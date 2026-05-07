@@ -23,7 +23,12 @@
       "Bash(pnpm build *)",
       "Bash(pnpm config *)",
       "Bash(pnpm -v)",
-      "Bash(git -c user.email=dev@reactlens.local -c user.name=reactlens commit -m \"feat\\(build\\): add typescript and tsup setup\")"
+      "Bash(git -c user.email=dev@reactlens.local -c user.name=reactlens commit -m \"feat\\(build\\): add typescript and tsup setup\")",
+      "Bash(chmod +x /Users/rey/Dev/Personal_Projects/reactlens/bin/reactlens.js)",
+      "Bash(node bin/reactlens.js --version)",
+      "Bash(node bin/reactlens.js init)",
+      "Bash(node bin/reactlens.js --help)",
+      "Bash(git -c user.email=dev@reactlens.local -c user.name=reactlens commit -m \"feat\\(cli\\): add commander skeleton with stub subcommands\")"
     ]
   }
 }
