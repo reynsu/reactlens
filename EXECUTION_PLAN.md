@@ -59,11 +59,11 @@ The goal is a published-shaped skeleton with a working CLI binary. No real funct
 
 ### 1.1 Stack detector
 
-- [ ] Create `src/ast/route-analyzer.ts` (note: lives under `ast/` because we'll later need it for static route discovery, not just package.json sniffing)
-- [ ] Implement `detectStack(projectPath: string): Promise<DetectedStack>`
-- [ ] `DetectedStack` covers: router (`react-router` | `tanstack` | `next-app` | `next-pages` | `unknown`), uiLibrary, formLibrary, devServerPort, buildTool, reactVersion (semver from `package.json`)
-- [ ] Detection reads `package.json` and existence of marker files (`next.config.js`, `vite.config.ts`, etc.)
-- [ ] Unit test against the three fixture stacks (placeholder `package.json` for each fixture)
+- [x] Create `src/ast/route-analyzer.ts` (note: lives under `ast/` because we'll later need it for static route discovery, not just package.json sniffing)
+- [x] Implement `detectStack(projectPath: string): Promise<DetectedStack>`
+- [x] `DetectedStack` covers: router (`react-router` | `tanstack` | `next-app` | `next-pages` | `unknown`), uiLibrary, formLibrary, devServerPort, buildTool, reactVersion (semver from `package.json`)
+- [x] Detection reads `package.json` and existence of marker files (`next.config.js`, `vite.config.ts`, etc.)
+- [x] Unit test against the three fixture stacks (placeholder `package.json` for each fixture)
 
 **Acceptance:** Unit tests pass for all three fixture stacks. Detector never throws; returns `unknown` for missing fields.
 
