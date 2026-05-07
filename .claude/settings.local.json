@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(pnpm --version)",
+      "Bash(npm --version)",
+      "Bash(export PATH=\"/opt/homebrew/bin:$PATH\")",
+      "Bash(corepack --version)",
+      "Bash(corepack enable *)",
+      "Bash(npm install *)",
+      "Bash(git init *)",
+      "Bash(pnpm install *)",
+      "Bash(git add *)",
+      "Bash(git -c user.email=dev@reactlens.local -c user.name=reactlens commit -m \"chore: initial repo\")"
+    ]
+  }
+}

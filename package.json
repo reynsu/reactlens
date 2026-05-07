@@ -1,0 +1,10 @@
+{
+  "name": "reactlens",
+  "version": "0.0.1",
+  "description": "The first E2E testing tool that understands your React code, not just your DOM.",
+  "license": "MIT",
+  "type": "commonjs",
+  "scripts": {
+    "test": "echo \"no tests yet\" && exit 0"
+  }
+}
