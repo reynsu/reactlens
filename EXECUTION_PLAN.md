@@ -14,30 +14,30 @@ The goal is a published-shaped skeleton with a working CLI binary. No real funct
 
 ### 0.1 Repository initialization
 
-- [ ] Run `pnpm init` and fill in `name: reactlens`, `version: 0.0.1`, `license: MIT`
-- [ ] Add `.gitignore` covering `node_modules`, `dist`, `.env`, `*.log`, `playwright-report`, `test-results`
-- [ ] Add `.nvmrc` pinning Node 20 LTS
-- [ ] Initialize git, first commit `chore: initial repo`
+- [x] Run `pnpm init` and fill in `name: reactlens`, `version: 0.0.1`, `license: MIT`
+- [x] Add `.gitignore` covering `node_modules`, `dist`, `.env`, `*.log`, `playwright-report`, `test-results`
+- [x] Add `.nvmrc` pinning Node 20 LTS
+- [x] Initialize git, first commit `chore: initial repo`
 
 **Acceptance:** `git log` shows one commit. `pnpm install` succeeds with no dependencies yet.
 
 ### 0.2 TypeScript and build setup
 
-- [ ] Install dev deps: `typescript`, `tsup`, `@types/node`, `tsx`
-- [ ] Create `tsconfig.json` with `strict: true`, `noUncheckedIndexedAccess: true`, `target: ES2022`, `module: NodeNext`, `moduleResolution: NodeNext`
-- [ ] Create `tsup.config.ts` with three entries: `src/cli.ts` (CJS, with shebang banner), `src/runner/reporter.ts` (CJS, used by user projects), `src/component-bridge/probe.ts` (IIFE bundle, injected into user's app)
-- [ ] Add scripts: `build`, `typecheck`, `dev` (tsup watch)
+- [x] Install dev deps: `typescript`, `tsup`, `@types/node`, `tsx`
+- [x] Create `tsconfig.json` with `strict: true`, `noUncheckedIndexedAccess: true`, `target: ES2022`, `module: NodeNext`, `moduleResolution: NodeNext`
+- [x] Create `tsup.config.ts` with three entries: `src/cli.ts` (CJS, with shebang banner), `src/runner/reporter.ts` (CJS, used by user projects), `src/component-bridge/probe.ts` (IIFE bundle, injected into user's app)
+- [x] Add scripts: `build`, `typecheck`, `dev` (tsup watch)
 
 **Acceptance:** `pnpm typecheck` passes on an empty project. `pnpm build` produces all three output artifacts.
 
 ### 0.3 CLI skeleton
 
-- [ ] Install `commander`, `pino`, `pino-pretty`
-- [ ] Create `src/cli.ts` with commander setup and stub subcommands: `init`, `generate`, `run`, `analyze`, `regen`. Each prints `"<name> not yet implemented"` and exits 0.
-- [ ] Create `bin/reactlens.js` with shebang `#!/usr/bin/env node` that requires `dist/cli.js`
-- [ ] Add `bin` field to `package.json`: `"bin": { "reactlens": "./bin/reactlens.js" }`
-- [ ] Add `--version` flag using version from `package.json`
-- [ ] Set up `pino` logger in `src/utils/logger.ts` with pretty transport in dev
+- [x] Install `commander`, `pino`, `pino-pretty`
+- [x] Create `src/cli.ts` with commander setup and stub subcommands: `init`, `generate`, `run`, `analyze`, `regen`. Each prints `"<name> not yet implemented"` and exits 0.
+- [x] Create `bin/reactlens.js` with shebang `#!/usr/bin/env node` that requires `dist/cli.js`
+- [x] Add `bin` field to `package.json`: `"bin": { "reactlens": "./bin/reactlens.js" }`
+- [x] Add `--version` flag using version from `package.json`
+- [x] Set up `pino` logger in `src/utils/logger.ts` with pretty transport in dev
 
 **Acceptance:**
 - `pnpm build && node bin/reactlens.js --version` prints `0.0.1`
@@ -46,10 +46,10 @@ The goal is a published-shaped skeleton with a working CLI binary. No real funct
 
 ### 0.4 Test infrastructure
 
-- [ ] Install `vitest`
-- [ ] Create `vitest.config.ts` with three projects: `unit` (fast, `tests/unit/**`), `integration` (slow, `tests/integration/**`), `eval` (slow + API-cost, `tests/diagnostic-eval/**`)
-- [ ] Add scripts: `test`, `test:integration`, `test:eval`, `test:watch`
-- [ ] Write one trivial unit test that asserts `1 + 1 === 2` to verify the runner works
+- [x] Install `vitest`
+- [x] Create `vitest.config.ts` with three projects: `unit` (fast, `tests/unit/**`), `integration` (slow, `tests/integration/**`), `eval` (slow + API-cost, `tests/diagnostic-eval/**`)
+- [x] Add scripts: `test`, `test:integration`, `test:eval`, `test:watch`
+- [x] Write one trivial unit test that asserts `1 + 1 === 2` to verify the runner works
 
 **Acceptance:** `pnpm test` runs and passes.
 

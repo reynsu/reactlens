@@ -28,7 +28,9 @@
       "Bash(node bin/reactlens.js --version)",
       "Bash(node bin/reactlens.js init)",
       "Bash(node bin/reactlens.js --help)",
-      "Bash(git -c user.email=dev@reactlens.local -c user.name=reactlens commit -m \"feat\\(cli\\): add commander skeleton with stub subcommands\")"
+      "Bash(git -c user.email=dev@reactlens.local -c user.name=reactlens commit -m \"feat\\(cli\\): add commander skeleton with stub subcommands\")",
+      "Bash(pnpm test *)",
+      "Bash(git -c user.email=dev@reactlens.local -c user.name=reactlens commit -m \"chore\\(test\\): add vitest infrastructure\")"
     ]
   }
 }
