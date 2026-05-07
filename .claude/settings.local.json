@@ -10,7 +10,20 @@
       "Bash(git init *)",
       "Bash(pnpm install *)",
       "Bash(git add *)",
-      "Bash(git -c user.email=dev@reactlens.local -c user.name=reactlens commit -m \"chore: initial repo\")"
+      "Bash(git -c user.email=dev@reactlens.local -c user.name=reactlens commit -m \"chore: initial repo\")",
+      "Bash(git config *)",
+      "Bash(export PATH=\"/opt/homebrew/bin:$PATH\" && git config --global user.email 2>/dev/null; git config --global user.name 2>/dev/null; cat ~/.gitconfig 2>/dev/null | head -20)",
+      "Bash(pnpm add *)",
+      "Bash(pnpm approve-builds *)",
+      "Bash(pnpm exec *)",
+      "Bash(node node_modules/tsup/dist/cli-default.js --help)",
+      "Bash(node -e \"const fs=require\\('fs'\\);const p=JSON.parse\\(fs.readFileSync\\('package.json','utf8'\\)\\);p.pnpm={onlyBuiltDependencies:['esbuild']};fs.writeFileSync\\('package.json',JSON.stringify\\(p,null,2\\)+'\\\\n'\\);\")",
+      "Bash(pnpm rebuild *)",
+      "Bash(pnpm typecheck *)",
+      "Bash(pnpm build *)",
+      "Bash(pnpm config *)",
+      "Bash(pnpm -v)",
+      "Bash(git -c user.email=dev@reactlens.local -c user.name=reactlens commit -m \"feat\\(build\\): add typescript and tsup setup\")"
     ]
   }
 }
