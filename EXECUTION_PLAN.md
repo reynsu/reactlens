@@ -87,11 +87,11 @@ The goal is a published-shaped skeleton with a working CLI binary. No real funct
 
 ### 1.4 The `init` command
 
-- [ ] Create `src/commands/init.ts`
-- [ ] Behavior: detect stack, log what was detected, copy templates, install Playwright + MSW as dev deps via `execa`, run `npx playwright install chromium`
-- [ ] Idempotent: prompt before overwriting existing files (use `prompts` library)
-- [ ] Add `--force` flag to skip prompts
-- [ ] Add `--dry-run` flag
+- [x] Create `src/commands/init.ts`
+- [x] Behavior: detect stack, log what was detected, copy templates, install Playwright + MSW as dev deps via `execa`, run `npx playwright install chromium`
+- [x] Idempotent: prompt before overwriting existing files (use `prompts` library)
+- [x] Add `--force` flag to skip prompts
+- [x] Add `--dry-run` flag
 
 **Acceptance:**
 - `reactlens init` in `tests/fixtures/vite-react-router/` copies all template files

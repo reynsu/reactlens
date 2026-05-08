@@ -1,10 +1,11 @@
 import { Command } from 'commander';
 import { readFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
+import { runInit } from './commands/init';
 import { ReactLensError } from './utils/errors';
 import { logger } from './utils/logger';
 
-type StubName = 'init' | 'generate' | 'run' | 'analyze' | 'regen';
+type StubName = 'generate' | 'run' | 'analyze' | 'regen';
 
 function readPackageVersion(): string {
   const pkgPath = join(__dirname, '..', 'package.json');
@@ -26,7 +27,22 @@ function buildProgram(): Command {
     .description('E2E testing for React that understands your component tree.')
     .version(readPackageVersion(), '-v, --version', 'print the reactlens version');
 
-  program.command('init').description('scaffold reactlens in the current project').action(stub('init'));
+  program
+    .command('init')
+    .description('scaffold reactlens in the current project')
+    .option('--cwd <path>', 'directory to scaffold into', process.cwd())
+    .option('-f, --force', 'overwrite existing files without prompting', false)
+    .option('--dry-run', 'list what would happen without writing', false)
+    .option('--no-install-playwright', 'skip downloading the chromium browser')
+    .action(async (opts: { cwd: string; force: boolean; dryRun: boolean; installPlaywright: boolean }) => {
+      await runInit({
+        cwd: resolve(opts.cwd),
+        force: opts.force,
+        dryRun: opts.dryRun,
+        installPlaywright: opts.installPlaywright,
+      });
+    });
+
   program.command('generate').description('generate tests by analyzing components').action(stub('generate'));
   program.command('run').description('run tests with the live dashboard').action(stub('run'));
   program.command('analyze').description('diagnose a Playwright report').action(stub('analyze'));
