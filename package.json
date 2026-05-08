@@ -23,6 +23,7 @@
     "test:eval": "vitest run --project eval"
   },
   "devDependencies": {
+    "@playwright/test": "^1.59.1",
     "@types/node": "^25.6.0",
     "@types/prompts": "^2.4.9",
     "tsup": "^8.5.1",

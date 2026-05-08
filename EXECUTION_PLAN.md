@@ -116,18 +116,18 @@ Make tests run and emit a parseable event stream. No dashboard yet.
 
 ### 2.1 Streaming reporter (final implementation)
 
-- [ ] Implement the full Playwright `Reporter` interface in `templates/streaming-reporter.ts`
-- [ ] Emit `run:start`, `run:end`, `test:start`, `test:end`, `step:start`, `step:end` per CLAUDE.md Section 9
-- [ ] On `test:end`, include attachment paths
-- [ ] Reporter must NOT log anything else to stdout — stdout is the event channel
+- [x] Implement the full Playwright `Reporter` interface in `templates/streaming-reporter.ts`
+- [x] Emit `run:start`, `run:end`, `test:start`, `test:end`, `step:start`, `step:end` per CLAUDE.md Section 9
+- [x] On `test:end`, include attachment paths
+- [x] Reporter must NOT log anything else to stdout — stdout is the event channel
 
 **Acceptance:** Run `npx playwright test` on the fixture (with one trivial spec); stdout contains valid JSONL.
 
 ### 2.2 Event bus
 
-- [ ] Create `src/runner/event-bus.ts` exporting a typed `EventEmitter` keyed by the `t` field
-- [ ] Type-safe `on(t, handler)` and `emit(event)`
-- [ ] Unit test verifying wrong event types fail to compile (using `expectTypeOf`)
+- [x] Create `src/runner/event-bus.ts` exporting a typed `EventEmitter` keyed by the `t` field
+- [x] Type-safe `on(t, handler)` and `emit(event)`
+- [x] Unit test verifying wrong event types fail to compile (using `expectTypeOf`)
 
 **Acceptance:** TypeScript catches event shape mismatches at compile time.
 
