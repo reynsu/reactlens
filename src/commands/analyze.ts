@@ -8,6 +8,7 @@ import { ReactLensError } from '../utils/errors';
 import { logger } from '../utils/logger';
 import { diagnose } from '../analyzer/failure-agent';
 import type { Diagnosis } from '../runner/events';
+import { requireAnthropicApiKey } from './_shared';
 
 export type AnalyzeCommandOptions = {
   cwd: string;
@@ -100,11 +101,7 @@ export async function runAnalyze(opts: AnalyzeCommandOptions): Promise<number> {
   if (!existsSync(reportPath)) {
     throw new ReactLensError(`report file not found: ${reportPath}`, { code: 'ANALYZE_NO_REPORT' });
   }
-  if (process.env.ANTHROPIC_API_KEY === undefined) {
-    throw new ReactLensError('ANTHROPIC_API_KEY is required to analyze failures', {
-      code: 'ANALYZE_NO_API_KEY',
-    });
-  }
+  requireAnthropicApiKey('analyze');
 
   const raw = await readFile(reportPath, 'utf8');
   const report = JSON.parse(raw) as PlaywrightReport;

@@ -1,64 +1,15 @@
-// Frontend-local copy of the canonical RunEvent + ComponentNode + Diagnosis
-// shapes from src/runner/events.ts. Duplicated here so the dashboard frontend
-// is fully decoupled from the package internals at build time (it's served
-// as static assets).
-export type Attachment = { name: string; path: string; contentType?: string };
-
-export type ComponentNode = {
-  name: string;
-  key?: string | null;
-  props: Record<string, unknown>;
-  hooks?: HookSnapshot[];
-  source?: { file: string; line: number };
-  children: ComponentNode[];
-};
-
-export type HookSnapshot = {
-  kind: 'state' | 'effect' | 'memo' | 'ref' | 'context' | 'reducer' | 'other';
-  value?: unknown;
-  name?: string;
-};
-
-export type Diagnosis = {
-  classification: 'real-bug' | 'test-bug' | 'flaky' | 'env-issue';
-  confidence: 'high' | 'medium' | 'low';
-  rootCause: string;
-  evidence: string[];
-  suggestedFix: string;
-  patch?: Array<{ file: string; oldStr: string; newStr: string; rationale: string }>;
-  gitContext?: {
-    componentLastChanged?: { sha: string; author: string; date: string; message: string };
-    specLastChanged?: { sha: string; author: string; date: string; message: string };
-  };
-};
-
-export type RunEvent =
-  | { t: 'run:start'; totalTests: number; timestamp: number }
-  | { t: 'run:end'; passed: number; failed: number; skipped: number; duration: number }
-  | { t: 'test:start'; id: string; title: string; file: string; suite: string }
-  | {
-      t: 'test:end';
-      id: string;
-      status: 'passed' | 'failed' | 'skipped' | 'timedOut';
-      duration: number;
-      error?: string;
-      attachments?: Attachment[];
-    }
-  | { t: 'step:start'; testId: string; stepId: string; title: string }
-  | { t: 'step:end'; testId: string; stepId: string; status: 'passed' | 'failed' }
-  | { t: 'frame'; testId: string; data: string; sessionId: string }
-  | { t: 'component:snapshot'; testId: string; stepId: string; tree: ComponentNode }
-  | {
-      t: 'component:event';
-      testId: string;
-      stepId: string;
-      kind: 'mount' | 'unmount' | 'update';
-      componentName: string;
-      props?: Record<string, unknown>;
-    }
-  | { t: 'diagnosis:start'; testId: string }
-  | { t: 'diagnosis:chunk'; testId: string; text: string }
-  | { t: 'diagnosis:end'; testId: string; result: Diagnosis };
+// Frontend-local re-export of the canonical event protocol. Vite bundles the
+// referenced types at build time, so the runtime bundle stays self-contained;
+// keeping a single source prevents the protocol drift CLAUDE.md §9 warns about.
+export type {
+  Attachment,
+  ComponentNode,
+  Diagnosis,
+  HookSnapshot,
+  RunEvent,
+  RunEventByType,
+  RunEventType,
+} from '../../runner/events';
 
 export type TestRow = {
   id: string;

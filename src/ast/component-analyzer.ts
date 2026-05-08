@@ -71,29 +71,23 @@ function pushState(states: VisualState[], state: VisualState): void {
   }
 }
 
+type StateMatcher = { pattern: RegExp; name: string; description: string };
+
+const STATE_MATCHERS: StateMatcher[] = [
+  { pattern: /\b(isLoading|isPending|isFetching)\b/i, name: 'loading', description: 'data fetch in progress' },
+  { pattern: /\b(isError|error\s*!==?\s*(null|undefined))\b/i, name: 'error', description: 'fetch or submit failed' },
+  { pattern: /\bisSuccess\b/i, name: 'success', description: 'happy-path render' },
+  { pattern: /\.length\s*===?\s*0\b/, name: 'empty', description: 'collection was empty' },
+  { pattern: /\bdeclined\b/i, name: 'declined', description: 'payment declined' },
+  { pattern: /\bnetwork[- _]?error\b/i, name: 'network-error', description: 'network failure' },
+  { pattern: /\bsubmitting\b/i, name: 'submitting', description: 'in-flight submit' },
+];
+
 function analyzeStateFromCondition(condition: string): VisualState | null {
-  // Heuristic: map common predicate shapes to canonical state names.
-  const lower = condition.toLowerCase();
-  if (lower.includes('isloading') || lower.includes('ispending') || lower.includes('isfetching')) {
-    return { name: 'loading', description: 'data fetch in progress', conditions: [condition], apiCalls: [] };
-  }
-  if (lower.includes('iserror') || lower.includes('error !==') || /error\s*!==?\s*(null|undefined)/i.test(condition)) {
-    return { name: 'error', description: 'fetch or submit failed', conditions: [condition], apiCalls: [] };
-  }
-  if (lower.includes('issuccess') || lower.includes('= true')) {
-    return { name: 'success', description: 'happy-path render', conditions: [condition], apiCalls: [] };
-  }
-  if (lower.includes('length === 0') || lower.includes('.length === 0')) {
-    return { name: 'empty', description: 'collection was empty', conditions: [condition], apiCalls: [] };
-  }
-  if (lower.includes('declined')) {
-    return { name: 'declined', description: 'payment declined', conditions: [condition], apiCalls: [] };
-  }
-  if (lower.includes('network')) {
-    return { name: 'network-error', description: 'network failure', conditions: [condition], apiCalls: [] };
-  }
-  if (lower.includes('submitting')) {
-    return { name: 'submitting', description: 'in-flight submit', conditions: [condition], apiCalls: [] };
+  for (const m of STATE_MATCHERS) {
+    if (m.pattern.test(condition)) {
+      return { name: m.name, description: m.description, conditions: [condition], apiCalls: [] };
+    }
   }
   return null;
 }

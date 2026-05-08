@@ -1,5 +1,4 @@
 import { existsSync } from 'node:fs';
-import { glob } from 'node:fs/promises';
 import { resolve, join } from 'node:path';
 import { execa } from 'execa';
 import { loadConfig } from '../config/load';
@@ -7,6 +6,7 @@ import { analyzeComponent } from '../ast/component-analyzer';
 import { generateTests } from '../generator/delegate';
 import { ReactLensError } from '../utils/errors';
 import { logger } from '../utils/logger';
+import { expandComponentGlobs, requireAnthropicApiKey } from './_shared';
 
 export type GenerateCommandOptions = {
   cwd: string;
@@ -14,26 +14,10 @@ export type GenerateCommandOptions = {
   skipTypecheck?: boolean;
 };
 
-async function expandComponentGlobs(cwd: string, patterns: string[]): Promise<string[]> {
-  const files = new Set<string>();
-  for (const pattern of patterns) {
-    const it = glob(pattern, { cwd }) as AsyncIterable<string>;
-    for await (const f of it) {
-      files.add(resolve(cwd, f));
-    }
-  }
-  return Array.from(files);
-}
-
 export async function runGenerate(opts: GenerateCommandOptions): Promise<number> {
   const cwd = resolve(opts.cwd);
   const config = await loadConfig(cwd);
-  if (process.env.ANTHROPIC_API_KEY === undefined) {
-    throw new ReactLensError(
-      'ANTHROPIC_API_KEY is required to generate tests. Set it in your environment.',
-      { code: 'GENERATE_NO_API_KEY' },
-    );
-  }
+  requireAnthropicApiKey('generate');
 
   const patterns = opts.pages !== undefined ? [opts.pages] : config.componentGlobs;
   const components = await expandComponentGlobs(cwd, patterns);

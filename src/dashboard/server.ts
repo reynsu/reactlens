@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { WebSocketServer, type WebSocket } from 'ws';
 import { logger } from '../utils/logger';
 import { EventBus } from '../runner/event-bus';
-import type { RunEvent } from '../runner/events';
+import { ALL_EVENT_TYPES, type RunEvent } from '../runner/events';
 
 export type DashboardServerOptions = {
   port: number;
@@ -76,23 +76,8 @@ export async function startDashboardServer(opts: DashboardServerOptions): Promis
     }
   }
 
-  // Subscribe the bus → dashboard clients. Returns a disposer for shutdown.
   const disposers: Array<() => void> = [];
-  const eventTypes: Array<RunEvent['t']> = [
-    'run:start',
-    'run:end',
-    'test:start',
-    'test:end',
-    'step:start',
-    'step:end',
-    'frame',
-    'component:snapshot',
-    'component:event',
-    'diagnosis:start',
-    'diagnosis:chunk',
-    'diagnosis:end',
-  ];
-  for (const t of eventTypes) {
+  for (const t of ALL_EVENT_TYPES) {
     disposers.push(opts.bus.on(t, (e) => bufferAndBroadcast(e as RunEvent)));
   }
 

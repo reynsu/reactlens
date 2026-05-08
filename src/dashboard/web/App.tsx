@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useReducer, useRef, useState } from 'react';
+import { useEffect, useMemo, useReducer, useState } from 'react';
 import type { ComponentNode, Diagnosis, RunEvent, TestRow } from './types';
 import { TestList } from './components/TestList';
 import { BrowserPreview } from './components/BrowserPreview';
@@ -31,12 +31,12 @@ const initialState: State = {
   diagnosesByTest: new Map(),
 };
 
-type Action = { type: 'event'; event: RunEvent } | { type: 'select'; id: string };
+type Action = RunEvent | { t: 'select'; id: string };
 
-function reducer(state: State, action: Action): State {
-  if (action.type === 'select') return { ...state, selectedTestId: action.id };
-  const e = action.event;
+function reducer(state: State, e: Action): State {
   switch (e.t) {
+    case 'select':
+      return { ...state, selectedTestId: e.id };
     case 'run:start':
       return { ...state, totalTests: e.totalTests, tests: new Map(), passed: 0, failed: 0, skipped: 0 };
     case 'run:end':
@@ -55,6 +55,9 @@ function reducer(state: State, action: Action): State {
       return { ...state, tests };
     }
     case 'frame': {
+      // Same testId + same data ⇒ skip the Map clone so React doesn't rerender
+      // every screencast frame when the preview hasn't actually changed.
+      if (state.framesByTest.get(e.testId) === e.data) return state;
       const framesByTest = new Map(state.framesByTest);
       framesByTest.set(e.testId, e.data);
       return { ...state, framesByTest };
@@ -88,8 +91,6 @@ function reducer(state: State, action: Action): State {
 
 function useDashboardSocket(dispatch: React.Dispatch<Action>): { connected: boolean } {
   const [connected, setConnected] = useState(false);
-  const dispatchRef = useRef(dispatch);
-  dispatchRef.current = dispatch;
 
   useEffect(() => {
     let cancelled = false;
@@ -107,7 +108,7 @@ function useDashboardSocket(dispatch: React.Dispatch<Action>): { connected: bool
       socket.addEventListener('message', (msg) => {
         try {
           const event = JSON.parse(typeof msg.data === 'string' ? msg.data : msg.data.toString()) as RunEvent;
-          dispatchRef.current({ type: 'event', event });
+          dispatch(event);
         } catch {
           /* ignore */
         }
@@ -158,7 +159,7 @@ export function App(): JSX.Element {
         </div>
       </header>
       <div className="layout">
-        <TestList tests={sortedTests} selectedId={state.selectedTestId} onSelect={(id) => dispatch({ type: 'select', id })} />
+        <TestList tests={sortedTests} selectedId={state.selectedTestId} onSelect={(id) => dispatch({ t: 'select', id })} />
         <BrowserPreview frame={selectedFrame} test={selected} />
         <div className="panel">
           <ComponentInspector tree={selectedTree} />

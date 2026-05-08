@@ -2,8 +2,8 @@
 // Walks a React fiber tree and produces a JSON-safe ComponentNode (CLAUDE.md
 // Section 9). Documented decisions:
 //
-// - DEPTH LIMIT: walks at most MAX_DEPTH levels deep. Prevents stack overflow
-//   on pathological trees and bounds serialization cost on huge apps.
+// - DEPTH LIMIT: walks at most MAX_DEPTH (30) levels deep. Prevents stack
+//   overflow on pathological trees and bounds serialization cost on huge apps.
 // - PROP SERIALIZATION: primitives pass through; functions become
 //   '[Function]'; React elements become '<ComponentName />'; nested
 //   objects/arrays are walked with cycle detection up to MAX_PROP_DEPTH.
@@ -106,16 +106,13 @@ export function sanitizeProps(props: Record<string, unknown> | null | undefined)
 }
 
 function classifyHook(state: { tag?: number; queue?: unknown; baseState?: unknown }): HookSnapshot['kind'] {
-  // Tags come from React's internal hook implementation. We treat unknown tags
-  // as 'other' rather than guessing, so future React changes degrade safely.
-  // (See React: ReactFiberHooks for the source.)
-  if (state.queue !== undefined && state.queue !== null) {
-    // useState / useReducer both have a queue. useReducer queues have a
-    // dispatch function; useState queues have a setState. We can't always
-    // distinguish from the snapshot alone, so prefer 'state'.
-    return 'state';
-  }
-  if (state.baseState === undefined && state.tag === undefined) return 'effect';
+  // Without React's internal hook tags exposed, we can only reliably tell
+  // useState/useReducer (they have a `queue`) from everything else. Effects,
+  // memos, refs all lack a queue and are lumped as 'other' rather than
+  // returning a wrong specific kind. The HookSnapshot.kind union still allows
+  // 'effect'/'memo'/'ref'/'context'/'reducer' so a future analyzer can refine
+  // without a protocol change.
+  if (state.queue !== undefined && state.queue !== null) return 'state';
   return 'other';
 }
 
@@ -124,17 +121,13 @@ function collectHooks(memoizedState: unknown): HookSnapshot[] | undefined {
   const hooks: HookSnapshot[] = [];
   const seen = new WeakSet<object>();
   let cursor: unknown = memoizedState;
-  let guard = 0;
-  while (cursor !== null && cursor !== undefined && guard < 200) {
+  // Hard cap is also a stop-gap against any pathological cycle React might
+  // introduce in a future version; the linked list itself is acyclic today.
+  for (let guard = 0; cursor !== null && cursor !== undefined && guard < 200; guard += 1) {
     if (typeof cursor !== 'object') break;
-    if (seen.has(cursor as object)) break;
-    seen.add(cursor as object);
     const node = cursor as { memoizedState?: unknown; baseState?: unknown; queue?: unknown; next?: unknown };
-    const kind = classifyHook(node);
-    const value = sanitizeValue(node.memoizedState, new WeakSet<object>(), 0);
-    hooks.push({ kind, value });
+    hooks.push({ kind: classifyHook(node), value: sanitizeValue(node.memoizedState, seen, 0) });
     cursor = node.next;
-    guard += 1;
   }
   return hooks.length > 0 ? hooks : undefined;
 }

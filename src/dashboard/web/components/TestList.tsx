@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import type { TestRow } from '../types';
 
 type Props = {
@@ -21,13 +22,16 @@ function statusIcon(status: TestRow['status']): { glyph: string; cls: string } {
 }
 
 export function TestList({ tests, selectedId, onSelect }: Props): JSX.Element {
-  const grouped = new Map<string, TestRow[]>();
-  for (const t of tests) {
-    const key = t.suite || t.file;
-    const arr = grouped.get(key) ?? [];
-    arr.push(t);
-    grouped.set(key, arr);
-  }
+  const groups = useMemo(() => {
+    const grouped = new Map<string, TestRow[]>();
+    for (const t of tests) {
+      const key = t.suite || t.file;
+      const arr = grouped.get(key) ?? [];
+      arr.push(t);
+      grouped.set(key, arr);
+    }
+    return Array.from(grouped.entries());
+  }, [tests]);
 
   return (
     <div className="panel">
@@ -35,7 +39,7 @@ export function TestList({ tests, selectedId, onSelect }: Props): JSX.Element {
       {tests.length === 0 ? (
         <div className="empty-state">Waiting for run…</div>
       ) : (
-        Array.from(grouped.entries()).map(([suite, rows]) => (
+        groups.map(([suite, rows]) => (
           <div key={suite}>
             <div className="suite-header">{suite}</div>
             {rows.map((t) => {

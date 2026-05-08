@@ -26,7 +26,10 @@ const INITIAL_BACKOFF_MS = 200;
 
 export class Transport {
   private ws: WebSocket | null = null;
+  // Index-cursor queue: avoid O(n) shift/unshift on each flush by tracking a
+  // moving head; we periodically compact when head grows large.
   private buffer: ProbeEvent[] = [];
+  private head = 0;
   private opening = false;
   private backoffMs = INITIAL_BACKOFF_MS;
   private lastSnapshotAt = 0;
@@ -111,16 +114,24 @@ export class Transport {
 
   private flush(): void {
     if (this.ws === null || this.ws.readyState !== WebSocket.OPEN) return;
-    while (this.buffer.length > 0) {
-      const next = this.buffer.shift();
-      if (next === undefined) break;
+    while (this.head < this.buffer.length) {
+      const next = this.buffer[this.head];
+      if (next === undefined) {
+        this.head += 1;
+        continue;
+      }
       try {
         this.ws.send(JSON.stringify(next));
+        this.head += 1;
       } catch {
-        // Reinsert at head; reconnect will retry.
-        this.buffer.unshift(next);
+        // Send failed; leave head at this item so the next flush retries it.
         return;
       }
+    }
+    // Compact when most of the buffer has been consumed, to bound memory.
+    if (this.head > 64 && this.head * 2 > this.buffer.length) {
+      this.buffer = this.buffer.slice(this.head);
+      this.head = 0;
     }
   }
 

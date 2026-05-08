@@ -62,14 +62,17 @@ class LineSplitter {
   private buffer = '';
 
   push(chunk: string, onLine: (line: string) => void): void {
-    this.buffer += chunk;
-    let idx = this.buffer.indexOf('\n');
+    // Scan from a moving offset and only collapse the residual once at the
+    // end; re-slicing on each newline is O(n²) for snapshot-heavy stdout.
+    const combined = this.buffer + chunk;
+    let start = 0;
+    let idx = combined.indexOf('\n', start);
     while (idx >= 0) {
-      const line = this.buffer.slice(0, idx);
-      this.buffer = this.buffer.slice(idx + 1);
-      onLine(line);
-      idx = this.buffer.indexOf('\n');
+      onLine(combined.slice(start, idx));
+      start = idx + 1;
+      idx = combined.indexOf('\n', start);
     }
+    this.buffer = start === 0 ? combined : combined.slice(start);
   }
 
   flush(onLine: (line: string) => void): void {

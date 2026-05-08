@@ -3,26 +3,15 @@
 // `.reactlens/cache.json` in the project.
 import { createHash } from 'node:crypto';
 import { existsSync } from 'node:fs';
-import { mkdir, readFile, writeFile, glob } from 'node:fs/promises';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
 import { loadConfig } from '../config/load';
 import { analyzeComponent } from '../ast/component-analyzer';
 import { generateTests } from '../generator/delegate';
-import { ReactLensError } from '../utils/errors';
 import { logger } from '../utils/logger';
+import { expandComponentGlobs, requireAnthropicApiKey } from './_shared';
 
 type CacheShape = { version: 1; hashes: Record<string, string> };
-
-async function expandComponentGlobs(cwd: string, patterns: string[]): Promise<string[]> {
-  const files = new Set<string>();
-  for (const pattern of patterns) {
-    const it = glob(pattern, { cwd }) as AsyncIterable<string>;
-    for await (const f of it) {
-      files.add(resolve(cwd, f));
-    }
-  }
-  return Array.from(files);
-}
 
 async function hashFile(path: string): Promise<string> {
   const content = await readFile(path);
@@ -49,12 +38,7 @@ async function saveCache(cwd: string, cache: CacheShape): Promise<void> {
 export async function runRegen(opts: { cwd: string }): Promise<number> {
   const cwd = resolve(opts.cwd);
   const config = await loadConfig(cwd);
-  if (process.env.ANTHROPIC_API_KEY === undefined) {
-    throw new ReactLensError(
-      'ANTHROPIC_API_KEY is required to regenerate tests.',
-      { code: 'REGEN_NO_API_KEY' },
-    );
-  }
+  requireAnthropicApiKey('regen');
 
   const components = await expandComponentGlobs(cwd, config.componentGlobs);
   const cache = await loadCache(cwd);

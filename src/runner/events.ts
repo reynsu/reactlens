@@ -68,3 +68,29 @@ export type RunEvent =
 
 export type RunEventType = RunEvent['t'];
 export type RunEventByType<T extends RunEventType> = Extract<RunEvent, { t: T }>;
+
+// Exhaustive list of every RunEvent variant. The `satisfies` clause makes
+// TypeScript reject this file if a RunEvent variant is added but not listed
+// here, which keeps subscribers (server, run command, dashboard) in sync.
+export const ALL_EVENT_TYPES = [
+  'run:start',
+  'run:end',
+  'test:start',
+  'test:end',
+  'step:start',
+  'step:end',
+  'frame',
+  'component:snapshot',
+  'component:event',
+  'diagnosis:start',
+  'diagnosis:chunk',
+  'diagnosis:end',
+] as const satisfies readonly RunEventType[];
+
+// Compile-time exhaustiveness: this assignment fails if a RunEvent variant
+// isn't included in ALL_EVENT_TYPES.
+type _AssertExhaustive = Exclude<RunEventType, (typeof ALL_EVENT_TYPES)[number]> extends never
+  ? true
+  : ['ALL_EVENT_TYPES is missing variants'];
+const _exhaustive: _AssertExhaustive = true;
+void _exhaustive;

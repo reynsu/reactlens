@@ -5,7 +5,7 @@ import { diagnose } from '../analyzer/failure-agent';
 import { loadConfig } from '../config/load';
 import { startDashboardServer } from '../dashboard/server';
 import { EventBus } from '../runner/event-bus';
-import type { ComponentNode } from '../runner/events';
+import { ALL_EVENT_TYPES, type ComponentNode } from '../runner/events';
 import { runTests, type RunSummary } from '../runner/playwright-runner';
 import { logger } from '../utils/logger';
 
@@ -75,10 +75,16 @@ function locatePackagedProbe(): string | undefined {
 }
 
 function tryOpenInBrowser(url: string): void {
-  // Replacement for the `open` package — uses platform-native shell command.
-  const cmd = process.platform === 'darwin' ? 'open' : process.platform === 'win32' ? 'start' : 'xdg-open';
+  // `start` is a cmd.exe builtin (not a binary), so on Windows we have to
+  // shell through cmd /c with an empty title argument so the URL isn't
+  // interpreted as the window title.
   try {
-    spawn(cmd, [url], { stdio: 'ignore', detached: true }).unref();
+    if (process.platform === 'win32') {
+      spawn('cmd', ['/c', 'start', '""', url], { stdio: 'ignore', detached: true }).unref();
+    } else {
+      const cmd = process.platform === 'darwin' ? 'open' : 'xdg-open';
+      spawn(cmd, [url], { stdio: 'ignore', detached: true }).unref();
+    }
   } catch (err) {
     logger.warn({ err }, 'failed to open browser');
   }
@@ -105,21 +111,7 @@ export async function runRun(opts: RunCommandOptions): Promise<number> {
   }
 
   if (opts.reporter === 'json') {
-    const types = [
-      'run:start',
-      'test:start',
-      'step:start',
-      'step:end',
-      'test:end',
-      'run:end',
-      'frame',
-      'component:snapshot',
-      'component:event',
-      'diagnosis:start',
-      'diagnosis:chunk',
-      'diagnosis:end',
-    ] as const;
-    for (const t of types) {
+    for (const t of ALL_EVENT_TYPES) {
       bus.on(t, (e) => process.stdout.write(JSON.stringify(e) + '\n'));
     }
     const summary = await runTests({
@@ -133,14 +125,16 @@ export async function runRun(opts: RunCommandOptions): Promise<number> {
     return summary.exitCode;
   }
 
-  // Track the last component snapshot per test so on-failure diagnosis has it.
-  const lastSnapshotByTest = new Map<string, ComponentNode>();
-  const lastTestMeta = new Map<string, { title: string; file: string }>();
-  bus.on('component:snapshot', (e) => {
-    lastSnapshotByTest.set(e.testId, e.tree);
-  });
+  // Track per-test data we need at failure time (title + file for the
+  // diagnosis prompt; latest snapshot as the unique evidence signal).
+  type TestState = { title: string; file: string; snapshot?: ComponentNode };
+  const testState = new Map<string, TestState>();
   bus.on('test:start', (e) => {
-    lastTestMeta.set(e.id, { title: e.title, file: e.file });
+    testState.set(e.id, { title: e.title, file: e.file });
+  });
+  bus.on('component:snapshot', (e) => {
+    const existing = testState.get(e.testId);
+    if (existing !== undefined) existing.snapshot = e.tree;
   });
   const diagnosisPromises: Array<Promise<void>> = [];
   const ciDiagnoses: Array<{ testId: string; title: string; diagnosis: unknown }> = [];
@@ -148,24 +142,24 @@ export async function runRun(opts: RunCommandOptions): Promise<number> {
   if (wantAnalyze) {
     bus.on('test:end', (e) => {
       if (e.status !== 'failed' && e.status !== 'timedOut') return;
-      const meta = lastTestMeta.get(e.id);
-      if (meta === undefined) return;
+      const t = testState.get(e.id);
+      if (t === undefined) return;
       bus.emit({ t: 'diagnosis:start', testId: e.id });
       const promise = diagnose({
         cwd,
         failure: {
           testId: e.id,
-          testTitle: meta.title,
-          specFile: meta.file,
+          testTitle: t.title,
+          specFile: t.file,
           ...(e.error !== undefined ? { errorMessage: e.error } : {}),
-          ...(lastSnapshotByTest.get(e.id) !== undefined ? { componentSnapshot: lastSnapshotByTest.get(e.id) } : {}),
+          ...(t.snapshot !== undefined ? { componentSnapshot: t.snapshot } : {}),
         },
         onChunk: (text) => bus.emit({ t: 'diagnosis:chunk', testId: e.id, text }),
       })
         .then((result) => {
           bus.emit({ t: 'diagnosis:end', testId: e.id, result });
           if (opts.ci === true) {
-            ciDiagnoses.push({ testId: e.id, title: meta.title, diagnosis: result });
+            ciDiagnoses.push({ testId: e.id, title: t.title, diagnosis: result });
           }
         })
         .catch((err) => {
