@@ -424,43 +424,43 @@ This is capability 4.3, the second core differentiator.
 
 ### 6.1 Eval set scaffolding
 
-- [ ] Create `tests/diagnostic-eval/cases/` with at least 12 hand-crafted failure cases:
-  - 4 `real-bug` cases (different categories: validation logic, API contract, race in business logic, off-by-one)
-  - 4 `test-bug` cases (stale selector, incorrect assumption about timing, wrong fixture data, copied-spec drift)
-  - 2 `flaky` cases
-  - 2 `env-issue` cases (port conflict, missing env var)
-- [ ] Each case directory contains: a snapshot of the fixture's source code, the spec, the failure trace/screenshot, the component snapshot at failure, AND a `truth.json` with the expected classification + minimum acceptable diagnosis quality
-- [ ] Create `tests/diagnostic-eval/eval-runner.ts` that runs the diagnosis agent on each case and computes accuracy, recall, false-confidence rate
+- [~] Create `tests/diagnostic-eval/cases/` with at least 12 hand-crafted failure cases — **2 representative cases authored** (case-001 stale-selector / test-bug, case-002 validation-regression / real-bug). Remaining 10 cases (4 real-bug, 3 test-bug, 2 flaky, 2 env-issue) deferred — listed as a Phase 7 follow-up.
+  - [~] 4 `real-bug` cases (different categories: validation logic, API contract, race in business logic, off-by-one)
+  - [~] 4 `test-bug` cases (stale selector, incorrect assumption about timing, wrong fixture data, copied-spec drift)
+  - [~] 2 `flaky` cases
+  - [~] 2 `env-issue` cases (port conflict, missing env var)
+- [x] Each case directory contains: a snapshot of the fixture's source code, the spec, the failure trace/screenshot, the component snapshot at failure, AND a `truth.json` with the expected classification + minimum acceptable diagnosis quality (snapshot/trace optional fields wired)
+- [x] Create `tests/diagnostic-eval/eval-runner.ts` that runs the diagnosis agent on each case and computes accuracy, recall, false-confidence rate (smoke test runs; live API metric collection skipped without ANTHROPIC_API_KEY)
 
 **Acceptance:** `pnpm test:eval` runs end-to-end and prints metrics. Initial baseline: any non-zero accuracy is acceptable; we improve it.
 
 ### 6.2 Git context gatherer
 
-- [ ] Create `src/analyzer/git-context.ts`
-- [ ] For a given component file and spec file, return: last commit SHA, author, date, message; first time the test passed (search history)
-- [ ] If git history is unavailable (shallow clone, no git repo), degrade gracefully — diagnosis still works but with `gitContext: undefined`
+- [x] Create `src/analyzer/git-context.ts`
+- [~] For a given component file and spec file, return: last commit SHA, author, date, message; first time the test passed (search history) — last-commit data implemented; "first time the test passed" deferred (would require running historical revs)
+- [x] If git history is unavailable (shallow clone, no git repo), degrade gracefully — diagnosis still works but with `gitContext: undefined`
 
 **Acceptance:** Unit tests on a small fake repo verify the data shape.
 
 ### 6.3 Diagnosis prompts
 
-- [ ] Create `src/analyzer/prompts/diagnose.md` — main system prompt
-- [ ] Create `src/analyzer/prompts/classify-bug.md` — explicit rubric for choosing classification, with examples for each label
-- [ ] Prompt instructs Claude to: read the spec, the Page Object, the React component, the trace, the component snapshot, the git context, then output ONLY a JSON object matching the `Diagnosis` type from CLAUDE.md Section 9
-- [ ] Crucially: the prompt mandates evidence-based confidence levels. `high` requires direct evidence (e.g. "the component snapshot shows `cvv: '123'` but source code requires length >= 4"). `low` is for guesses.
-- [ ] Include 4 worked examples (one per classification)
+- [x] Create `src/analyzer/prompts/diagnose.md` — main system prompt
+- [x] Create `src/analyzer/prompts/classify-bug.md` — explicit rubric for choosing classification, with examples for each label
+- [x] Prompt instructs Claude to: read the spec, the Page Object, the React component, the trace, the component snapshot, the git context, then output ONLY a JSON object matching the `Diagnosis` type from CLAUDE.md Section 9
+- [x] Crucially: the prompt mandates evidence-based confidence levels. `high` requires direct evidence (e.g. "the component snapshot shows `cvv: '123'` but source code requires length >= 4"). `low` is for guesses.
+- [x] Include 4 worked examples (one per classification) (one example per classification embedded in `classify-bug.md`)
 
 **Acceptance:** Prompts committed; example outputs validate against the Zod schema.
 
 ### 6.4 Failure agent
 
-- [ ] Create `src/analyzer/failure-agent.ts`
-- [ ] `diagnose(failure: FailedTest, projectPath, onChunk): Promise<Diagnosis>`
-- [ ] Pre-loads (before invoking the agent): the component snapshot at failure, git context for both files, and the trace summary
-- [ ] Invokes `query()` with allowed tools `['Read', 'Glob', 'Grep', 'Bash']`, `maxTurns: 30`
-- [ ] Streams chunks to `onChunk`
-- [ ] On `result`, extracts JSON, validates with Zod, returns `Diagnosis`
-- [ ] On invalid JSON, retries once with stricter prompt; on second failure, returns degraded `Diagnosis` with `classification: 'env-issue'`, `confidence: 'low'`
+- [x] Create `src/analyzer/failure-agent.ts`
+- [x] `diagnose(failure: FailedTest, projectPath, onChunk): Promise<Diagnosis>`
+- [x] Pre-loads (before invoking the agent): the component snapshot at failure, git context for both files, and the trace summary
+- [x] Invokes `query()` with allowed tools `['Read', 'Glob', 'Grep', 'Bash']`, `maxTurns: 30`
+- [x] Streams chunks to `onChunk`
+- [x] On `result`, extracts JSON, validates with Zod, returns `Diagnosis`
+- [x] On invalid JSON, retries once with stricter prompt; on second failure, returns degraded `Diagnosis` with `classification: 'env-issue'`, `confidence: 'low'`
 
 **Acceptance:**
 - For each case in `tests/diagnostic-eval/cases/`, the agent produces a valid `Diagnosis`
@@ -468,28 +468,28 @@ This is capability 4.3, the second core differentiator.
 
 ### 6.5 Wire diagnosis into run flow
 
-- [ ] In `run.ts`, on every `test:end` with `status: 'failed'`, kick off `diagnose()` in parallel
-- [ ] Emit `diagnosis:start`, `diagnosis:chunk` (multiple), `diagnosis:end` events
-- [ ] At end of run, all diagnoses must be awaited before exit
-- [ ] Add `--no-analyze` flag to disable
+- [x] In `run.ts`, on every `test:end` with `status: 'failed'`, kick off `diagnose()` in parallel
+- [x] Emit `diagnosis:start`, `diagnosis:chunk` (multiple), `diagnosis:end` events
+- [x] At end of run, all diagnoses must be awaited before exit
+- [x] Add `--no-analyze` flag to disable
 
 **Acceptance:** A run with one failure emits the full diagnosis sequence; the dashboard's diagnostics panel shows it streaming in.
 
 ### 6.6 DiagnosticsPanel component
 
-- [ ] Create `src/dashboard/web/components/DiagnosticsPanel.tsx`
-- [ ] Shows the diagnosis for the currently selected failed test
-- [ ] Streams text in as `diagnosis:chunk` events arrive
-- [ ] On `diagnosis:end`: render structured layout with classification badge (color-coded by classification: red for real-bug, orange for test-bug, yellow for flaky, gray for env-issue), confidence indicator, root cause one-liner, evidence list, suggested fix, expandable patch view, git context block ("last changed by Alice 2h ago in commit a3f21d")
-- [ ] "Apply fix" button (only enabled if `patch` is present) sends a WS message back to apply
-- [ ] Server applies the patch using fs operations (NOT via the agent — direct edit) and emits `patch:applied`
+- [x] Create `src/dashboard/web/components/DiagnosticsPanel.tsx`
+- [x] Shows the diagnosis for the currently selected failed test
+- [x] Streams text in as `diagnosis:chunk` events arrive
+- [x] On `diagnosis:end`: render structured layout with classification badge (color-coded by classification: red for real-bug, orange for test-bug, yellow for flaky, gray for env-issue), confidence indicator, root cause one-liner, evidence list, suggested fix, expandable patch view, git context block ("last changed by Alice 2h ago in commit a3f21d")
+- [~] "Apply fix" button (only enabled if `patch` is present) sends a WS message back to apply — UI button deferred (panel renders the patch but doesn't ship Apply Fix yet)
+- [~] Server applies the patch using fs operations (NOT via the agent — direct edit) and emits `patch:applied` — deferred with the button
 
 **Acceptance:** Forced failure in fixture → diagnosis appears with correct classification → Apply Fix updates the file → re-run passes.
 
 ### 6.7 Standalone analyze command
 
-- [ ] Implement `src/commands/analyze.ts` that takes a path to a Playwright JSON report and runs diagnoses on the failed tests
-- [ ] Output as Markdown (no dashboard) — useful for CI artifacts
+- [x] Implement `src/commands/analyze.ts` that takes a path to a Playwright JSON report and runs diagnoses on the failed tests
+- [x] Output as Markdown (no dashboard) — useful for CI artifacts
 
 **Acceptance:** `reactlens analyze playwright-report/results.json > diagnoses.md` works.
 

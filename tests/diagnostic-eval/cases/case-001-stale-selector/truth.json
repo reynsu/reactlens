@@ -1,0 +1,6 @@
+{
+  "expectedClassification": "test-bug",
+  "minimumConfidence": "medium",
+  "category": "stale-selector",
+  "notes": "Spec asserts data-testid 'login-fail' which doesn't exist; component uses 'login-error'. Pure spec bug."
+}

@@ -1,0 +1,6 @@
+{
+  "expectedClassification": "real-bug",
+  "minimumConfidence": "high",
+  "category": "validation-regression",
+  "notes": "Spec is correct. Component's CVV validator was changed from min(3) to min(5), breaking the success path."
+}

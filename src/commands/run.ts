@@ -1,9 +1,11 @@
 import { existsSync } from 'node:fs';
 import { resolve, join } from 'node:path';
 import { spawn } from 'node:child_process';
+import { diagnose } from '../analyzer/failure-agent';
 import { loadConfig } from '../config/load';
 import { startDashboardServer } from '../dashboard/server';
 import { EventBus } from '../runner/event-bus';
+import type { ComponentNode } from '../runner/events';
 import { runTests, type RunSummary } from '../runner/playwright-runner';
 import { logger } from '../utils/logger';
 
@@ -14,6 +16,9 @@ export type RunCommandOptions = {
   // Disable launching the dashboard server. CI mode + json mode imply this.
   noDashboard?: boolean;
   open?: boolean;
+  // Disable on-failure diagnosis. Useful in CI when you want raw results
+  // without API calls. Defaults to enabled when ANTHROPIC_API_KEY is set.
+  noAnalyze?: boolean;
 };
 
 type Status = 'running' | 'passed' | 'failed' | 'skipped' | 'timedOut';
@@ -126,6 +131,44 @@ export async function runRun(opts: RunCommandOptions): Promise<number> {
     return summary.exitCode;
   }
 
+  // Track the last component snapshot per test so on-failure diagnosis has it.
+  const lastSnapshotByTest = new Map<string, ComponentNode>();
+  const lastTestMeta = new Map<string, { title: string; file: string }>();
+  bus.on('component:snapshot', (e) => {
+    lastSnapshotByTest.set(e.testId, e.tree);
+  });
+  bus.on('test:start', (e) => {
+    lastTestMeta.set(e.id, { title: e.title, file: e.file });
+  });
+  const diagnosisPromises: Array<Promise<void>> = [];
+  const wantAnalyze = opts.noAnalyze !== true && process.env.ANTHROPIC_API_KEY !== undefined;
+  if (wantAnalyze) {
+    bus.on('test:end', (e) => {
+      if (e.status !== 'failed' && e.status !== 'timedOut') return;
+      const meta = lastTestMeta.get(e.id);
+      if (meta === undefined) return;
+      bus.emit({ t: 'diagnosis:start', testId: e.id });
+      const promise = diagnose({
+        cwd,
+        failure: {
+          testId: e.id,
+          testTitle: meta.title,
+          specFile: meta.file,
+          ...(e.error !== undefined ? { errorMessage: e.error } : {}),
+          ...(lastSnapshotByTest.get(e.id) !== undefined ? { componentSnapshot: lastSnapshotByTest.get(e.id) } : {}),
+        },
+        onChunk: (text) => bus.emit({ t: 'diagnosis:chunk', testId: e.id, text }),
+      })
+        .then((result) => {
+          bus.emit({ t: 'diagnosis:end', testId: e.id, result });
+        })
+        .catch((err) => {
+          logger.warn({ err, testId: e.id }, 'diagnosis failed');
+        });
+      diagnosisPromises.push(promise);
+    });
+  }
+
   const state = { totalTests: 0, rows: [] as Row[] };
   const isTty = process.stdout.isTTY === true;
 
@@ -156,8 +199,9 @@ export async function runRun(opts: RunCommandOptions): Promise<number> {
       probePath: locatePackagedProbe(),
     });
   } finally {
-    // Keep dashboard alive briefly so users can inspect after the run.
-    // For CLI/CI exit, close immediately.
+    if (diagnosisPromises.length > 0) {
+      await Promise.allSettled(diagnosisPromises);
+    }
     if (dashboard !== null) await dashboard.close();
   }
 
