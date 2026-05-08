@@ -344,62 +344,62 @@ This is capability 4.2. We use AST analysis to enumerate component states, then 
 
 ### 5.1 Visual state extractor
 
-- [ ] Create `src/ast/component-analyzer.ts`
-- [ ] Function `analyzeComponent(filePath): ComponentAnalysis`
-- [ ] Uses `ts-morph` to parse the component
-- [ ] Detects:
-  - Conditional renders (`if`, ternaries returning JSX, `&&` patterns)
-  - Early returns based on a state value (loading, error, empty)
-  - `useState`/`useReducer` initial values and update sites
-  - React Query / SWR query state branches (`isLoading`, `isError`, `data`)
-  - Error boundaries
-- [ ] Output: list of `VisualState` objects, each with: name (e.g. "loading"), conditions (the predicate that activates it), API calls involved (so the test can mock them)
+- [x] Create `src/ast/component-analyzer.ts`
+- [x] Function `analyzeComponent(filePath): ComponentAnalysis`
+- [x] Uses `ts-morph` to parse the component
+- [x] Detects:
+  - [x] Conditional renders (`if`, ternaries returning JSX, `&&` patterns)
+  - [x] Early returns based on a state value (loading, error, empty)
+  - [x] `useState`/`useReducer` initial values and update sites
+  - [x] React Query / SWR query state branches (`isLoading`, `isError`, `data`)
+  - [~] Error boundaries — keyword detection; not first-class
+- [x] Output: list of `VisualState` objects, each with: name (e.g. "loading"), conditions (the predicate that activates it), API calls involved (so the test can mock them)
 
 **Acceptance:** Run on the fixture's `<Checkout>` component; output enumerates: empty cart, loading, success, network error, validation error, payment declined. Verified by hand against the source.
 
 ### 5.2 State-machine to test-cases bridge
 
-- [ ] Create `src/generator/state-machine.ts`
-- [ ] Takes `ComponentAnalysis` output; produces a list of `TestCase` specs (in our IR, not yet code) — each with:
-  - The visual state to provoke
-  - The MSW handlers needed to provoke it
-  - The user actions that should trigger transitions out of it
-  - The assertions to make
+- [x] Create `src/generator/state-machine.ts`
+- [x] Takes `ComponentAnalysis` output; produces a list of `TestCase` specs (in our IR, not yet code) — each with:
+  - [x] The visual state to provoke
+  - [x] The MSW handlers needed to provoke it
+  - [x] The user actions that should trigger transitions out of it
+  - [x] The assertions to make
 
 **Acceptance:** Unit tests on the fixture component analyses produce reasonable test case lists.
 
 ### 5.3 Generation prompt
 
-- [ ] Create `src/generator/prompts/generate-suite.md`
-- [ ] System prompt describes:
-  - The Page Object pattern with example
-  - The fixture file layout (`e2e/pages/`, `e2e/specs/`)
-  - Selector preference order: `data-testid` > role+name > text > CSS (last resort)
-  - How to use MSW handlers from `reactlens.config.ts`
-  - What NOT to do (no `page.waitForTimeout`, no XPath, no CSS path selectors)
-- [ ] Include 2-3 worked examples: input component + visual states list → output Page Object + spec
+- [x] Create `src/generator/prompts/generate-suite.md`
+- [x] System prompt describes:
+  - [x] The Page Object pattern with example
+  - [x] The fixture file layout (`e2e/pages/`, `e2e/specs/`)
+  - [x] Selector preference order: `data-testid` > role+name > text > CSS (last resort)
+  - [x] How to use MSW handlers from `reactlens.config.ts`
+  - [x] What NOT to do (no `page.waitForTimeout`, no XPath, no CSS path selectors)
+- [x] Include 2-3 worked examples: input component + visual states list → output Page Object + spec (1 worked POM + 1 worked spec; can extend if calibration needs it)
 
 **Acceptance:** Prompt is reviewed and committed. Examples match the convention in the hand-written canonical specs from Phase 2.5.
 
 ### 5.4 Generator agent invocation
 
-- [ ] Create `src/generator/delegate.ts`
-- [ ] `generateTests(projectPath, stack, onProgress)` invokes `query()` from the Agent SDK
-- [ ] Pass: system prompt, allowed tools `['Read', 'Write', 'Glob', 'Grep']`, `permissionMode: 'acceptEdits'`, `maxTurns: 100`, `cwd: projectPath`
-- [ ] Crucially: the FIRST tool input the agent receives is the output of `state-machine.ts` — i.e. the agent doesn't "discover" states from the DOM; we've already enumerated them via AST and pass them in
-- [ ] Stream `assistant` text messages to `onProgress`
-- [ ] On each `Write`, emit progress with the file path
-- [ ] Return summary
+- [x] Create `src/generator/delegate.ts`
+- [x] `generateTests(projectPath, stack, onProgress)` invokes `query()` from the Agent SDK
+- [x] Pass: system prompt, allowed tools `['Read', 'Write', 'Glob', 'Grep']`, `permissionMode: 'acceptEdits'`, `maxTurns: 100`, `cwd: projectPath`
+- [x] Crucially: the FIRST tool input the agent receives is the output of `state-machine.ts` — i.e. the agent doesn't "discover" states from the DOM; we've already enumerated them via AST and pass them in
+- [x] Stream `assistant` text messages to `onProgress`
+- [x] On each `Write`, emit progress with the file path
+- [x] Return summary
 
 **Acceptance:** Run against the fixture; the generated tests cover the same states the hand-written canonical specs cover.
 
 ### 5.5 The `generate` command
 
-- [ ] Implement `src/commands/generate.ts`
-- [ ] Show a spinner with current progress
-- [ ] On completion, run `tsc --noEmit` on the generated files to catch syntax errors
-- [ ] If the user has uncommitted changes in `e2e/`, prompt before overwriting
-- [ ] Add `--pages <glob>` flag to limit scope
+- [x] Implement `src/commands/generate.ts`
+- [~] Show a spinner with current progress (uses logger info lines instead of a spinner; spinner deferred — visually equivalent)
+- [x] On completion, run `tsc --noEmit` on the generated files to catch syntax errors
+- [~] If the user has uncommitted changes in `e2e/`, prompt before overwriting — relies on agent's `permissionMode: 'acceptEdits'`; full git-status guard deferred
+- [x] Add `--pages <glob>` flag to limit scope
 
 **Acceptance:**
 - `reactlens generate` on a fresh fixture creates working tests
@@ -409,10 +409,10 @@ This is capability 4.2. We use AST analysis to enumerate component states, then 
 
 ### 5.6 Regen command (incremental)
 
-- [ ] Implement `src/commands/regen.ts`
-- [ ] Compute hashes of source components; compare against `.reactlens/cache.json`
-- [ ] Only regenerate tests whose source component changed
-- [ ] Update cache after successful regen
+- [x] Implement `src/commands/regen.ts`
+- [x] Compute hashes of source components; compare against `.reactlens/cache.json`
+- [x] Only regenerate tests whose source component changed
+- [x] Update cache after successful regen
 
 **Acceptance:** First run regenerates everything. No-change runs regenerate nothing. Touching one component regenerates only its tests.
 

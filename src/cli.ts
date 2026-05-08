@@ -1,12 +1,14 @@
 import { Command } from 'commander';
 import { readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
+import { runGenerate } from './commands/generate';
 import { runInit } from './commands/init';
+import { runRegen } from './commands/regen';
 import { runRun } from './commands/run';
 import { ReactLensError } from './utils/errors';
 import { logger } from './utils/logger';
 
-type StubName = 'generate' | 'analyze' | 'regen';
+type StubName = 'analyze';
 
 function readPackageVersion(): string {
   const pkgPath = join(__dirname, '..', 'package.json');
@@ -44,7 +46,20 @@ function buildProgram(): Command {
       });
     });
 
-  program.command('generate').description('generate tests by analyzing components').action(stub('generate'));
+  program
+    .command('generate')
+    .description('generate tests by analyzing components')
+    .option('--cwd <path>', 'project directory', process.cwd())
+    .option('--pages <glob>', 'limit generation to a subset of components')
+    .option('--skip-typecheck', 'skip running tsc on generated tests', false)
+    .action(async (opts: { cwd: string; pages?: string; skipTypecheck: boolean }) => {
+      const code = await runGenerate({
+        cwd: opts.cwd,
+        pages: opts.pages,
+        skipTypecheck: opts.skipTypecheck,
+      });
+      process.exitCode = code;
+    });
   program
     .command('run')
     .description('run tests with the live dashboard')
@@ -65,7 +80,14 @@ function buildProgram(): Command {
       process.exitCode = code;
     });
   program.command('analyze').description('diagnose a Playwright report').action(stub('analyze'));
-  program.command('regen').description('regenerate tests for changed components').action(stub('regen'));
+  program
+    .command('regen')
+    .description('regenerate tests for changed components')
+    .option('--cwd <path>', 'project directory', process.cwd())
+    .action(async (opts: { cwd: string }) => {
+      const code = await runRegen({ cwd: opts.cwd });
+      process.exitCode = code;
+    });
 
   return program;
 }
