@@ -51,12 +51,16 @@ function buildProgram(): Command {
     .option('--cwd <path>', 'project directory', process.cwd())
     .option('--reporter <kind>', 'text | json', 'text')
     .option('--skip-web-server', 'do not auto-start the user webServer', false)
-    .action(async (opts: { cwd: string; reporter: string; skipWebServer: boolean }) => {
+    .option('--no-dashboard', 'run headlessly without the dashboard server')
+    .option('--no-open', 'do not auto-open the dashboard in a browser')
+    .action(async (opts: { cwd: string; reporter: string; skipWebServer: boolean; dashboard: boolean; open: boolean }) => {
       const reporter = opts.reporter === 'json' ? 'json' : 'text';
       const code = await runRun({
         cwd: opts.cwd,
         reporter,
         skipWebServer: opts.skipWebServer,
+        noDashboard: !opts.dashboard,
+        open: opts.open,
       });
       process.exitCode = code;
     });

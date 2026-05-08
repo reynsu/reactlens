@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test } from '../../reactlens/fixtures';
 import { DashboardPage } from '../pages/DashboardPage';
 
 test.describe('Dashboard', () => {

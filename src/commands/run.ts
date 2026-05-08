@@ -1,12 +1,19 @@
-import { resolve } from 'node:path';
+import { existsSync } from 'node:fs';
+import { resolve, join } from 'node:path';
+import { spawn } from 'node:child_process';
 import { loadConfig } from '../config/load';
+import { startDashboardServer } from '../dashboard/server';
 import { EventBus } from '../runner/event-bus';
 import { runTests, type RunSummary } from '../runner/playwright-runner';
+import { logger } from '../utils/logger';
 
 export type RunCommandOptions = {
   cwd: string;
   reporter: 'text' | 'json';
   skipWebServer?: boolean;
+  // Disable launching the dashboard server. CI mode + json mode imply this.
+  noDashboard?: boolean;
+  open?: boolean;
 };
 
 type Status = 'running' | 'passed' | 'failed' | 'skipped' | 'timedOut';
@@ -41,28 +48,81 @@ function renderTable(rows: Row[], totalTests: number): string {
 function reprint(state: { rows: Row[]; totalTests: number }, isTty: boolean): void {
   const text = renderTable(state.rows, state.totalTests);
   if (isTty) {
-    // Move cursor to top-left and clear screen below — simple repaint.
     process.stdout.write('\x1b[H\x1b[2J' + text);
   } else {
-    // Non-TTY: append (e.g. piped to a file). Drop terminal control chars.
     process.stdout.write(text);
+  }
+}
+
+function locatePackagedProbe(): string | undefined {
+  // Walk up from this compiled file looking for the dist/probe bundle.
+  const candidates = [
+    join(__dirname, 'probe', 'probe.global.js'),
+    join(__dirname, '..', 'probe', 'probe.global.js'),
+    join(__dirname, '..', '..', 'dist', 'probe', 'probe.global.js'),
+  ];
+  for (const c of candidates) {
+    if (existsSync(c)) return c;
+  }
+  return undefined;
+}
+
+function tryOpenInBrowser(url: string): void {
+  // Replacement for the `open` package — uses platform-native shell command.
+  const cmd = process.platform === 'darwin' ? 'open' : process.platform === 'win32' ? 'start' : 'xdg-open';
+  try {
+    spawn(cmd, [url], { stdio: 'ignore', detached: true }).unref();
+  } catch (err) {
+    logger.warn({ err }, 'failed to open browser');
   }
 }
 
 export async function runRun(opts: RunCommandOptions): Promise<number> {
   const cwd = resolve(opts.cwd);
-  await loadConfig(cwd); // validates user config; failure throws ConfigError
-
+  const config = await loadConfig(cwd);
   const bus = new EventBus();
 
+  const wantDashboard = opts.noDashboard !== true && opts.reporter !== 'json';
+
+  let dashboard: Awaited<ReturnType<typeof startDashboardServer>> | null = null;
+  if (wantDashboard) {
+    try {
+      dashboard = await startDashboardServer({ port: config.dashboard.port, bus });
+      const url = `http://localhost:${dashboard.port}`;
+      logger.info({ url }, 'dashboard listening');
+      if (opts.open !== false && config.dashboard.open) tryOpenInBrowser(url);
+    } catch (err) {
+      logger.warn({ err }, 'dashboard server failed to start; continuing in headless mode');
+      dashboard = null;
+    }
+  }
+
   if (opts.reporter === 'json') {
-    bus.on('run:start', (e) => process.stdout.write(JSON.stringify(e) + '\n'));
-    bus.on('test:start', (e) => process.stdout.write(JSON.stringify(e) + '\n'));
-    bus.on('step:start', (e) => process.stdout.write(JSON.stringify(e) + '\n'));
-    bus.on('step:end', (e) => process.stdout.write(JSON.stringify(e) + '\n'));
-    bus.on('test:end', (e) => process.stdout.write(JSON.stringify(e) + '\n'));
-    bus.on('run:end', (e) => process.stdout.write(JSON.stringify(e) + '\n'));
-    const summary = await runTests({ cwd, bus, skipWebServer: opts.skipWebServer });
+    const types = [
+      'run:start',
+      'test:start',
+      'step:start',
+      'step:end',
+      'test:end',
+      'run:end',
+      'frame',
+      'component:snapshot',
+      'component:event',
+      'diagnosis:start',
+      'diagnosis:chunk',
+      'diagnosis:end',
+    ] as const;
+    for (const t of types) {
+      bus.on(t, (e) => process.stdout.write(JSON.stringify(e) + '\n'));
+    }
+    const summary = await runTests({
+      cwd,
+      bus,
+      skipWebServer: opts.skipWebServer,
+      probeWsUrl: dashboard?.probeWsUrl,
+      probePath: locatePackagedProbe(),
+    });
+    if (dashboard !== null) await dashboard.close();
     return summary.exitCode;
   }
 
@@ -88,11 +148,17 @@ export async function runRun(opts: RunCommandOptions): Promise<number> {
 
   let summary: RunSummary;
   try {
-    summary = await runTests({ cwd, bus, skipWebServer: opts.skipWebServer });
+    summary = await runTests({
+      cwd,
+      bus,
+      skipWebServer: opts.skipWebServer,
+      probeWsUrl: dashboard?.probeWsUrl,
+      probePath: locatePackagedProbe(),
+    });
   } finally {
-    if (!isTty) {
-      // No final repaint needed in TTY mode (last run:end already triggered).
-    }
+    // Keep dashboard alive briefly so users can inspect after the run.
+    // For CLI/CI exit, close immediately.
+    if (dashboard !== null) await dashboard.close();
   }
 
   process.stdout.write(

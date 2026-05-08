@@ -13,6 +13,14 @@ export type RunnerOptions = {
   // When true, set REACTLENS_NO_WEB_SERVER=1 so the user's playwright config
   // skips its webServer block. Currently only used in tests.
   skipWebServer?: boolean;
+  // WS URL the in-app probe and the screencast fixture should connect to.
+  // Set when reactlens drives the run with a live dashboard.
+  probeWsUrl?: string;
+  // Filesystem path to the probe IIFE bundle. Used to pin lookup during
+  // reactlens development (when the package isn't installed into the target
+  // project's node_modules); in published use, the fixtures.ts default
+  // resolution via require.resolve('reactlens/package.json') is preferred.
+  probePath?: string;
 };
 
 export type RunSummary = {
@@ -75,6 +83,8 @@ export async function runTests(opts: RunnerOptions): Promise<RunSummary> {
   const args = ['playwright', 'test', ...(opts.extraArgs ?? [])];
   const env: Record<string, string> = { ...process.env } as Record<string, string>;
   if (opts.skipWebServer === true) env['REACTLENS_NO_WEB_SERVER'] = '1';
+  if (opts.probeWsUrl !== undefined) env['REACTLENS_WS_URL'] = opts.probeWsUrl;
+  if (opts.probePath !== undefined) env['REACTLENS_PROBE_PATH'] = opts.probePath;
 
   const child = execa('npx', args, {
     cwd: opts.cwd,

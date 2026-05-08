@@ -28,6 +28,7 @@ const FILE_LAYOUT: Array<{ template: string; destRel: string }> = [
   { template: 'reactlens.config.ts', destRel: 'reactlens.config.ts' },
   { template: 'streaming-reporter.ts', destRel: 'reactlens/streaming-reporter.ts' },
   { template: 'global-setup.ts', destRel: 'reactlens/global-setup.ts' },
+  { template: 'fixtures.ts', destRel: 'reactlens/fixtures.ts' },
 ];
 
 async function planFiles(opts: InitOptions): Promise<FilePlan[]> {
