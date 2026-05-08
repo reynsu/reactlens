@@ -133,12 +133,12 @@ Make tests run and emit a parseable event stream. No dashboard yet.
 
 ### 2.3 Playwright runner wrapper
 
-- [ ] Create `src/runner/playwright-runner.ts`
-- [ ] Function `runTests(opts: RunnerOptions): Promise<RunSummary>` spawns `npx playwright test` via `execa`
-- [ ] Parse stdout line by line; for each valid JSON line, emit on the event bus
-- [ ] Capture stderr; surface non-event output as warnings via the logger
-- [ ] Handle exit codes: 0 = passed, 1 = some failed (resolve), other = error (reject)
-- [ ] Forward `SIGINT` to the child for clean Ctrl+C
+- [x] Create `src/runner/playwright-runner.ts`
+- [x] Function `runTests(opts: RunnerOptions): Promise<RunSummary>` spawns `npx playwright test` via `execa`
+- [x] Parse stdout line by line; for each valid JSON line, emit on the event bus
+- [x] Capture stderr; surface non-event output as warnings via the logger
+- [x] Handle exit codes: 0 = passed, 1 = some failed (resolve), other = error (reject)
+- [x] Forward `SIGINT` to the child for clean Ctrl+C
 
 **Acceptance:**
 - `runTests({ cwd: 'tests/fixtures/vite-react-router' })` runs the fixture's tests
@@ -147,9 +147,9 @@ Make tests run and emit a parseable event stream. No dashboard yet.
 
 ### 2.4 Wire `run` command (no dashboard yet)
 
-- [ ] Implement `src/commands/run.ts` to: load config, call `runTests`, subscribe to events, print a simple text status table
-- [ ] Add `--reporter json` flag for raw JSONL passthrough
-- [ ] Add `--cwd <path>` flag
+- [x] Implement `src/commands/run.ts` to: load config, call `runTests`, subscribe to events, print a simple text status table
+- [x] Add `--reporter json` flag for raw JSONL passthrough
+- [x] Add `--cwd <path>` flag
 
 **Acceptance:** `reactlens run --cwd tests/fixtures/vite-react-router` runs Playwright, shows a live-updating table, exits with the correct code.
 

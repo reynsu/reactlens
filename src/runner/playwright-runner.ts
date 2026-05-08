@@ -1,0 +1,159 @@
+import { execa, type ResultPromise, type Subprocess } from 'execa';
+import { ReactLensError } from '../utils/errors';
+import { logger } from '../utils/logger';
+import { EventBus } from './event-bus';
+import type { RunEvent, RunEventType } from './events';
+
+export type RunnerOptions = {
+  cwd: string;
+  bus: EventBus;
+  // Extra args appended to `npx playwright test`. Useful for `--last-failed`
+  // and grep filters from the dashboard.
+  extraArgs?: string[];
+  // When true, set REACTLENS_NO_WEB_SERVER=1 so the user's playwright config
+  // skips its webServer block. Currently only used in tests.
+  skipWebServer?: boolean;
+};
+
+export type RunSummary = {
+  passed: number;
+  failed: number;
+  skipped: number;
+  duration: number;
+  exitCode: number;
+};
+
+const KNOWN_EVENT_TYPES = new Set<RunEventType>([
+  'run:start',
+  'run:end',
+  'test:start',
+  'test:end',
+  'step:start',
+  'step:end',
+  'frame',
+  'component:snapshot',
+  'component:event',
+  'diagnosis:start',
+  'diagnosis:chunk',
+  'diagnosis:end',
+]);
+
+function tryParseEvent(line: string): RunEvent | null {
+  if (line.length === 0 || line[0] !== '{') return null;
+  try {
+    const parsed = JSON.parse(line) as { t?: unknown };
+    if (typeof parsed.t !== 'string') return null;
+    if (!KNOWN_EVENT_TYPES.has(parsed.t as RunEventType)) return null;
+    return parsed as RunEvent;
+  } catch {
+    return null;
+  }
+}
+
+class LineSplitter {
+  private buffer = '';
+
+  push(chunk: string, onLine: (line: string) => void): void {
+    this.buffer += chunk;
+    let idx = this.buffer.indexOf('\n');
+    while (idx >= 0) {
+      const line = this.buffer.slice(0, idx);
+      this.buffer = this.buffer.slice(idx + 1);
+      onLine(line);
+      idx = this.buffer.indexOf('\n');
+    }
+  }
+
+  flush(onLine: (line: string) => void): void {
+    if (this.buffer.length === 0) return;
+    onLine(this.buffer);
+    this.buffer = '';
+  }
+}
+
+export async function runTests(opts: RunnerOptions): Promise<RunSummary> {
+  const args = ['playwright', 'test', ...(opts.extraArgs ?? [])];
+  const env: Record<string, string> = { ...process.env } as Record<string, string>;
+  if (opts.skipWebServer === true) env['REACTLENS_NO_WEB_SERVER'] = '1';
+
+  const child = execa('npx', args, {
+    cwd: opts.cwd,
+    env,
+    reject: false,
+    stdio: ['ignore', 'pipe', 'pipe'],
+    encoding: 'utf8',
+  }) as ResultPromise<{ reject: false; encoding: 'utf8' }> & Subprocess;
+
+  let summary: { passed: number; failed: number; skipped: number; duration: number } = {
+    passed: 0,
+    failed: 0,
+    skipped: 0,
+    duration: 0,
+  };
+
+  const stdoutSplitter = new LineSplitter();
+  const stderrSplitter = new LineSplitter();
+
+  child.stdout?.setEncoding('utf8');
+  child.stderr?.setEncoding('utf8');
+
+  child.stdout?.on('data', (chunk: string) => {
+    stdoutSplitter.push(chunk, (line) => {
+      const event = tryParseEvent(line);
+      if (event !== null) {
+        if (event.t === 'run:end') {
+          summary = {
+            passed: event.passed,
+            failed: event.failed,
+            skipped: event.skipped,
+            duration: event.duration,
+          };
+        }
+        opts.bus.emit(event);
+      } else if (line.trim().length > 0) {
+        logger.warn({ line }, 'unparseable runner output');
+      }
+    });
+  });
+
+  child.stderr?.on('data', (chunk: string) => {
+    stderrSplitter.push(chunk, (line) => {
+      if (line.trim().length > 0) logger.warn({ line }, 'playwright stderr');
+    });
+  });
+
+  // Forward Ctrl+C from our process to the child so Playwright shuts its
+  // browsers and webServer cleanly. Without this, child processes leak.
+  const onSigint = (): void => {
+    try {
+      child.kill('SIGINT');
+    } catch {
+      /* already dead */
+    }
+  };
+  process.once('SIGINT', onSigint);
+
+  let result;
+  try {
+    result = await child;
+  } finally {
+    process.removeListener('SIGINT', onSigint);
+    stdoutSplitter.flush((line) => {
+      const event = tryParseEvent(line);
+      if (event !== null) opts.bus.emit(event);
+    });
+    stderrSplitter.flush(() => undefined);
+  }
+
+  const exitCode = result.exitCode ?? 0;
+  // Playwright exits 0 = pass, 1 = some failed. Anything else (signal, infra)
+  // is a hard error — let the caller decide.
+  if (exitCode !== 0 && exitCode !== 1 && !result.isCanceled) {
+    throw new ReactLensError(
+      `playwright runner exited with code ${exitCode}: ${result.stderr ?? ''}`,
+      { code: 'RUNNER_INFRA_ERROR' },
+    );
+  }
+
+  return { ...summary, exitCode };
+}

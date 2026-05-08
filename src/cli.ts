@@ -2,10 +2,11 @@ import { Command } from 'commander';
 import { readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { runInit } from './commands/init';
+import { runRun } from './commands/run';
 import { ReactLensError } from './utils/errors';
 import { logger } from './utils/logger';
 
-type StubName = 'generate' | 'run' | 'analyze' | 'regen';
+type StubName = 'generate' | 'analyze' | 'regen';
 
 function readPackageVersion(): string {
   const pkgPath = join(__dirname, '..', 'package.json');
@@ -44,7 +45,21 @@ function buildProgram(): Command {
     });
 
   program.command('generate').description('generate tests by analyzing components').action(stub('generate'));
-  program.command('run').description('run tests with the live dashboard').action(stub('run'));
+  program
+    .command('run')
+    .description('run tests with the live dashboard')
+    .option('--cwd <path>', 'project directory', process.cwd())
+    .option('--reporter <kind>', 'text | json', 'text')
+    .option('--skip-web-server', 'do not auto-start the user webServer', false)
+    .action(async (opts: { cwd: string; reporter: string; skipWebServer: boolean }) => {
+      const reporter = opts.reporter === 'json' ? 'json' : 'text';
+      const code = await runRun({
+        cwd: opts.cwd,
+        reporter,
+        skipWebServer: opts.skipWebServer,
+      });
+      process.exitCode = code;
+    });
   program.command('analyze').description('diagnose a Playwright report').action(stub('analyze'));
   program.command('regen').description('regenerate tests for changed components').action(stub('regen'));
 
