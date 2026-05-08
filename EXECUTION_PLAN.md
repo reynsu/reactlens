@@ -69,10 +69,10 @@ The goal is a published-shaped skeleton with a working CLI binary. No real funct
 
 ### 1.2 First fixture app (Vite + React Router)
 
-- [ ] Create `tests/fixtures/vite-react-router/` with a Vite + React + React Router app
-- [ ] App must have at least: `/login`, `/dashboard`, `/checkout`. Each page must have NON-trivial component logic — multiple visual states (loading/error/empty/success), at least one form with validation, at least one component using a query state from `react-query` or similar
-- [ ] The fixture must be useful for testing capability 4.2 (state enumeration), so don't make it trivial
-- [ ] Add a README explaining what the fixture is for
+- [x] Create `tests/fixtures/vite-react-router/` with a Vite + React + React Router app
+- [x] App must have at least: `/login`, `/dashboard`, `/checkout`. Each page must have NON-trivial component logic — multiple visual states (loading/error/empty/success), at least one form with validation, at least one component using a query state from `react-query` or similar
+- [x] The fixture must be useful for testing capability 4.2 (state enumeration), so don't make it trivial
+- [x] Add a README explaining what the fixture is for
 
 **Acceptance:** `cd tests/fixtures/vite-react-router && pnpm install && pnpm dev` opens a working app at `localhost:5173` with all the planned visual states reachable manually.
 
