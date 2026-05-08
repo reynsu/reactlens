@@ -248,31 +248,31 @@ Build the web dashboard. The component inspector (4.5) is what makes this dashbo
 
 ### 4.1 Server scaffolding
 
-- [ ] Create `src/dashboard/server.ts` with Express on port 7777 (configurable via `--port`)
-- [ ] Serve static files from `dist/web/`
-- [ ] Two WS endpoints: `/ws/dashboard` for browser dashboard clients, `/ws/probe` for in-app probes
-- [ ] Server holds an event buffer (last N events) so a dashboard client connecting mid-run gets recent history
-- [ ] On client connect, send buffered events; then forward live events
-- [ ] Graceful shutdown: close all WS connections, then HTTP server
+- [x] Create `src/dashboard/server.ts` with Express on port 7777 (configurable via `--port`)
+- [x] Serve static files from `dist/web/`
+- [x] Two WS endpoints: `/ws/dashboard` for browser dashboard clients, `/ws/probe` for in-app probes
+- [x] Server holds an event buffer (last N events) so a dashboard client connecting mid-run gets recent history
+- [x] On client connect, send buffered events; then forward live events
+- [x] Graceful shutdown: close all WS connections, then HTTP server
 
 **Acceptance:** Manual: start the server, connect via `wscat`, see events flow.
 
 ### 4.2 Frontend scaffolding
 
-- [ ] Inside `src/dashboard/web/`, set up Vite + React + Tailwind
-- [ ] Configure Vite to build into `dist/web/`
-- [ ] Add `build:web` script and have `build` run both
-- [ ] Hello-world UI: connect to WS, log every event to console
+- [x] Inside `src/dashboard/web/`, set up Vite + React + Tailwind (Tailwind dropped — used hand-written CSS to keep the bundle small; Vite + React 19 in place)
+- [x] Configure Vite to build into `dist/web/`
+- [x] Add `build:web` script and have `build` run both
+- [x] Hello-world UI: connect to WS, log every event to console (full UI, not just hello-world)
 
 **Acceptance:** `pnpm build` produces a unified `dist/`. Dashboard at `localhost:7777` logs events from a real run.
 
 ### 4.3 TestList component
 
-- [ ] Create `src/dashboard/web/components/TestList.tsx`
-- [ ] Each test row: status icon (spinner/check/X/dash), title, duration, file path
-- [ ] Group rows by suite (file)
-- [ ] Header shows aggregate: `3/12 passed, 1 failed` with progress bar
-- [ ] Clicking a row selects it; selected test's details show in the side panels
+- [x] Create `src/dashboard/web/components/TestList.tsx`
+- [x] Each test row: status icon (spinner/check/X/dash), title, duration, file path
+- [x] Group rows by suite (file)
+- [x] Header shows aggregate: `3/12 passed, 1 failed` with progress bar
+- [x] Clicking a row selects it; selected test's details show in the side panels
 
 **Acceptance:** Run real tests; the list updates live with correct statuses.
 
@@ -280,39 +280,39 @@ Build the web dashboard. The component inspector (4.5) is what makes this dashbo
 
 #### 4.4.1 CDP attachment in user's project
 
-- [ ] In `templates/global-setup.ts`:
-  - Read `process.env.REACTLENS_WS_URL`
-  - Hook into Playwright's per-page lifecycle to attach a CDP session
-  - On each new page, call `Page.startScreencast` (`format: 'jpeg', quality: 60, maxWidth: 1280`)
-  - On `Page.screencastFrame`, send `{ t: 'frame', testId, data, sessionId }` and ack
-  - On test end, stop the screencast for that page
+- [x] In `templates/global-setup.ts`: (CDP attach moved to `templates/fixtures.ts` for the same reason `test.beforeEach` did — Playwright disallows config-time hooks)
+  - [x] Read `process.env.REACTLENS_WS_URL`
+  - [x] Hook into Playwright's per-page lifecycle to attach a CDP session
+  - [x] On each new page, call `Page.startScreencast` (`format: 'jpeg', quality: 60, maxWidth: 1280`)
+  - [x] On `Page.screencastFrame`, send `{ t: 'frame', testId, data, sessionId }` and ack
+  - [x] On test end, stop the screencast for that page
 
-- [ ] Update `playwright-runner.ts` to set `REACTLENS_WS_URL` before spawning
+- [x] Update `playwright-runner.ts` to set `REACTLENS_WS_URL` before spawning
 
 #### 4.4.2 Frontend rendering
 
-- [ ] Create `BrowserPreview.tsx`
-- [ ] Maintain `latestFrame` state per `testId`; switch based on selected test
-- [ ] Render the frame as `<img src={`data:image/jpeg;base64,${frame.data}`} />` in a fixed-aspect container
-- [ ] Show overlay with current step title and current URL
-- [ ] When no test is running, show a placeholder
+- [x] Create `BrowserPreview.tsx`
+- [x] Maintain `latestFrame` state per `testId`; switch based on selected test
+- [x] Render the frame as `<img src={`data:image/jpeg;base64,${frame.data}`} />` in a fixed-aspect container
+- [x] Show overlay with current step title and current URL
+- [x] When no test is running, show a placeholder
 
 **Acceptance:** Frames update at 15+ fps. Switching tests switches the preview. Last frame stays visible 2s after test ends, then clears.
 
 #### 4.4.3 Force `workers: 1` when dashboard is on
 
-- [ ] Detect dashboard mode in `run.ts`; pass `--workers=1` unless `--ci` is set
+- [x] Detect dashboard mode in `run.ts`; pass `--workers=1` unless `--ci` is set (workers: 1 is set by default in playwright.config template; --ci flag in Phase 7.1 will override)
 
 **Acceptance:** Default `reactlens run` runs serially. `--ci` runs in parallel without dashboard.
 
 ### 4.5 ComponentInspector (the differentiated panel)
 
-- [ ] Create `src/dashboard/web/components/ComponentInspector.tsx`
-- [ ] Subscribes to `component:snapshot` events for the selected test
-- [ ] Shows the most recent snapshot for the currently selected step
-- [ ] Renders a tree view (collapsible) of components by name
-- [ ] Selecting a node shows its props (table), hooks (table), source location (with link if `code: editor` is configured)
-- [ ] Highlights the component currently being interacted with by Playwright (heuristic: the most recently changed subtree, or the one matching the step's locator)
+- [x] Create `src/dashboard/web/components/ComponentInspector.tsx`
+- [x] Subscribes to `component:snapshot` events for the selected test
+- [x] Shows the most recent snapshot for the currently selected step
+- [x] Renders a tree view (collapsible) of components by name
+- [x] Selecting a node shows its props (table), hooks (table), source location (with link if `code: editor` is configured) (source line shown; clickable editor link deferred)
+- [~] Highlights the component currently being interacted with by Playwright (heuristic: the most recently changed subtree, or the one matching the step's locator) — deferred to v0.2
 
 **Acceptance:**
 - Open the dashboard during a fixture run
@@ -322,17 +322,17 @@ Build the web dashboard. The component inspector (4.5) is what makes this dashbo
 
 ### 4.6 Header and run controls
 
-- [ ] Header bar with project name, aggregate stats, run timer
-- [ ] "Stop" button → SIGINT to runner via WS
-- [ ] "Re-run failed" button → `--last-failed`
+- [x] Header bar with project name, aggregate stats, run timer
+- [~] "Stop" button → SIGINT to runner via WS — deferred (UI v2)
+- [~] "Re-run failed" button → `--last-failed` — deferred (UI v2)
 
 **Acceptance:** Stop kills the run cleanly. Re-run failed only runs failed tests.
 
 ### 4.7 Open browser automatically
 
-- [ ] On `reactlens run`, after the dashboard is listening, open `http://localhost:7777` via the `open` package
-- [ ] Add `--no-open` flag
-- [ ] If a tab is already connected, don't open a duplicate
+- [x] On `reactlens run`, after the dashboard is listening, open `http://localhost:7777` via the `open` package (uses platform-native `open`/`xdg-open`/`start` instead of the `open` npm dep)
+- [x] Add `--no-open` flag
+- [~] If a tab is already connected, don't open a duplicate — relies on Chrome's URL-de-duplication; not strictly enforced
 
 **Acceptance:** Running the command opens the browser; closing/reopening doesn't spawn duplicates.
 
