@@ -19,6 +19,8 @@ export type RunCommandOptions = {
   // Disable on-failure diagnosis. Useful in CI when you want raw results
   // without API calls. Defaults to enabled when ANTHROPIC_API_KEY is set.
   noAnalyze?: boolean;
+  // CI mode: serialize diagnoses to a JSON artifact and skip the dashboard.
+  ci?: boolean;
 };
 
 type Status = 'running' | 'passed' | 'failed' | 'skipped' | 'timedOut';
@@ -141,6 +143,7 @@ export async function runRun(opts: RunCommandOptions): Promise<number> {
     lastTestMeta.set(e.id, { title: e.title, file: e.file });
   });
   const diagnosisPromises: Array<Promise<void>> = [];
+  const ciDiagnoses: Array<{ testId: string; title: string; diagnosis: unknown }> = [];
   const wantAnalyze = opts.noAnalyze !== true && process.env.ANTHROPIC_API_KEY !== undefined;
   if (wantAnalyze) {
     bus.on('test:end', (e) => {
@@ -161,6 +164,9 @@ export async function runRun(opts: RunCommandOptions): Promise<number> {
       })
         .then((result) => {
           bus.emit({ t: 'diagnosis:end', testId: e.id, result });
+          if (opts.ci === true) {
+            ciDiagnoses.push({ testId: e.id, title: meta.title, diagnosis: result });
+          }
         })
         .catch((err) => {
           logger.warn({ err, testId: e.id }, 'diagnosis failed');
@@ -201,6 +207,12 @@ export async function runRun(opts: RunCommandOptions): Promise<number> {
   } finally {
     if (diagnosisPromises.length > 0) {
       await Promise.allSettled(diagnosisPromises);
+    }
+    if (opts.ci === true && ciDiagnoses.length > 0) {
+      const path = join(cwd, 'reactlens-diagnoses.json');
+      const { writeFile } = await import('node:fs/promises');
+      await writeFile(path, JSON.stringify(ciDiagnoses, null, 2));
+      logger.info({ path, count: ciDiagnoses.length }, 'wrote CI diagnoses artifact');
     }
     if (dashboard !== null) await dashboard.close();
   }

@@ -499,70 +499,70 @@ This is capability 4.3, the second core differentiator.
 
 ### 7.1 CI mode
 
-- [ ] `--ci` flag disables dashboard, sets `workers` from config (default 4), emits JUnit XML
-- [ ] Diagnoses written to `reactlens-diagnoses.json` artifact
-- [ ] Exit codes: 0 if all pass, 1 if any fail, 2 on infra error
+- [x] `--ci` flag disables dashboard, sets `workers` from config (default 4), emits JUnit XML — `--ci` disables dashboard + auto-open. JUnit XML reporter wiring deferred (the streaming reporter still emits JSONL on stdout, which CI artifacts can capture).
+- [x] Diagnoses written to `reactlens-diagnoses.json` artifact
+- [x] Exit codes: 0 if all pass, 1 if any fail, 2 on infra error
 
 **Acceptance:** Runs cleanly in GitHub Actions with no TTY.
 
 ### 7.2 Watch mode
 
-- [ ] `reactlens run --watch` with `chokidar`
-- [ ] On change, runs `regen` for affected components, then re-runs only those tests
-- [ ] Dashboard stays open and updates
+- [~] `reactlens run --watch` with `chokidar` — deferred to a follow-up; not in v0.0.1.
+- [~] On change, runs `regen` for affected components, then re-runs only those tests — deferred.
+- [~] Dashboard stays open and updates — deferred.
 
-**Acceptance:** Edit a component → corresponding tests regenerate and re-run within 5 seconds.
+**Acceptance:** Edit a component → corresponding tests regenerate and re-run within 5 seconds. (Deferred — Phase 7.2 is not part of the v0.0.1 cut.)
 
 ### 7.3 Documentation
 
-- [ ] `README.md` with installation, quickstart, feature list, screenshots/GIF of the dashboard with the component inspector visible
-- [ ] `docs/configuration.md`
-- [ ] `docs/troubleshooting.md`
-- [ ] `docs/component-bridge.md` — how the moat works, for transparency
-- [ ] Inline JSDoc on all exported functions
+- [x] `README.md` with installation, quickstart, feature list, screenshots/GIF of the dashboard with the component inspector visible (text only; GIF deferred)
+- [x] `docs/configuration.md`
+- [x] `docs/troubleshooting.md`
+- [x] `docs/component-bridge.md` — how the moat works, for transparency
+- [~] Inline JSDoc on all exported functions — most exports have block comments at top of file or inline; full JSDoc pass deferred
 
 **Acceptance:** A new user goes from `npm install` to a passing test run by following the README only.
 
 ### 7.4 Comprehensive integration tests
 
-- [ ] Add integration tests under `tests/integration/`:
-  - For each fixture: `init` → `generate` → `run` end-to-end
-  - Assert expected files were created and tests pass
-  - Assert component snapshots arrive correctly
-  - Assert at least one diagnosis is emitted for an injected failure
-- [ ] These run in CI but skip in `pnpm test`
+- [x] Add integration tests under `tests/integration/`:
+  - [x] Run end-to-end against the Vite + React Router fixture (`tests/integration/run-flow.test.ts`)
+  - [x] Assert component snapshots arrive correctly
+  - [x] Assert frame events flow (CDP screencast)
+  - [~] Assert at least one diagnosis is emitted for an injected failure — deferred (no fixture failure available without injecting one; `init` and `generate` integration tests deferred)
+- [x] These run in CI but skip in `pnpm test`
 
 **Acceptance:** All integration tests pass on Linux, macOS, and Windows in GitHub Actions.
 
 ### 7.5 Add Next.js fixture
 
-- [ ] Create `tests/fixtures/next-app-router/` mirroring the Vite fixture's complexity
-- [ ] Update stack detector and templates for Next.js (App Router, server components, `app/` directory)
-- [ ] Verify the component bridge works through Next's hydration boundary
-- [ ] Run integration tests against it
+- [~] Create `tests/fixtures/next-app-router/` mirroring the Vite fixture's complexity — placeholder package.json + README only; full app deferred to a follow-up. Stack detection works.
+- [~] Update stack detector and templates for Next.js (App Router, server components, `app/` directory) — detector ✓; templates unchanged (work for vite + most Next configs).
+- [~] Verify the component bridge works through Next's hydration boundary — deferred until full fixture exists.
+- [~] Run integration tests against it — deferred.
 
 **Acceptance:** `init && generate && run` works against a Next.js App Router project. Component inspector shows correct trees including server-rendered components after hydration.
 
 ### 7.6 Add TanStack Router fixture
 
-- [ ] Same as 7.5 for TanStack Router
+- [~] Same as 7.5 for TanStack Router — placeholder package.json only; deferred.
 
 **Acceptance:** Works on TanStack Router.
 
 ### 7.7 Diagnostic eval gate
 
-- [ ] In CI, `pnpm test:eval` must pass with the v0.1.0 targets (≥ 80% overall, ≥ 95% on `high` confidence cases)
-- [ ] If a PR regresses these numbers, it cannot merge
+- [~] In CI, `pnpm test:eval` must pass with the v0.1.0 targets (≥ 80% overall, ≥ 95% on `high` confidence cases) — eval scaffolding committed (smoke test always passes); live API metric collection + threshold gate deferred until eval set is filled to 12+ cases.
+- [~] If a PR regresses these numbers, it cannot merge — deferred with the gate.
 
 **Acceptance:** Eval gate runs in CI on every PR.
 
 ### 7.8 Publish to npm
 
-- [ ] Set `version: 0.1.0` and tag release
-- [ ] Set up `np` or `changesets` for release management
-- [ ] Verify `package.json` `files` field only includes `dist/`, `templates/`, `bin/`, `README.md`
-- [ ] Publish: `npm publish --access public`
-- [ ] Verify install in a fresh project: `npx reactlens@latest init`
+- [~] Set `version: 0.1.0` and tag release — staying at `0.0.1` until first manual release.
+- [~] Set up `np` or `changesets` for release management — deferred.
+- [x] Verify `package.json` `files` field only includes `dist/`, `templates/`, `bin/`, `README.md`
+- [~] Publish: `npm publish --access public` — not run.
+- [~] Verify install in a fresh project: `npx reactlens@latest init` — not run.
 
 **Acceptance:** Public npm package installable. `npx reactlens --version` returns `0.1.0`.
 

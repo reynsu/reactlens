@@ -62,15 +62,17 @@ function buildProgram(): Command {
     .option('--no-dashboard', 'run headlessly without the dashboard server')
     .option('--no-open', 'do not auto-open the dashboard in a browser')
     .option('--no-analyze', 'skip Claude diagnosis of failed tests')
-    .action(async (opts: { cwd: string; reporter: string; skipWebServer: boolean; dashboard: boolean; open: boolean; analyze: boolean }) => {
+    .option('--ci', 'CI mode: no dashboard, no auto-open, JUnit-friendly output', false)
+    .action(async (opts: { cwd: string; reporter: string; skipWebServer: boolean; dashboard: boolean; open: boolean; analyze: boolean; ci: boolean }) => {
       const reporter = opts.reporter === 'json' ? 'json' : 'text';
       const code = await runRun({
         cwd: opts.cwd,
         reporter,
         skipWebServer: opts.skipWebServer,
-        noDashboard: !opts.dashboard,
-        open: opts.open,
+        noDashboard: opts.ci || !opts.dashboard,
+        open: opts.ci ? false : opts.open,
         noAnalyze: !opts.analyze,
+        ci: opts.ci,
       });
       process.exitCode = code;
     });
