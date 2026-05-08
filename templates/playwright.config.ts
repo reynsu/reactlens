@@ -1,0 +1,26 @@
+// Copied verbatim into user projects by `reactlens init`. Wires the streaming
+// reporter, sets baseURL from REACTLENS_BASE_URL (or a sensible default), and
+// declares the global setup file that injects the component bridge.
+import { defineConfig, devices } from '@playwright/test';
+
+const BASE_URL = process.env.REACTLENS_BASE_URL ?? 'http://localhost:5173';
+
+export default defineConfig({
+  testDir: './e2e/specs',
+  fullyParallel: false,
+  workers: 1,
+  reporter: [['./reactlens/streaming-reporter.ts']],
+  globalSetup: './reactlens/global-setup.ts',
+  use: {
+    baseURL: BASE_URL,
+    trace: 'on',
+    screenshot: 'only-on-failure',
+  },
+  projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],
+  webServer: {
+    command: process.env.REACTLENS_WEB_SERVER ?? 'pnpm dev',
+    url: BASE_URL,
+    reuseExistingServer: !process.env.CI,
+    timeout: 60_000,
+  },
+});

@@ -78,10 +78,10 @@ The goal is a published-shaped skeleton with a working CLI binary. No real funct
 
 ### 1.3 Templates directory
 
-- [ ] Create `templates/playwright.config.ts` — minimal Playwright config that uses our reporter, sets `baseURL` from env, configures `webServer`, declares the global setup file
-- [ ] Create `templates/streaming-reporter.ts` — emits JSONL on stdout per the event protocol in CLAUDE.md Section 9
-- [ ] Create `templates/global-setup.ts` — sets up the CDP screencast bridge AND injects the component bridge probe (real implementation in Phase 3)
-- [ ] Create `templates/reactlens.config.ts` — exports a Zod-validated config object with sensible defaults
+- [x] Create `templates/playwright.config.ts` — minimal Playwright config that uses our reporter, sets `baseURL` from env, configures `webServer`, declares the global setup file
+- [x] Create `templates/streaming-reporter.ts` — emits JSONL on stdout per the event protocol in CLAUDE.md Section 9
+- [x] Create `templates/global-setup.ts` — sets up the CDP screencast bridge AND injects the component bridge probe (real implementation in Phase 3)
+- [x] Create `templates/reactlens.config.ts` — exports a Zod-validated config object with sensible defaults
 
 **Acceptance:** Each template file is syntactically valid TypeScript.
 
