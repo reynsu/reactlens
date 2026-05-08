@@ -9,6 +9,10 @@ import { CheckoutPage } from './pages/CheckoutPage';
 import './styles.css';
 
 async function enableMocks(): Promise<void> {
+  // Skip MSW when tests need Playwright route interception. Tests opt out by
+  // navigating with ?mocks=off; MSW's service worker would otherwise win the
+  // race against page.route() because it intercepts before the network layer.
+  if (new URLSearchParams(window.location.search).get('mocks') === 'off') return;
   const { worker } = await import('./mocks/browser');
   await worker.start({ onUnhandledRequest: 'bypass' });
 }

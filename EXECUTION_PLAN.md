@@ -155,9 +155,9 @@ Make tests run and emit a parseable event stream. No dashboard yet.
 
 ### 2.5 Hand-write the canonical test set for the fixture
 
-- [ ] By hand (not via the AI generator yet), write Page Objects and specs covering ALL visual states of the fixture's pages: not just login-success but login-error, dashboard-loading, dashboard-empty, checkout-validation-error, etc.
-- [ ] These specs become the ground truth that the AI generator must match or exceed in Phase 5
-- [ ] Confirm the full `reactlens run` flow works against them
+- [x] By hand (not via the AI generator yet), write Page Objects and specs covering ALL visual states of the fixture's pages: not just login-success but login-error, dashboard-loading, dashboard-empty, checkout-validation-error, etc.
+- [x] These specs become the ground truth that the AI generator must match or exceed in Phase 5
+- [x] Confirm the full `reactlens run` flow works against them
 
 **Acceptance:** Manual smoke test passes. The hand-written specs cover all branches of the fixture; this set is committed and used as the spec target for capability 4.2.
 
