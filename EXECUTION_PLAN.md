@@ -101,10 +101,10 @@ The goal is a published-shaped skeleton with a working CLI binary. No real funct
 
 ### 1.5 Config loading and validation
 
-- [ ] Create `src/config/schema.ts` with Zod schema mirroring `templates/reactlens.config.ts`
-- [ ] Create `src/config/load.ts` exporting `loadConfig(cwd: string)` (using `tsx` to allow `.ts` configs)
-- [ ] Loader returns sensible defaults when config is absent
-- [ ] Throws typed `ConfigError` with helpful messages on validation failure
+- [x] Create `src/config/schema.ts` with Zod schema mirroring `templates/reactlens.config.ts`
+- [x] Create `src/config/load.ts` exporting `loadConfig(cwd: string)` (using `tsx` to allow `.ts` configs)
+- [x] Loader returns sensible defaults when config is absent
+- [x] Throws typed `ConfigError` with helpful messages on validation failure
 
 **Acceptance:** Unit tests cover: valid config, missing config (returns defaults), invalid config (throws clearly).
 
