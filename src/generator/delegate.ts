@@ -4,10 +4,10 @@
 // hand it the AST-derived list up front. That's the difference between
 // guessing and knowing (capability 4.2 in CLAUDE.md).
 import { readFile } from 'node:fs/promises';
-import { resolve, join, dirname } from 'node:path';
-import { query, type Options } from '@anthropic-ai/claude-agent-sdk';
+import { join, dirname } from 'node:path';
 import { ReactLensError } from '../utils/errors';
 import { logger } from '../utils/logger';
+import type { AgentRunner } from '../agent/runner';
 import type { ComponentAnalysis } from '../ast/component-analyzer';
 import { statesToTestCases, type TestCase } from './state-machine';
 
@@ -17,6 +17,7 @@ export type GenerateOptions = {
   analysis: ComponentAnalysis;
   outputs: { pages: string; specs: string };
   mswHandlers: string;
+  agent: AgentRunner;
   onProgress?: (event: GenerateProgress) => void;
 };
 
@@ -92,17 +93,13 @@ export async function generateTests(opts: GenerateOptions): Promise<GenerateResu
   const userMessage = buildUserMessage(opts, testCases);
   const filesWritten: string[] = [];
 
-  const queryOptions: Options = {
-    cwd: resolve(opts.cwd),
-    systemPrompt: { type: 'preset', preset: 'claude_code', append: systemPrompt },
+  const stream = opts.agent.query({
+    cwd: opts.cwd,
+    prompt: userMessage,
+    systemPromptAppend: systemPrompt,
     allowedTools: ['Read', 'Write', 'Glob', 'Grep'],
     permissionMode: 'acceptEdits',
     maxTurns: 100,
-  };
-
-  const stream = query({
-    prompt: userMessage,
-    options: queryOptions,
   });
 
   for await (const message of stream) {

@@ -45,11 +45,13 @@ function buildProgram(): Command {
     .option('--cwd <path>', 'project directory', process.cwd())
     .option('--pages <glob>', 'limit generation to a subset of components')
     .option('--skip-typecheck', 'skip running tsc on generated tests', false)
-    .action(async (opts: { cwd: string; pages?: string; skipTypecheck: boolean }) => {
+    .option('--use-claude-code', 'route through local claude CLI (Max-billed; local-dev only)', false)
+    .action(async (opts: { cwd: string; pages?: string; skipTypecheck: boolean; useClaudeCode: boolean }) => {
       const code = await runGenerate({
         cwd: opts.cwd,
         pages: opts.pages,
         skipTypecheck: opts.skipTypecheck,
+        useClaudeCode: opts.useClaudeCode,
       });
       process.exitCode = code;
     });
@@ -63,7 +65,8 @@ function buildProgram(): Command {
     .option('--no-open', 'do not auto-open the dashboard in a browser')
     .option('--no-analyze', 'skip Claude diagnosis of failed tests')
     .option('--ci', 'CI mode: no dashboard, no auto-open, JUnit-friendly output', false)
-    .action(async (opts: { cwd: string; reporter: string; skipWebServer: boolean; dashboard: boolean; open: boolean; analyze: boolean; ci: boolean }) => {
+    .option('--use-claude-code', 'route diagnosis through local claude CLI (Max-billed; local-dev only)', false)
+    .action(async (opts: { cwd: string; reporter: string; skipWebServer: boolean; dashboard: boolean; open: boolean; analyze: boolean; ci: boolean; useClaudeCode: boolean }) => {
       const reporter = opts.reporter === 'json' ? 'json' : 'text';
       const code = await runRun({
         cwd: opts.cwd,
@@ -73,6 +76,7 @@ function buildProgram(): Command {
         open: opts.ci ? false : opts.open,
         noAnalyze: !opts.analyze,
         ci: opts.ci,
+        useClaudeCode: opts.useClaudeCode,
       });
       process.exitCode = code;
     });
@@ -82,16 +86,23 @@ function buildProgram(): Command {
     .argument('<report>', 'path to the Playwright JSON report')
     .option('--cwd <path>', 'project directory', process.cwd())
     .option('--out <file>', 'write Markdown to this file instead of stdout')
-    .action(async (report: string, opts: { cwd: string; out?: string }) => {
-      const code = await runAnalyze({ cwd: opts.cwd, reportPath: report, outFile: opts.out });
+    .option('--use-claude-code', 'route through local claude CLI (Max-billed; local-dev only)', false)
+    .action(async (report: string, opts: { cwd: string; out?: string; useClaudeCode: boolean }) => {
+      const code = await runAnalyze({
+        cwd: opts.cwd,
+        reportPath: report,
+        outFile: opts.out,
+        useClaudeCode: opts.useClaudeCode,
+      });
       process.exitCode = code;
     });
   program
     .command('regen')
     .description('regenerate tests for changed components')
     .option('--cwd <path>', 'project directory', process.cwd())
-    .action(async (opts: { cwd: string }) => {
-      const code = await runRegen({ cwd: opts.cwd });
+    .option('--use-claude-code', 'route through local claude CLI (Max-billed; local-dev only)', false)
+    .action(async (opts: { cwd: string; useClaudeCode: boolean }) => {
+      const code = await runRegen({ cwd: opts.cwd, useClaudeCode: opts.useClaudeCode });
       process.exitCode = code;
     });
 

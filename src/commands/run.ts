@@ -1,6 +1,7 @@
 import { existsSync } from 'node:fs';
 import { resolve, join } from 'node:path';
 import { spawn } from 'node:child_process';
+import { pickAgentRunner } from '../agent/select';
 import { diagnose } from '../analyzer/failure-agent';
 import { loadConfig } from '../config/load';
 import { startDashboardServer } from '../dashboard/server';
@@ -21,6 +22,9 @@ export type RunCommandOptions = {
   noAnalyze?: boolean;
   // CI mode: serialize diagnoses to a JSON artifact and skip the dashboard.
   ci?: boolean;
+  // Route diagnosis through the local `claude` CLI (Max-billed) instead of
+  // the SDK. Local development only.
+  useClaudeCode?: boolean;
 };
 
 type Status = 'running' | 'passed' | 'failed' | 'skipped' | 'timedOut';
@@ -138,24 +142,38 @@ export async function runRun(opts: RunCommandOptions): Promise<number> {
   });
   const diagnosisPromises: Array<Promise<void>> = [];
   const ciDiagnoses: Array<{ testId: string; title: string; diagnosis: unknown }> = [];
-  const wantAnalyze = opts.noAnalyze !== true && process.env.ANTHROPIC_API_KEY !== undefined;
-  if (wantAnalyze) {
+  // Diagnosis is opt-in: requires either an API key or --use-claude-code.
+  // We resolve the runner lazily so a no-failure run never spins up the agent.
+  const canDiagnose =
+    opts.noAnalyze !== true &&
+    (opts.useClaudeCode === true ||
+      process.env.REACTLENS_USE_CLAUDE_CODE === '1' ||
+      process.env.ANTHROPIC_API_KEY !== undefined);
+  if (canDiagnose) {
+    let agentPromise: ReturnType<typeof pickAgentRunner> | null = null;
     bus.on('test:end', (e) => {
       if (e.status !== 'failed' && e.status !== 'timedOut') return;
       const t = testState.get(e.id);
       if (t === undefined) return;
       bus.emit({ t: 'diagnosis:start', testId: e.id });
-      const promise = diagnose({
-        cwd,
-        failure: {
-          testId: e.id,
-          testTitle: t.title,
-          specFile: t.file,
-          ...(e.error !== undefined ? { errorMessage: e.error } : {}),
-          ...(t.snapshot !== undefined ? { componentSnapshot: t.snapshot } : {}),
-        },
-        onChunk: (text) => bus.emit({ t: 'diagnosis:chunk', testId: e.id, text }),
-      })
+      if (agentPromise === null) {
+        agentPromise = pickAgentRunner({ commandName: 'run', useClaudeCode: opts.useClaudeCode });
+      }
+      const promise = agentPromise
+        .then((agent) =>
+          diagnose({
+            cwd,
+            agent,
+            failure: {
+              testId: e.id,
+              testTitle: t.title,
+              specFile: t.file,
+              ...(e.error !== undefined ? { errorMessage: e.error } : {}),
+              ...(t.snapshot !== undefined ? { componentSnapshot: t.snapshot } : {}),
+            },
+            onChunk: (text) => bus.emit({ t: 'diagnosis:chunk', testId: e.id, text }),
+          }),
+        )
         .then((result) => {
           bus.emit({ t: 'diagnosis:end', testId: e.id, result });
           if (opts.ci === true) {

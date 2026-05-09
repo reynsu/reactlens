@@ -3,11 +3,11 @@
 // stricter prompt; on second failure returns a degraded `env-issue` diagnosis
 // rather than crashing the run.
 import { readFile } from 'node:fs/promises';
-import { join, resolve, dirname } from 'node:path';
+import { join, dirname } from 'node:path';
 import { z } from 'zod';
-import { query, type Options } from '@anthropic-ai/claude-agent-sdk';
 import { ReactLensError } from '../utils/errors';
 import { logger } from '../utils/logger';
+import type { AgentRunner } from '../agent/runner';
 import type { ComponentNode, Diagnosis } from '../runner/events';
 import { gatherGitContext } from './git-context';
 
@@ -107,20 +107,20 @@ function extractFinalJson(text: string): unknown {
 
 async function runOnce(opts: {
   cwd: string;
+  agent: AgentRunner;
   systemPrompt: string;
   userMessage: string;
   onChunk?: (chunk: string) => void;
 }): Promise<Diagnosis | null> {
-  const queryOptions: Options = {
-    cwd: resolve(opts.cwd),
-    systemPrompt: { type: 'preset', preset: 'claude_code', append: opts.systemPrompt },
+  let lastText = '';
+  const stream = opts.agent.query({
+    cwd: opts.cwd,
+    prompt: opts.userMessage,
+    systemPromptAppend: opts.systemPrompt,
     allowedTools: ['Read', 'Glob', 'Grep', 'Bash'],
     permissionMode: 'default',
     maxTurns: 30,
-  };
-
-  let lastText = '';
-  const stream = query({ prompt: opts.userMessage, options: queryOptions });
+  });
   for await (const message of stream) {
     if (message.type === 'assistant') {
       for (const block of message.message.content) {
@@ -144,6 +144,7 @@ async function runOnce(opts: {
 
 export async function diagnose(opts: {
   cwd: string;
+  agent: AgentRunner;
   failure: FailedTest;
   onChunk?: (text: string) => void;
 }): Promise<Diagnosis> {
@@ -159,6 +160,7 @@ export async function diagnose(opts: {
   // First attempt.
   let result = await runOnce({
     cwd: opts.cwd,
+    agent: opts.agent,
     systemPrompt: `${systemPrompt}\n\n---\n\n${classifyAddendum}`,
     userMessage: baseMessage,
     onChunk: opts.onChunk,
@@ -169,6 +171,7 @@ export async function diagnose(opts: {
     const stricter = `${baseMessage}\n\nIMPORTANT: your previous response did not contain a parseable Diagnosis JSON object. The FINAL message must be exactly the JSON, nothing else.`;
     result = await runOnce({
       cwd: opts.cwd,
+      agent: opts.agent,
       systemPrompt: `${systemPrompt}\n\n---\n\n${classifyAddendum}`,
       userMessage: stricter,
       onChunk: opts.onChunk,

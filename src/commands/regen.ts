@@ -5,11 +5,12 @@ import { createHash } from 'node:crypto';
 import { existsSync } from 'node:fs';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
+import { pickAgentRunner } from '../agent/select';
 import { loadConfig } from '../config/load';
 import { analyzeComponent } from '../ast/component-analyzer';
 import { generateTests } from '../generator/delegate';
 import { logger } from '../utils/logger';
-import { expandComponentGlobs, requireAnthropicApiKey } from './_shared';
+import { expandComponentGlobs } from './_shared';
 
 type CacheShape = { version: 1; hashes: Record<string, string> };
 
@@ -35,10 +36,10 @@ async function saveCache(cwd: string, cache: CacheShape): Promise<void> {
   await writeFile(path, JSON.stringify(cache, null, 2));
 }
 
-export async function runRegen(opts: { cwd: string }): Promise<number> {
+export async function runRegen(opts: { cwd: string; useClaudeCode?: boolean }): Promise<number> {
   const cwd = resolve(opts.cwd);
   const config = await loadConfig(cwd);
-  requireAnthropicApiKey('regen');
+  const agent = await pickAgentRunner({ commandName: 'regen', useClaudeCode: opts.useClaudeCode });
 
   const components = await expandComponentGlobs(cwd, config.componentGlobs);
   const cache = await loadCache(cwd);
@@ -59,6 +60,7 @@ export async function runRegen(opts: { cwd: string }): Promise<number> {
       analysis,
       outputs: config.output,
       mswHandlers: config.msw.handlers,
+      agent,
     });
     next.hashes[componentPath] = hash;
     regenerated += 1;

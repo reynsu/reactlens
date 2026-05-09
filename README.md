@@ -43,6 +43,7 @@ reactlens supports React 18+ projects on Vite + React Router (full support), Nex
 - `reactlens run --reporter json` — emit raw JSONL events on stdout (for piping).
 - `reactlens generate --pages 'src/pages/Login.tsx'` — limit generation to one component.
 - `reactlens init --dry-run` — list what `init` would do without writing.
+- `reactlens generate --use-claude-code` (and the same flag on `run`/`regen`/`analyze`) — route through your local `claude` CLI binary instead of the API. Bills against your Claude.ai/Max subscription; **local development only** — Anthropic's TOS prohibits this for distributed tools. See [docs/troubleshooting.md](docs/troubleshooting.md#use-claude-code).
 
 ## How the moat works
 

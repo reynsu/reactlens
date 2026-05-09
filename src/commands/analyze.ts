@@ -4,16 +4,17 @@
 import { existsSync } from 'node:fs';
 import { readFile, writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
+import { pickAgentRunner } from '../agent/select';
 import { ReactLensError } from '../utils/errors';
 import { logger } from '../utils/logger';
 import { diagnose } from '../analyzer/failure-agent';
 import type { Diagnosis } from '../runner/events';
-import { requireAnthropicApiKey } from './_shared';
 
 export type AnalyzeCommandOptions = {
   cwd: string;
   reportPath: string;
   outFile?: string;
+  useClaudeCode?: boolean;
 };
 
 type PlaywrightReport = {
@@ -101,7 +102,7 @@ export async function runAnalyze(opts: AnalyzeCommandOptions): Promise<number> {
   if (!existsSync(reportPath)) {
     throw new ReactLensError(`report file not found: ${reportPath}`, { code: 'ANALYZE_NO_REPORT' });
   }
-  requireAnthropicApiKey('analyze');
+  const agent = await pickAgentRunner({ commandName: 'analyze', useClaudeCode: opts.useClaudeCode });
 
   const raw = await readFile(reportPath, 'utf8');
   const report = JSON.parse(raw) as PlaywrightReport;
@@ -112,6 +113,7 @@ export async function runAnalyze(opts: AnalyzeCommandOptions): Promise<number> {
   for (const hit of failures) {
     const diagnosis = await diagnose({
       cwd,
+      agent,
       failure: {
         testId: hit.testId,
         testTitle: hit.title,

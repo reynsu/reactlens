@@ -35,6 +35,32 @@ Two likely causes:
 - The diagnosis agent's output didn't parse as JSON twice in a row. Re-run with `REACTLENS_LOG_LEVEL=debug` to see what the agent emitted.
 - `ANTHROPIC_API_KEY` is unset or invalid. Diagnosis runs only when the key is present; the run otherwise completes without diagnoses.
 
+<a id="use-claude-code"></a>
+## `--use-claude-code` and `REACTLENS_USE_CLAUDE_CODE=1`
+
+Routes generation/diagnosis calls through your local `claude` CLI binary instead of through the Anthropic API. The CLI authenticates against your Claude.ai account, so calls are billed against your Max/Pro subscription rather than per-token.
+
+**This flag is for LOCAL DEVELOPMENT only.** Anthropic's terms of service explicitly prohibit third-party tools from leveraging Claude.ai login for distribution: `https://code.claude.com/docs/en/agent-sdk/quickstart` ("Anthropic does not allow third party developers to offer claude.ai login or rate limits for their products"). If you publish a tool that uses this flag, expect to be told to remove it.
+
+Prerequisites:
+
+- `claude` CLI installed and on your `PATH` (test with `claude --version`).
+- Logged in via `claude login` or the Claude desktop app.
+
+Usage:
+
+```bash
+# Per-command
+reactlens generate --use-claude-code --pages 'src/pages/Login.tsx'
+reactlens run --use-claude-code
+
+# Or globally
+export REACTLENS_USE_CLAUDE_CODE=1
+reactlens run
+```
+
+If the binary is missing reactlens errors with `CLI_RUNNER_NOT_FOUND`. Unset the variable or drop the flag to fall back to the SDK + `ANTHROPIC_API_KEY`.
+
 ## `pnpm: ignored build scripts: esbuild@x.y.z`
 
 pnpm 11 requires explicit approval for postinstall scripts. Add to `pnpm-workspace.yaml`:

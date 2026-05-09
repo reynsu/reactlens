@@ -1,23 +1,25 @@
 import { existsSync } from 'node:fs';
 import { resolve, join } from 'node:path';
 import { execa } from 'execa';
+import { pickAgentRunner } from '../agent/select';
 import { loadConfig } from '../config/load';
 import { analyzeComponent } from '../ast/component-analyzer';
 import { generateTests } from '../generator/delegate';
 import { ReactLensError } from '../utils/errors';
 import { logger } from '../utils/logger';
-import { expandComponentGlobs, requireAnthropicApiKey } from './_shared';
+import { expandComponentGlobs } from './_shared';
 
 export type GenerateCommandOptions = {
   cwd: string;
   pages?: string;
   skipTypecheck?: boolean;
+  useClaudeCode?: boolean;
 };
 
 export async function runGenerate(opts: GenerateCommandOptions): Promise<number> {
   const cwd = resolve(opts.cwd);
   const config = await loadConfig(cwd);
-  requireAnthropicApiKey('generate');
+  const agent = await pickAgentRunner({ commandName: 'generate', useClaudeCode: opts.useClaudeCode });
 
   const patterns = opts.pages !== undefined ? [opts.pages] : config.componentGlobs;
   const components = await expandComponentGlobs(cwd, patterns);
@@ -38,6 +40,7 @@ export async function runGenerate(opts: GenerateCommandOptions): Promise<number>
         analysis,
         outputs: config.output,
         mswHandlers: config.msw.handlers,
+        agent,
         onProgress: (e) => {
           if (e.kind === 'wrote') logger.info({ file: e.file }, 'wrote');
           else if (e.kind === 'tool') logger.debug({ tool: e.name }, 'tool call');
