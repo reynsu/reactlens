@@ -354,19 +354,22 @@ flowchart LR
             <div class="kan-card"><span class="meta">P7.7 · CI</span><strong>Eval CI gate.</strong> Thresholds 80% / 95% wired; needs prompt fix first.</div>
           </div>
           <div class="kan-col pending">
-            <h4>To do <span class="count" id="count-pending">—</span></h4>
-            <div class="kan-card"><span class="meta">P7.2</span><strong>Watch mode (<code>--watch</code>).</strong> chokidar-driven regen + re-run loop.</div>
-            <div class="kan-card"><span class="meta">P7.8</span><strong>Publish v0.1.0 to npm.</strong> Smoke install + version bump; manual publish.</div>
-            <div class="kan-card"><span class="meta">CC.1</span><strong>Logging hygiene.</strong> Try/catch every HTTP/WS handler.</div>
-            <div class="kan-card"><span class="meta">CC.2</span><strong>Cost tracking &amp; <code>--max-cost</code>.</strong> Aggregate token usage across <code>query()</code> calls.</div>
-            <div class="kan-card"><span class="meta">CC.3</span><strong>Error UX help URLs.</strong> Each ReactLensError → docs anchor.</div>
+            <h4>To do — optional next fronts <span class="count" id="count-pending">—</span></h4>
+            <div class="kan-card"><span class="meta">Front F · eval depth</span><strong>Capture real snapshots for cases 003 / 004 / 006 / 007.</strong> The deep-capture infra now works on all 3 stacks (post MAX_DEPTH fix). 4 of 13 cases still lack <code>snapshot.json</code>; filling them turns the moat from "partially mute" to fully audible in the diagnosis prompt. ~1–2h.</div>
+            <div class="kan-card"><span class="meta">Front G · cross-cutting</span><strong>Logging hygiene + cost tracking + error UX URLs.</strong> Try/catch every HTTP/WS handler (CC.1); aggregate token usage across <code>query()</code> calls + <code>--max-cost</code> (CC.2); ReactLensError → docs anchor (CC.3). ~2–3h.</div>
+            <div class="kan-card"><span class="meta">Front H · ship</span><strong>npm publish prep (DoD #11).</strong> Version bump, <code>npm pack</code>, smoke install into a throwaway React app, then publish v0.1.0. Manual final step; nothing automated decides it. ~30 min–1h.</div>
+            <div class="kan-card"><span class="meta">Front I · integration</span><strong>Extend <code>run-flow.test.ts</code> to all 3 fixtures.</strong> Currently exercises Vite only; replay smoke against Next + TanStack inside the integration suite. Closes the §7.4 follow-up. ~1h.</div>
+            <div class="kan-card"><span class="meta">Front J · eval breadth</span><strong>More <code>flaky</code> cases (IndexedDB, ServiceWorker, MSW handler residual).</strong> Generalization rule held at 13/13 across 3 storage surfaces; adding 2 more surfaces hardens it before cabling the CI gate. ~1–2h.</div>
+            <div class="kan-card"><span class="meta">Front K · stop</span><strong>Close session, ship v0.1.0 as-is.</strong> All 11 DoD criteria are met. Nothing in F–J blocks release; they all sharpen something already shipped. Natural break point. — </div>
+            <div class="kan-card"><span class="meta">P7.2</span><strong>Watch mode (<code>--watch</code>).</strong> chokidar-driven regen + re-run loop. Deferred to v0.2.</div>
             <div class="kan-card"><span class="meta">v0.2 roadmap</span><strong>Time-travel debugging.</strong> Scrub through DOM + tree + props per step.</div>
           </div>
           <div class="kan-col blocked">
-            <h4>To improve <span class="count" id="count-blocked">—</span></h4>
-            <div class="kan-card"><span class="meta">P6 · eval scale</span><strong>n=13 — modest but generalizing.</strong> 100% accuracy across 3 distinct state-leak surfaces (localStorage, cookies, sessionStorage). Adding more (IndexedDB, ServiceWorker, MSW handler residual) before cabling CI is welcome; no longer a v0.1.0 blocker.</div>
-            <div class="kan-card"><span class="meta">P6 · eval</span><strong>Snapshots underused.</strong> 8 of 11 cases lack <code>snapshot.json</code>. The moat is partially mute.</div>
-            <div class="kan-card"><span class="meta">P3 · stepId</span><strong>Step granularity.</strong> Should advance per Playwright step.</div>
+            <h4>To improve — known gaps <span class="count" id="count-blocked">—</span></h4>
+            <div class="kan-card"><span class="meta">P3.2 · React 19</span><strong>React 19 fixture pending.</strong> React 18 verified across 3 stacks; 19 not yet exercised end-to-end.</div>
+            <div class="kan-card"><span class="meta">P3.5 · stepId</span><strong>Step granularity.</strong> Snapshots currently tagged with testId on both axes; should advance per Playwright step. Required before time-travel can land.</div>
+            <div class="kan-card"><span class="meta">P4.5 · UI</span><strong>Active-component highlight + apply-fix button.</strong> Inspector renders tree but doesn't highlight the locator's target; diagnosis renders patch but one-click apply is deferred.</div>
+            <div class="kan-card"><span class="meta">P6 · eval scale</span><strong>n=13 — modest but generalizing.</strong> 100% accuracy on 3 distinct state-leak surfaces. Adding IndexedDB / ServiceWorker / MSW residual (Front J) before cabling CI is welcome; no longer a v0.1.0 blocker.</div>
             <div class="kan-card"><span class="meta">P6 · drift risk</span><strong>This portal &amp; EXECUTION_PLAN.md drift.</strong> Hand-maintained; long-term: generate from git log + plan parser.</div>
           </div>
         </div>
@@ -392,12 +395,13 @@ flowchart LR
           <div class="gantt-row"><div class="gantt-label">P0 · Bootstrap</div><div class="gantt-track"><span class="gantt-bar done" style="left: 0%; width: 10%;">done</span></div></div>
           <div class="gantt-row"><div class="gantt-label">P1 · Init &amp; detect</div><div class="gantt-track"><span class="gantt-bar done" style="left: 10%; width: 12%;">done</span></div></div>
           <div class="gantt-row"><div class="gantt-label">P2 · Runner</div><div class="gantt-track"><span class="gantt-bar done" style="left: 22%; width: 11%;">done</span></div></div>
-          <div class="gantt-row"><div class="gantt-label">P3 · Bridge (moat)</div><div class="gantt-track"><span class="gantt-bar progress" style="left: 33%; width: 14%;">90%</span></div></div>
+          <div class="gantt-row"><div class="gantt-label">P3 · Bridge (moat)</div><div class="gantt-track"><span class="gantt-bar done" style="left: 33%; width: 14%;">done · DoD #9 ✓</span></div></div>
           <div class="gantt-row"><div class="gantt-label">P4 · Dashboard</div><div class="gantt-track"><span class="gantt-bar progress" style="left: 47%; width: 11%;">85%</span></div></div>
           <div class="gantt-row"><div class="gantt-label">P5 · Generate</div><div class="gantt-track"><span class="gantt-bar progress" style="left: 58%; width: 10%;">95%</span></div></div>
-          <div class="gantt-row"><div class="gantt-label">P6 · Diagnose &amp; eval</div><div class="gantt-track"><span class="gantt-bar progress" style="left: 68%; width: 13%;">95%</span></div></div>
-          <div class="gantt-row"><div class="gantt-label">P7 · CI · docs · pub</div><div class="gantt-track"><span class="gantt-bar progress" style="left: 81%; width: 11%;">60%</span></div></div>
-          <div class="gantt-row"><div class="gantt-label">v0.2.0 roadmap</div><div class="gantt-track"><span class="gantt-bar pending" style="left: 92%; width: 8%;">pending</span></div></div>
+          <div class="gantt-row"><div class="gantt-label">P6 · Diagnose &amp; eval</div><div class="gantt-track"><span class="gantt-bar done" style="left: 68%; width: 13%;">done · DoD #5 ✓ (13/13)</span></div></div>
+          <div class="gantt-row"><div class="gantt-label">P7 · 3 stacks · CI · docs</div><div class="gantt-track"><span class="gantt-bar done" style="left: 81%; width: 11%;">done · DoD #8 ✓</span></div></div>
+          <div class="gantt-row"><div class="gantt-label">Optional fronts F–J</div><div class="gantt-track"><span class="gantt-bar pending" style="left: 92%; width: 8%;">elective</span></div></div>
+          <div class="gantt-row"><div class="gantt-label">v0.2.0 roadmap</div><div class="gantt-track"><span class="gantt-bar pending" style="left: 100%; width: 0%;">—</span></div></div>
         </div>
         <p class="note center">
           Horizontal axis is project order (left = earliest). Width approximates
