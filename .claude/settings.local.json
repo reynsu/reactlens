@@ -31,7 +31,20 @@
       "Bash(git -c user.email=dev@reactlens.local -c user.name=reactlens commit -m \"feat\\(cli\\): add commander skeleton with stub subcommands\")",
       "Bash(pnpm test *)",
       "Bash(git -c user.email=dev@reactlens.local -c user.name=reactlens commit -m \"chore\\(test\\): add vitest infrastructure\")",
-      "Bash(git -c user.email=dev@reactlens.local -c user.name=reactlens commit -m \"feat\\(ast\\): add stack detector with fixture-based unit tests\")"
+      "Bash(git -c user.email=dev@reactlens.local -c user.name=reactlens commit -m \"feat\\(ast\\): add stack detector with fixture-based unit tests\")",
+      "Bash(pnpm test:eval)",
+      "Bash(REACTLENS_USE_CLAUDE_CODE=1 pnpm tsx scripts/eval-one.ts case-001-stale-selector)",
+      "Bash(tee eval-dry-run.log)",
+      "Bash(REACTLENS_USE_CLAUDE_CODE=1 pnpm vitest run --project eval)",
+      "Bash(tee eval-baseline.log)",
+      "Bash(tee eval-baseline-sandboxed.log)",
+      "Bash(sed -i.bak -e 's|<button class=\"tab-btn |<button type=\"button\" class=\"tab-btn |g' -e 's|<button class=\"zoom-btn |<button type=\"button\" class=\"zoom-btn |g' -e 's|<div class=\"demo-wrap\" aria-label=\"Dashboard mockup \\(animated\\)\">|<div class=\"demo-wrap\" role=\"img\" aria-label=\"Dashboard mockup, animated\">|g' docs/portal/index.html)",
+      "Bash(npx --yes html-validate docs/portal/index.html)",
+      "Bash(open docs/portal/index.html)",
+      "Bash(tee eval-baseline-prompt-refined.log)"
     ]
+  },
+  "enabledPlugins": {
+    "ecc@ecc": true
   }
 }

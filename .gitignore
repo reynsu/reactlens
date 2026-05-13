@@ -11,3 +11,11 @@ coverage
 
 # Throwaway directories from probe-debug + eval-one runs.
 captured-*/
+
+# TypeScript incremental build artifacts (per-fixture).
+*.tsbuildinfo
+
+# Per-developer skill installs (Matt Pocock / ecc) — not part of the project.
+.agents/
+.claude/skills/
+skills-lock.json
