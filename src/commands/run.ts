@@ -8,6 +8,7 @@ import { startDashboardServer } from '../dashboard/server';
 import { EventBus } from '../runner/event-bus';
 import { ALL_EVENT_TYPES, type ComponentNode } from '../runner/events';
 import { runTests, type RunSummary } from '../runner/playwright-runner';
+import { persistSnapshots } from '../runner/snapshot-sink';
 import { logger } from '../utils/logger';
 
 export type RunCommandOptions = {
@@ -25,6 +26,10 @@ export type RunCommandOptions = {
   // Route diagnosis through the local `claude` CLI (Max-billed) instead of
   // the SDK. Local development only.
   useClaudeCode?: boolean;
+  // Directory to write per-test component snapshots into. One <testId>.json
+  // per failing test, plus a manifest.json mapping ids to titles/spec files.
+  // Used by the diagnostic-eval pipeline to harvest real bridge captures.
+  saveSnapshotsTo?: string;
 };
 
 type Status = 'running' | 'passed' | 'failed' | 'skipped' | 'timedOut';
@@ -225,6 +230,20 @@ export async function runRun(opts: RunCommandOptions): Promise<number> {
       const { writeFile } = await import('node:fs/promises');
       await writeFile(path, JSON.stringify(ciDiagnoses, null, 2));
       logger.info({ path, count: ciDiagnoses.length }, 'wrote CI diagnoses artifact');
+    }
+    if (opts.saveSnapshotsTo !== undefined) {
+      const outDir = resolve(cwd, opts.saveSnapshotsTo);
+      const tests = Array.from(testState.entries()).map(([id, t]) => ({
+        id,
+        title: t.title,
+        file: t.file,
+        ...(t.snapshot !== undefined ? { snapshot: t.snapshot } : {}),
+      }));
+      const result = await persistSnapshots({ outDir, tests, writeManifest: true });
+      logger.info(
+        { outDir, written: result.written.length, skipped: result.skipped.length },
+        'wrote per-test snapshots',
+      );
     }
     if (dashboard !== null) await dashboard.close();
   }

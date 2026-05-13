@@ -66,7 +66,8 @@ function buildProgram(): Command {
     .option('--no-analyze', 'skip Claude diagnosis of failed tests')
     .option('--ci', 'CI mode: no dashboard, no auto-open, JUnit-friendly output', false)
     .option('--use-claude-code', 'route diagnosis through local claude CLI (Max-billed; local-dev only)', false)
-    .action(async (opts: { cwd: string; reporter: string; skipWebServer: boolean; dashboard: boolean; open: boolean; analyze: boolean; ci: boolean; useClaudeCode: boolean }) => {
+    .option('--save-snapshots-to <dir>', 'write per-test component snapshots (one <testId>.json + manifest.json) into <dir> after the run')
+    .action(async (opts: { cwd: string; reporter: string; skipWebServer: boolean; dashboard: boolean; open: boolean; analyze: boolean; ci: boolean; useClaudeCode: boolean; saveSnapshotsTo?: string }) => {
       const reporter = opts.reporter === 'json' ? 'json' : 'text';
       const code = await runRun({
         cwd: opts.cwd,
@@ -77,6 +78,7 @@ function buildProgram(): Command {
         noAnalyze: !opts.analyze,
         ci: opts.ci,
         useClaudeCode: opts.useClaudeCode,
+        ...(opts.saveSnapshotsTo !== undefined ? { saveSnapshotsTo: opts.saveSnapshotsTo } : {}),
       });
       process.exitCode = code;
     });
