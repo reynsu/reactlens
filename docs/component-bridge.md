@@ -73,7 +73,17 @@ Sample size is intentionally small (5 commits × 3 runs = 15 observations per co
 
 ### Depth limit
 
-If a particular component blows the depth limit (default 30), the walk is cut and a placeholder is emitted. We don't have a knob to raise the limit yet — file an issue if your tree legitimately needs more.
+The walker bails after `MAX_DEPTH` (currently 200) nested fibers. This is a stack-overflow / runaway-tree guard, not a "reasonable user tree" limit — modern routers wrap user code in 25–40 layers of context/boundary fibers before reaching the page component:
+
+| Stack | Wrapper layers before user code |
+|---|---|
+| Vite + react-router-dom | ~10 |
+| Vite + @tanstack/react-router | ~18 (includes SafeFragment / MatchImpl scaffolding) |
+| Next.js 14 App Router | ~28 (RouterContextProvider, Matches, ErrorBoundary, NotFoundBoundary, RedirectBoundary, layout routers, plus per-segment overhead) |
+
+Setting `MAX_DEPTH` too low silently truncates the actual user subtree to empty children. The previous default of 30 was tuned for a flat Vite + react-router app and surfaced the bug on Next/TanStack: the captured snapshot stopped at `QueryClientProvider → Context(?)` with no children, even though `LoginPage` had rendered correctly. See `src/component-bridge/snapshot.ts` header comment for the diagnostic timeline.
+
+If you somehow blow 200 levels, file an issue — your tree is likely pathological or has an unbounded recursive component.
 
 ## Why bippy
 

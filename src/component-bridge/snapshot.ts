@@ -2,8 +2,18 @@
 // Walks a React fiber tree and produces a JSON-safe ComponentNode (CLAUDE.md
 // Section 9). Documented decisions:
 //
-// - DEPTH LIMIT: walks at most MAX_DEPTH (30) levels deep. Prevents stack
-//   overflow on pathological trees and bounds serialization cost on huge apps.
+// - DEPTH LIMIT: walks at most MAX_DEPTH levels deep. This is a stack-
+//   overflow / runaway-tree guard, NOT a "reasonable user tree" limit.
+//   Modern routers wrap user code in many layers of context/boundary
+//   fibers before it ever reaches the page component: Next.js App Router
+//   plants ~28 wrappers (RouterContextProvider, Matches, MatchesInner,
+//   ErrorBoundary, NotFoundBoundary, RedirectBoundary, layout routers,
+//   etc.) and each nested route segment adds another ~10. TanStack
+//   Router does the same shape with SafeFragment / MatchImpl. Setting
+//   MAX_DEPTH too low silently truncates the actual user tree to empty
+//   children once the router scaffolding is unwound. The previous value
+//   (30) was tuned for a flat Vite + react-router app and exhibited
+//   exactly that failure on Next/TanStack.
 // - PROP SERIALIZATION: primitives pass through; functions become
 //   '[Function]'; React elements become '<ComponentName />'; nested
 //   objects/arrays are walked with cycle detection up to MAX_PROP_DEPTH.
@@ -42,7 +52,7 @@ export type HookSnapshot = {
   name?: string;
 };
 
-const MAX_DEPTH = 30;
+const MAX_DEPTH = 200;
 const MAX_PROP_DEPTH = 4;
 const MAX_STRING_LEN = 200;
 const MAX_ARRAY_ITEMS = 50;

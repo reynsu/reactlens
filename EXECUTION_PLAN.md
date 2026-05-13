@@ -541,7 +541,7 @@ This is capability 4.3, the second core differentiator.
 
 - [x] Create `tests/fixtures/next-app-router/` mirroring the Vite fixture's complexity — login + dashboard + checkout pages with the same testids, MSW handlers, react-hook-form/zod/tanstack-query stack. Probe injects, smoke spec (`e2e/specs/login.spec.ts`) passes 3/3 against the real Next dev server.
 - [x] Update stack detector and templates for Next.js (App Router, server components, `app/` directory) — detector ✓; templates work with one fixture-local adjustment (webServer command bypasses `pnpm dev` since pnpm walks up to the repo-root workspace).
-- [~] Verify the component bridge works through Next's hydration boundary — partial. The probe DOES inject post-hydration; the outer tree (Providers, QueryClientProvider) captures correctly. Deeper subtree (NavBar, LoginPage and below) is currently missing from captured snapshots — likely an interaction between Next's streaming hydration and bippy's single-renderer hook. Specs run and assertions pass (the page renders and behaves correctly in the browser); only the introspection signal is shallow. Follow-up bug — does not block this fixture.
+- [x] Verify the component bridge works through Next's hydration boundary — full capture confirmed. Root cause of the earlier "shallow snapshot" symptom was `MAX_DEPTH=30` in `src/component-bridge/snapshot.ts`: Next App Router adds ~28 wrapper fibers before user code, so the walker was bailing one or two levels before `LoginPage`. Bumped to 200 and verified: LoginPage + NavBar now visible in Next snapshots (26→36 unique nodes per capture).
 - [~] Run integration tests against it — login.spec.ts proves the pipeline; full integration in `tests/integration/` follows in a separate cut.
 
 **Acceptance:** `init && generate && run` works against a Next.js App Router project. Component inspector shows correct trees including server-rendered components after hydration.
@@ -550,7 +550,7 @@ This is capability 4.3, the second core differentiator.
 
 - [x] Real TanStack Router (over Vite) fixture mirroring `vite-react-router/`'s complexity — login + dashboard + checkout, same testids, MSW handlers, react-hook-form/zod/tanstack-query stack. Code-based routes via `createRouter`/`createRoute`/`createRootRoute`. Smoke spec (`e2e/specs/login.spec.ts`) passes 3/3 against the real `vite` dev server.
 
-**Acceptance:** Works on TanStack Router. **Same shallow-capture caveat as the Next fixture (§7.5)**: the probe sees the outer tree (App, OutletImpl, RouterProvider) but does not currently walk into the matched route's component (`LoginPage` etc.). Specs run and the page renders correctly. Investigation tracked as a shared follow-up between §7.5 and §7.6 — likely an interaction between bippy's commit hook and routers that use `SafeFragment`/streaming-style fiber layouts.
+**Acceptance:** Works on TanStack Router. Initial port showed shallow capture (same MAX_DEPTH issue as §7.5); fixed by raising MAX_DEPTH to 200 in `src/component-bridge/snapshot.ts`. TanStack's SafeFragment/MatchImpl wrappers add ~18 levels before user code; LoginPage now visible in captures (16→18 unique nodes).
 
 ### 7.7 Diagnostic eval gate
 

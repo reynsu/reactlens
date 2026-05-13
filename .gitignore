@@ -8,3 +8,6 @@ test-results
 .DS_Store
 .reactlens
 coverage
+
+# Throwaway directories from probe-debug + eval-one runs.
+captured-*/
