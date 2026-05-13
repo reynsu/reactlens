@@ -1,0 +1,13 @@
+# Next.js build/dev cache
+.next
+out
+
+# Dependencies
+node_modules
+
+# Playwright artifacts
+playwright-report
+test-results
+
+# OS
+.DS_Store

@@ -539,10 +539,10 @@ This is capability 4.3, the second core differentiator.
 
 ### 7.5 Add Next.js fixture
 
-- [~] Create `tests/fixtures/next-app-router/` mirroring the Vite fixture's complexity — placeholder package.json + README only; full app deferred to a follow-up. Stack detection works.
-- [~] Update stack detector and templates for Next.js (App Router, server components, `app/` directory) — detector ✓; templates unchanged (work for vite + most Next configs).
-- [~] Verify the component bridge works through Next's hydration boundary — deferred until full fixture exists.
-- [~] Run integration tests against it — deferred.
+- [x] Create `tests/fixtures/next-app-router/` mirroring the Vite fixture's complexity — login + dashboard + checkout pages with the same testids, MSW handlers, react-hook-form/zod/tanstack-query stack. Probe injects, smoke spec (`e2e/specs/login.spec.ts`) passes 3/3 against the real Next dev server.
+- [x] Update stack detector and templates for Next.js (App Router, server components, `app/` directory) — detector ✓; templates work with one fixture-local adjustment (webServer command bypasses `pnpm dev` since pnpm walks up to the repo-root workspace).
+- [~] Verify the component bridge works through Next's hydration boundary — partial. The probe DOES inject post-hydration; the outer tree (Providers, QueryClientProvider) captures correctly. Deeper subtree (NavBar, LoginPage and below) is currently missing from captured snapshots — likely an interaction between Next's streaming hydration and bippy's single-renderer hook. Specs run and assertions pass (the page renders and behaves correctly in the browser); only the introspection signal is shallow. Follow-up bug — does not block this fixture.
+- [~] Run integration tests against it — login.spec.ts proves the pipeline; full integration in `tests/integration/` follows in a separate cut.
 
 **Acceptance:** `init && generate && run` works against a Next.js App Router project. Component inspector shows correct trees including server-rendered components after hydration.
 

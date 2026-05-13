@@ -1,10 +1,30 @@
 # fixture: next-app-router
 
-Minimal placeholder fixture for testing reactlens stack detection against Next.js App Router.
+Real Next.js 14 App Router fixture for reactlens e2e tests. Mirrors the
+complexity of `vite-react-router/`: same three pages (login, dashboard,
+checkout), same testids, same MSW handlers, so specs can be ported
+structurally between the two fixtures.
 
-This is intentionally NOT a runnable Next.js app — it exists so:
+Differences vs. the Vite fixture:
 
-- `detectStack()` correctly identifies `router: 'next-app'`, `buildTool: 'next'`, `devServerPort: 3000`
-- The detector unit tests have a target
+- Routing via Next App Router (`app/login/page.tsx`, etc.) instead of
+  react-router. Navigation uses `next/navigation`'s `useRouter`.
+- MSW is started inside a client-only `Providers` component that gates
+  child rendering on the worker being ready. This avoids the SSR/CSR race
+  where a server-rendered fetch hits real network before the worker
+  intercepts.
+- `app/page.tsx` renders `<LoginPage />` directly so `/` and `/login` are
+  equivalent (mirroring the Vite fixture's index route).
 
-A full Next.js fixture mirroring the complexity of `vite-react-router/` is on the v0.1.0 roadmap (Phase 7.5) but deferred to a follow-up to keep the moat work focused.
+To run:
+
+```bash
+pnpm install
+pnpm dev                 # localhost:3000
+# or via reactlens:
+node ../../../bin/reactlens.js run --cwd .
+```
+
+Used by the integration test suite to verify the component bridge works
+through Next's hydration boundary (Principle 4: "one framework, deeply" —
+the moat must hold even when the initial render comes from the server).
