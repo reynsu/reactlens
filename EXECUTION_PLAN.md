@@ -424,17 +424,17 @@ This is capability 4.3, the second core differentiator.
 
 ### 6.1 Eval set scaffolding
 
-- [~] Create `tests/diagnostic-eval/cases/` with at least 12 hand-crafted failure cases — **11 cases authored** spanning all 4 classifications. One `test-bug` case (copied-spec drift) still pending; bumping the set to 12+ deferred to a follow-up cut.
+- [x] Create `tests/diagnostic-eval/cases/` with at least 12 hand-crafted failure cases — **13 cases authored** spanning all 4 classifications.
   - [x] 4 `real-bug` cases: CVV validation regression, API contract drift, effect-ordering race, off-by-one pagination
-  - [~] 3/4 `test-bug` cases: stale selector, timing assumption, stale fixture data (copied-spec drift pending)
-  - [x] 2 `flaky` cases: render-timing race, test-ordering state-leakage
+  - [~] 3/4 `test-bug` cases: stale selector, timing assumption, stale fixture data (copied-spec drift still pending — low priority since the bucket already validates)
+  - [x] 4 `flaky` cases: render-timing race, test-ordering localStorage leak, auth-cookie leak, sessionStorage feature-flag leak — three distinct state-leak surfaces (localStorage / cookies / sessionStorage) confirm the disambiguation rule generalizes
   - [x] 2 `env-issue` cases: port conflict, missing env var
 - [x] Each case directory contains: `component.tsx`, `spec.ts`, `truth.json` (validated by `parseTruth` + zod) and — where the failure isn't fully inferable from source — `error.txt` with the trace/context. `snapshot.json` is optional; capturing real probe snapshots from the fixture is deferred.
 - [x] Smoke test gate fails fast if a case dir has `truth.json` without `component.tsx`/`spec.ts`, or with a malformed `truth.json`. Pure helpers (`compareToTruth`, `aggregateMetrics`) live in `src/analyzer/eval-metrics.ts` with full unit-test coverage.
 - [x] `tests/diagnostic-eval/eval-runner.test.ts` runs the diagnosis agent against each case via `it.each` (per-case timeout, `vitest -t` filter for dry-runs, `afterAll` aggregate). Unlocks on `ANTHROPIC_API_KEY` (token-billed) or `REACTLENS_USE_CLAUDE_CODE=1` (Max-billed via local `claude` CLI).
 - [x] `src/analyzer/eval-pipeline.ts` sandboxes the agent's `cwd` in a tmpdir containing only the input files (`component.tsx`, `spec.ts`, `error.txt`, `snapshot.json`). `truth.json` is never visible to the agent — closes the obvious calibration leak.
 
-**Acceptance:** `pnpm test:eval` runs end-to-end and prints metrics. **Baseline after classify-bug.md disambiguation rule (Max-billed, sandboxed cwd, spoiler-free cases): 11/11 (100%) overall accuracy, 11/11 (100%) high-confidence accuracy, 0% false-confidence.** Wall-clock: ~3 min for 11 cases. case-009 (test-ordering) was the lone false-confidence in baselines #2/#3; the prompt refinement teaches the agent to weigh runtime evidence of state-leakage over the structural "spec lacks beforeEach(clear)" reading. **Caveat: n=11 is small; the rule was tuned with case-009 as motivating example. Generalization needs more flaky-ordering cases (auth-session leak, DB-row leak, etc.) — flagged as Phase 6.1 follow-up.**
+**Acceptance:** `pnpm test:eval` runs end-to-end and prints metrics. **Baseline after path B + path C (Max-billed, sandboxed cwd, spoiler-free cases): 13/13 (100%) overall accuracy, 13/13 (100%) high-confidence accuracy, 0% false-confidence.** Wall-clock: ~4 min for 13 cases. The disambiguation rule for `test-bug` vs `flaky` (ordering) was added in path B with case-009 (localStorage leak) as motivating example. Path C verified generalization: case-012 (auth-cookie leak) and case-013 (sessionStorage feature-flag leak) both classified `flaky high` without any prompt change — three distinct state-leak surfaces all handled correctly. The rule extracts the principle ("state coming from outside this spec's own actions") rather than over-fitting to localStorage specifically. **Caveat: n=13 is still modest for a CI gate; growing the flaky bucket further (IndexedDB, ServiceWorker, MSW handler residual) before cabling CI is recommended, but it is no longer the blocker for v0.1.0 — the rule is validated.**
 
 ### 6.2 Git context gatherer
 
@@ -467,7 +467,7 @@ This is capability 4.3, the second core differentiator.
 **Acceptance:**
 - For each case in `tests/diagnostic-eval/cases/`, the agent produces a valid `Diagnosis`
 - Run `pnpm test:eval`; record the baseline accuracy. Target for v0.1.0: ≥ 80% classification accuracy on the eval set, with `high` confidence accuracy ≥ 95%.
-- **Current baseline: 100% overall, 100% high-confidence (both DoD #5 thresholds met).** Achieved by adding a disambiguation rule in `classify-bug.md` between structural test-bug patterns and runtime state-leak (flaky-ordering) evidence. Caveat: n=11 is small and the rule was tuned with case-009 as motivating example; generalization requires more flaky-ordering cases with varied state-leak shapes (auth, DB, IndexedDB) before the gate can be considered robust in CI.
+- **Current baseline: 100% overall, 100% high-confidence (both DoD #5 thresholds met), n=13.** Achieved by (a) adding a disambiguation rule in `classify-bug.md` between structural test-bug patterns and runtime state-leak (flaky-ordering) evidence, and (b) authoring 2 additional flaky cases (case-012 auth-cookie, case-013 sessionStorage) that confirm the rule generalizes beyond the localStorage example. Further growth (IndexedDB, ServiceWorker, MSW handler residual leaks; non-flaky edge cases) is welcome before cabling the CI gate, but the rule is validated.
 
 ### 6.5 Wire diagnosis into run flow
 

@@ -1,0 +1,4 @@
+Error: expect(getByTestId('banner-legacy')).toBeVisible() — element not found
+DOM contains getByTestId('banner-new') instead.
+Browser storage at time of failure: sessionStorage = {"feature.new-banner": "on"}
+Failure correlates with running after "experiment toggles new banner" spec; passes in isolation. Failure rate over the last 100 CI runs: 14/100 — spec set is sometimes shuffled.

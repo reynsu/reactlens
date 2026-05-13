@@ -1,0 +1,6 @@
+{
+  "expectedClassification": "flaky",
+  "minimumConfidence": "high",
+  "category": "sessionstorage-feature-flag-leak",
+  "notes": "Spec asserts the legacy banner copy. A previous spec enabled the 'new-banner' feature flag by writing it to sessionStorage and never cleared. The component reads sessionStorage at mount and renders the new variant. Spec doesn't reset sessionStorage and the fixture doesn't isolate it per spec."
+}

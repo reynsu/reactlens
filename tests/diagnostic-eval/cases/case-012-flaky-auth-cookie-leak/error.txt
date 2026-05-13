@@ -1,0 +1,5 @@
+TimeoutError: locator.waitFor: Timeout 5000ms exceeded.
+Expected: getByTestId("landing-sign-in") visible
+Actual: getByTestId("dashboard-shell") rendered with text "Welcome back"
+Browser cookies at time of failure: ["app_session=eyJ1aWQiOiJ1c3JfMTIzIn0.sig"]
+Failure correlates with running after "user logs in" spec; passes in isolation. No spec or component change in 45 days.

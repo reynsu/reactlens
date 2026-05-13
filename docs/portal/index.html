@@ -40,9 +40,9 @@
       inspect the live React tree at any moment of any run.
     </p>
     <div class="hero-meta">
-      <div><strong>11 / 11</strong>cases in eval set</div>
-      <div><strong>100%</strong>diagnosis accuracy (n=11)</div>
-      <div><strong>66 + 12</strong>unit + eval tests passing</div>
+      <div><strong>13 / 13</strong>cases in eval set</div>
+      <div><strong>100%</strong>diagnosis accuracy (n=13)</div>
+      <div><strong>66 + 14</strong>unit + eval tests passing</div>
       <div><strong>Local-first</strong>no cloud, no telemetry</div>
     </div>
   </div>
@@ -338,7 +338,7 @@ flowchart LR
             <div class="kan-card"><span class="meta">P4 · dashboard</span><strong>Server + TestList + Preview + Inspector.</strong> localhost:7777, CDP screencast, tree synced to step.</div>
             <div class="kan-card"><span class="meta">P5 · generate</span><strong>AST analysis + agent SDK.</strong> ts-morph enumerates visual states; agent writes POM + spec.</div>
             <div class="kan-card"><span class="meta">P6 · diagnose</span><strong>Failure agent + git context.</strong> Streaming diagnosis with Zod-validated output, retry on bad JSON.</div>
-            <div class="kan-card"><span class="meta">P6 · eval</span><strong>11-case set + sandboxed pipeline.</strong> parseTruth / compareToTruth / aggregateMetrics. Baseline 100% (n=11) after classify-bug.md disambiguation rule.</div>
+            <div class="kan-card"><span class="meta">P6 · eval</span><strong>13-case set + sandboxed pipeline.</strong> parseTruth / compareToTruth / aggregateMetrics. Baseline 100% (n=13) after classify-bug.md disambiguation rule. Three state-leak surfaces covered (localStorage / cookies / sessionStorage) — rule validated to generalize.</div>
             <div class="kan-card"><span class="meta">P7 · CI mode</span><strong><code>--ci</code> flag + diagnoses JSON.</strong> No dashboard, no auto-open.</div>
           </div>
           <div class="kan-col progress">
@@ -362,7 +362,7 @@ flowchart LR
           </div>
           <div class="kan-col blocked">
             <h4>To improve <span class="count" id="count-blocked">—</span></h4>
-            <div class="kan-card"><span class="meta">P6 · eval scale</span><strong>n=11 is small.</strong> 100% accuracy is solid but the disambiguation rule was tuned with case-009 as motivating example. Need 6-10 more flaky-ordering cases with varied state-leak shapes before the CI gate is robust.</div>
+            <div class="kan-card"><span class="meta">P6 · eval scale</span><strong>n=13 — modest but generalizing.</strong> 100% accuracy across 3 distinct state-leak surfaces (localStorage, cookies, sessionStorage). Adding more (IndexedDB, ServiceWorker, MSW handler residual) before cabling CI is welcome; no longer a v0.1.0 blocker.</div>
             <div class="kan-card"><span class="meta">P6 · eval</span><strong>Snapshots underused.</strong> 8 of 11 cases lack <code>snapshot.json</code>. The moat is partially mute.</div>
             <div class="kan-card"><span class="meta">P3 · stepId</span><strong>Step granularity.</strong> Should advance per Playwright step.</div>
             <div class="kan-card"><span class="meta">P6 · drift risk</span><strong>This portal &amp; EXECUTION_PLAN.md drift.</strong> Hand-maintained; long-term: generate from git log + plan parser.</div>

@@ -1,0 +1,6 @@
+{
+  "expectedClassification": "flaky",
+  "minimumConfidence": "high",
+  "category": "auth-cookie-leak",
+  "notes": "Spec asserts the anonymous landing page. A previous spec in the same worker authenticated and left the auth session cookie. The component reads document.cookie at mount, sees the session, and renders the authed dashboard instead. Spec doesn't call context.clearCookies() and the framework's default storageState doesn't apply between specs in this fixture."
+}
