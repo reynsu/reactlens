@@ -1,0 +1,13 @@
+{
+  "name": "Pagination",
+  "key": null,
+  "props": {
+    "total": 11,
+    "pageSize": 5
+  },
+  "children": [],
+  "source": {
+    "file": "tests/fixtures/vite-react-router/src/pages/eval/CaseFivePage.tsx",
+    "line": 30
+  }
+}

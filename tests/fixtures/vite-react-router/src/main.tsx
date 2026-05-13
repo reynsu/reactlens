@@ -6,6 +6,8 @@ import { App } from './App';
 import { LoginPage } from './pages/LoginPage';
 import { DashboardPage } from './pages/DashboardPage';
 import { CheckoutPage } from './pages/CheckoutPage';
+import { CaseFivePage } from './pages/eval/CaseFivePage';
+import { CaseNinePage } from './pages/eval/CaseNinePage';
 import './styles.css';
 
 async function enableMocks(): Promise<void> {
@@ -30,6 +32,10 @@ const router = createBrowserRouter([
       { path: 'login', element: <LoginPage /> },
       { path: 'dashboard', element: <DashboardPage /> },
       { path: 'checkout', element: <CheckoutPage /> },
+      // Eval scaffolds — render isolated case components so the bridge can
+      // capture real snapshots for tests/diagnostic-eval/cases/*.
+      { path: 'eval/case-005', element: <CaseFivePage /> },
+      { path: 'eval/case-009', element: <CaseNinePage /> },
     ],
   },
 ]);
