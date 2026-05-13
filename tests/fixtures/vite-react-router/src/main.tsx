@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { Profiler, type ProfilerOnRenderCallback } from 'react';
 import ReactDOM from 'react-dom/client';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { RouterProvider, createBrowserRouter } from 'react-router-dom';
@@ -40,12 +40,33 @@ const router = createBrowserRouter([
   },
 ]);
 
+// Lightweight benchmark hook: each React commit's actualDuration is pushed
+// to window.__rlProfile__ so a Playwright spec can read it back and compare
+// per-render cost with vs. without the probe injected. No-op in normal use
+// (window globals do not affect any render path).
+declare global {
+  interface Window {
+    __rlProfile__?: Array<{
+      phase: 'mount' | 'update' | 'nested-update';
+      actualDuration: number;
+      baseDuration: number;
+      commitTime: number;
+    }>;
+  }
+}
+const onRender: ProfilerOnRenderCallback = (_id, phase, actualDuration, baseDuration, _start, commitTime) => {
+  if (window.__rlProfile__ === undefined) window.__rlProfile__ = [];
+  window.__rlProfile__.push({ phase, actualDuration, baseDuration, commitTime });
+};
+
 void enableMocks().then(() => {
   ReactDOM.createRoot(document.getElementById('root')!).render(
     <React.StrictMode>
-      <QueryClientProvider client={queryClient}>
-        <RouterProvider router={router} />
-      </QueryClientProvider>
+      <Profiler id="fixture-root" onRender={onRender}>
+        <QueryClientProvider client={queryClient}>
+          <RouterProvider router={router} />
+        </QueryClientProvider>
+      </Profiler>
     </React.StrictMode>,
   );
 });

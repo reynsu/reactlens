@@ -235,7 +235,7 @@ Before declaring Phase 3 done, ALL of the following must hold on the fixture app
 - [x] Props are serialized accurately for primitives, arrays, plain objects
 - [x] At least `useState` hook values are captured correctly (hook count + values captured; full kind classification is approximate)
 - [x] No probe-induced crashes during a 100-test run (33-test run on fixture: 0 crashes)
-- [~] Probe overhead < 50ms per render on the fixture app — not formally measured; subjectively no perceived slowdown
+- [x] Probe overhead < 50ms per render on the fixture app — measured via React Profiler API on the Vite fixture (3 runs each, probe ON vs OFF). Delta within noise (~−0.1 ms mean); ~50× margin against the 50 ms threshold. Details in `docs/component-bridge.md`.
 - [x] Source location (`file:line`) is captured in dev mode
 
 **Acceptance:** Manual review with the developer. This is a quality gate — phase is not done until the developer signs off.

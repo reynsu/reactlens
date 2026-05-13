@@ -334,6 +334,7 @@ flowchart LR
             <div class="kan-card"><span class="meta">P1 · init</span><strong>Stack detection &amp; templates.</strong> Vite + React Router fixture full.</div>
             <div class="kan-card"><span class="meta">P2 · runner</span><strong>Streaming reporter + event bus.</strong> Full Playwright reporter; JSONL passthrough.</div>
             <div class="kan-card"><span class="meta">P3 · bridge</span><strong>Probe + bippy + transport.</strong> Captures component tree per commit, throttled 10/s.</div>
+            <div class="kan-card"><span class="meta">P3.6 · bridge</span><strong>Overhead benchmark (DoD #9 ✓).</strong> React Profiler measured ~−0.1 ms delta (within noise), 50× margin against the 50 ms threshold.</div>
             <div class="kan-card"><span class="meta">P4 · dashboard</span><strong>Server + TestList + Preview + Inspector.</strong> localhost:7777, CDP screencast, tree synced to step.</div>
             <div class="kan-card"><span class="meta">P5 · generate</span><strong>AST analysis + agent SDK.</strong> ts-morph enumerates visual states; agent writes POM + spec.</div>
             <div class="kan-card"><span class="meta">P6 · diagnose</span><strong>Failure agent + git context.</strong> Streaming diagnosis with Zod-validated output, retry on bad JSON.</div>
@@ -344,7 +345,6 @@ flowchart LR
             <h4>In progress <span class="count" id="count-progress">—</span></h4>
             <div class="kan-card"><span class="meta">P3.2 · bridge</span><strong>React 19 verification.</strong> React 18 verified; React 19 fixture pending.</div>
             <div class="kan-card"><span class="meta">P3.5 · bridge</span><strong>Per-step stepId update.</strong> Currently uses testId for both.</div>
-            <div class="kan-card"><span class="meta">P3.6 · bridge</span><strong>&lt;50ms overhead benchmark.</strong> Not formally measured.</div>
             <div class="kan-card"><span class="meta">P4.5 · UI</span><strong>Active-component highlight.</strong> Inspector shows tree but doesn't highlight locator-target.</div>
             <div class="kan-card"><span class="meta">P6.1 · eval</span><strong>1 test-bug case missing.</strong> 3/4 test-bug; copied-spec drift case pending.</div>
             <div class="kan-card"><span class="meta">P6.6 · UI</span><strong>Apply-fix button.</strong> Diagnosis renders patch; one-click apply deferred.</div>

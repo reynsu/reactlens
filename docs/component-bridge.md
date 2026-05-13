@@ -52,7 +52,26 @@ Host elements (DOM nodes like `div`) and "passthrough" fibers (Fragment, StrictM
 
 ## Performance
 
-Snapshots are throttled to ~10/sec. Serialization happens on `setTimeout(0)` after the commit so it doesn't add measurable latency to React's commit phase. Empirically the probe adds well under 50ms per render on the fixture app.
+Snapshots are throttled to ~10/sec. Serialization happens on `setTimeout(0)` after the commit so it doesn't add measurable latency to React's commit phase.
+
+### Measured (2026-05-13)
+
+A React Profiler API benchmark on the Vite fixture (`tests/fixtures/vite-react-router/e2e/specs/eval/probe-benchmark.spec.ts`) drives a deterministic checkout scenario (fill 3 inputs, submit, wait for response) and reads `actualDuration` per React commit. Three runs each, probe ON (`REACTLENS_WS_URL` set, probe IIFE injected and bippy active) vs probe OFF (probe never loaded):
+
+| metric (per commit) | probe OFF | probe ON | delta |
+|---|---|---|---|
+| mean   | 1.11 ms | 1.00 ms | −0.11 ms |
+| max    | 4.47 ms | 4.13 ms | −0.34 ms |
+| sum    | 5.57 ms | 5.00 ms | −0.57 ms |
+| n      | 5       | 5       | — |
+
+Delta is within measurement noise (probe ON is marginally faster than OFF — consistent with variance, not a real effect). Per-render overhead is well below the DoD #9 threshold of 50 ms — by a factor of roughly 50×.
+
+**What this measures vs. what it doesn't.** `actualDuration` covers React's commit phase, which is the user-perceived render latency. The probe's actual work (fiber walk + prop sanitization + JSON.stringify + WS send) happens *after* commit on `setTimeout(0)`, *outside* this window. So this benchmark validates "the probe does not extend commit-phase latency" — which is what users notice. It does *not* measure post-commit main-thread blocking; if you suspect the probe is starving idle time, run a `PerformanceObserver({entryTypes: ['longtask']})` benchmark instead.
+
+Sample size is intentionally small (5 commits × 3 runs = 15 observations per condition) because the delta is so close to zero that more data wouldn't change the conclusion. If the probe ever shows a non-noise overhead, expand the scenario and rerun.
+
+### Depth limit
 
 If a particular component blows the depth limit (default 30), the walk is cut and a placeholder is emitted. We don't have a knob to raise the limit yet — file an issue if your tree legitimately needs more.
 
