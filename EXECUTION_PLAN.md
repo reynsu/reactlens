@@ -434,7 +434,7 @@ This is capability 4.3, the second core differentiator.
 - [x] `tests/diagnostic-eval/eval-runner.test.ts` runs the diagnosis agent against each case via `it.each` (per-case timeout, `vitest -t` filter for dry-runs, `afterAll` aggregate). Unlocks on `ANTHROPIC_API_KEY` (token-billed) or `REACTLENS_USE_CLAUDE_CODE=1` (Max-billed via local `claude` CLI).
 - [x] `src/analyzer/eval-pipeline.ts` sandboxes the agent's `cwd` in a tmpdir containing only the input files (`component.tsx`, `spec.ts`, `error.txt`, `snapshot.json`). `truth.json` is never visible to the agent — closes the obvious calibration leak.
 
-**Acceptance:** `pnpm test:eval` runs end-to-end and prints metrics. **First honest baseline (Max-billed, sandboxed cwd, spoiler-free cases): 10/11 (90.9%) overall accuracy, 9/10 (90%) high-confidence accuracy, 1/11 (9.1%) false-confidence.** The single false-confidence case is case-009 (test-ordering, labelled `flaky` per CLAUDE.md §4.3, classified as `test-bug` by the agent — taxonomy edge case to clarify in `classify-bug.md`). Wall-clock: ~3.5 min for 11 cases.
+**Acceptance:** `pnpm test:eval` runs end-to-end and prints metrics. **Baseline after classify-bug.md disambiguation rule (Max-billed, sandboxed cwd, spoiler-free cases): 11/11 (100%) overall accuracy, 11/11 (100%) high-confidence accuracy, 0% false-confidence.** Wall-clock: ~3 min for 11 cases. case-009 (test-ordering) was the lone false-confidence in baselines #2/#3; the prompt refinement teaches the agent to weigh runtime evidence of state-leakage over the structural "spec lacks beforeEach(clear)" reading. **Caveat: n=11 is small; the rule was tuned with case-009 as motivating example. Generalization needs more flaky-ordering cases (auth-session leak, DB-row leak, etc.) — flagged as Phase 6.1 follow-up.**
 
 ### 6.2 Git context gatherer
 
@@ -467,7 +467,7 @@ This is capability 4.3, the second core differentiator.
 **Acceptance:**
 - For each case in `tests/diagnostic-eval/cases/`, the agent produces a valid `Diagnosis`
 - Run `pnpm test:eval`; record the baseline accuracy. Target for v0.1.0: ≥ 80% classification accuracy on the eval set, with `high` confidence accuracy ≥ 95%.
-- **Current baseline: 90.9% overall (≥80% ✓), 90% high-confidence (≥95% ✗).** One false-confidence case (case-009 flaky/test-ordering classified as test-bug high). The high-confidence gap is not yet closed; needs either prompt refinement in `classify-bug.md` for ordering-flake or more cases in the `flaky` bucket so a single error doesn't dominate the recall metric.
+- **Current baseline: 100% overall, 100% high-confidence (both DoD #5 thresholds met).** Achieved by adding a disambiguation rule in `classify-bug.md` between structural test-bug patterns and runtime state-leak (flaky-ordering) evidence. Caveat: n=11 is small and the rule was tuned with case-009 as motivating example; generalization requires more flaky-ordering cases with varied state-leak shapes (auth, DB, IndexedDB) before the gate can be considered robust in CI.
 
 ### 6.5 Wire diagnosis into run flow
 

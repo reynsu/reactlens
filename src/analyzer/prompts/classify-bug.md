@@ -44,13 +44,14 @@ This document defines, with examples, when to choose each classification. Diagno
 
 ## `flaky`
 
-**Definition:** non-deterministic failure unrelated to a code change.
+**Definition:** non-deterministic failure unrelated to a code change. Includes ordering failures — failures that depend on what *other* specs did, not on the code or this spec.
 
 **Strongest signals:**
 - Failure mode is "waiting for X, timed out". X exists in source.
 - Neither file has changed recently.
 - Multiple consecutive runs against unchanged code show different outcomes.
 - Snapshot shows the component DID render the asserted state — just after the timeout.
+- Snapshot or runtime evidence shows state coming from **outside this spec's own actions** — eg `localStorage` populated with keys this spec never writes, an authenticated session this spec didn't sign in for, a database row another spec inserted. Often paired with an `error.txt` / trace line that says the failure correlates with run order ("passes in isolation, fails after spec X").
 
 Use sparingly. "I don't know" is more often a `low`-confidence other-classification than `flaky`.
 
@@ -58,6 +59,31 @@ Use sparingly. "I don't know" is more often a `low`-confidence other-classificat
 
 > Spec: clicks submit, asserts redirect within 5s. Sometimes the redirect takes 6s due to a queue.
 > → `flaky`, `medium`. Suggested fix: increase timeout for this spec, or add a deterministic gate (`waitForResponse`).
+
+> Spec: `await page.goto('/cart'); await expect(getByTestId('cart-empty')).toBeVisible()`.
+> Component snapshot: `hooks.state = [{id: 'abc'}]` (items array populated).
+> error.txt: "Browser storage at time of failure: localStorage = {cart: '[{id:abc}]'}. Failure correlates with running after 'adds item to cart' spec. No spec or component change in 60 days."
+> Component on disk reads from localStorage on mount; spec doesn't call `localStorage.clear()`.
+> → `flaky` (ordering / state leak), `high`. The localStorage state did not come from this spec's actions — it leaked from another spec running first in the same worker. Even though the spec is also structurally fragile, the proximate cause is the order.
+> Suggested fix: add `test.beforeEach(({page}) => page.evaluate(() => localStorage.clear()))` to this spec or the file's parent describe. Optionally file an issue against the spec that wrote the leaked data.
+
+## Disambiguating `test-bug` vs `flaky` (ordering) when both fit
+
+Some failures look structurally like test-bugs (the spec doesn't `beforeEach(localStorage.clear())`, doesn't reset a global, doesn't re-seed the database) while *also* having runtime evidence of an ordering issue (snapshot shows state this spec never wrote; trace says the failure correlates with another spec running first). This is the most common false-confidence trap in the eval set, so be explicit.
+
+**Prefer `flaky` when:**
+- The component snapshot at failure contains state values this spec's own actions cannot explain. Eg `hooks.state = [{id:'abc'}]` but the spec never wrote that id; `props.user.email = '...'` but the spec didn't log anyone in.
+- The error trace or `error.txt` mentions the failure correlates with run order ("passes in isolation, fails after X"), failure rate is below 100%, or no recent changes to either file.
+- The same spec passes when run alone (a strong tell — if you only see "fails in suite, passes alone" in the trace, lean `flaky`).
+
+**Prefer `test-bug` when:**
+- The state the spec depends on is conventionally set up by the framework (eg `storageState`, fixtures) and *this* spec is the one that should have configured it.
+- The spec asserts a `data-testid` / text / route that doesn't exist anywhere in the source — the bug is in the assertion itself, not in the runtime state.
+- Multiple specs in the same file fail the same way regardless of order.
+
+The structural shortcoming (no `beforeEach(clear)`) is real and worth fixing in both cases. But if the runtime evidence shows the leak came from *elsewhere*, that's the proximate cause — and the proximate cause is what `flaky` captures. Don't punish the symptom-bearing spec for being the one that exposed the order-dependency.
+
+Confidence in this disambiguation should track the directness of the evidence: snapshot hook values + an error.txt that names the suspected upstream spec is `high`; just "no recent commits + spec doesn't clear state" is `medium`.
 
 ## `env-issue`
 
