@@ -548,9 +548,9 @@ This is capability 4.3, the second core differentiator.
 
 ### 7.6 Add TanStack Router fixture
 
-- [~] Same as 7.5 for TanStack Router — placeholder package.json only; deferred.
+- [x] Real TanStack Router (over Vite) fixture mirroring `vite-react-router/`'s complexity — login + dashboard + checkout, same testids, MSW handlers, react-hook-form/zod/tanstack-query stack. Code-based routes via `createRouter`/`createRoute`/`createRootRoute`. Smoke spec (`e2e/specs/login.spec.ts`) passes 3/3 against the real `vite` dev server.
 
-**Acceptance:** Works on TanStack Router.
+**Acceptance:** Works on TanStack Router. **Same shallow-capture caveat as the Next fixture (§7.5)**: the probe sees the outer tree (App, OutletImpl, RouterProvider) but does not currently walk into the matched route's component (`LoginPage` etc.). Specs run and the page renders correctly. Investigation tracked as a shared follow-up between §7.5 and §7.6 — likely an interaction between bippy's commit hook and routers that use `SafeFragment`/streaming-style fiber layouts.
 
 ### 7.7 Diagnostic eval gate
 
