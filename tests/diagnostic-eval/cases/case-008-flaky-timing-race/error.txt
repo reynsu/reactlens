@@ -1,0 +1,2 @@
+TimeoutError: locator.click: Timeout 5000ms exceeded while waiting for element to receive event.
+Failure rate over the last 50 CI runs: 6/50 (12%). No spec or component changes in the last 30 days.

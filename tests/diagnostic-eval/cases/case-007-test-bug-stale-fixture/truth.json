@@ -1,0 +1,6 @@
+{
+  "expectedClassification": "test-bug",
+  "minimumConfidence": "high",
+  "category": "stale-fixture-data",
+  "notes": "MSW handler was updated to return the new product field shape (price.amount + price.currency), but this spec still asserts the old flat shape (priceUsd). The component renders correctly against the new shape; the spec assertions are wrong."
+}

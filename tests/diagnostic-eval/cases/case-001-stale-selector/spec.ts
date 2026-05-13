@@ -1,6 +1,3 @@
-// Failing spec: data-testid does not exist in the component source.
-// The probe snapshot will show the page rendered correctly with the canonical
-// 'login-error' element — the spec is the broken artifact.
 import { expect, test } from '@playwright/test';
 
 test('login error', async ({ page }) => {

@@ -1,0 +1,6 @@
+{
+  "expectedClassification": "flaky",
+  "minimumConfidence": "low",
+  "category": "render-timing-race",
+  "notes": "Spec clicks immediately after the page loads. The button is enabled on mount but the click handler depends on a state set inside a deferred useLayoutEffect, so on slow CI the click sometimes lands before the handler is bound. Neither code nor spec changed; failure rate ~10%."
+}

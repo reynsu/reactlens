@@ -1,0 +1,6 @@
+{
+  "expectedClassification": "real-bug",
+  "minimumConfidence": "high",
+  "category": "effect-ordering-race",
+  "notes": "Two useEffects: one fetches user, one fetches preferences keyed by user.id. The dependency array on the second was widened to [] in a recent refactor, so it fires before user is loaded and reads undefined.id, silently rendering the default preferences forever."
+}

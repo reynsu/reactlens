@@ -1,0 +1,6 @@
+{
+  "expectedClassification": "real-bug",
+  "minimumConfidence": "high",
+  "category": "api-contract-drift",
+  "notes": "Backend renamed user.fullName to user.displayName. Component still reads fullName and renders empty, breaking the welcome banner."
+}

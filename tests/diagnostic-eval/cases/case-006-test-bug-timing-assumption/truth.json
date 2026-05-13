@@ -1,0 +1,6 @@
+{
+  "expectedClassification": "test-bug",
+  "minimumConfidence": "medium",
+  "category": "timing-assumption",
+  "notes": "Spec asserts the user list synchronously, but the component fetches asynchronously and renders a skeleton first. The component is correct (it eventually shows the list); the spec needs to wait for the list to appear instead of asserting immediately after goto."
+}

@@ -1,0 +1,6 @@
+{
+  "expectedClassification": "env-issue",
+  "minimumConfidence": "medium",
+  "category": "missing-env-var",
+  "notes": "Vite reads VITE_API_BASE_URL at build time. The CI runner is missing the env var, so the bundle ships with undefined and every fetch hits /undefined/* returning 404. The test then fails because no data ever loads. Code and spec are correct; the environment is missing a required variable."
+}

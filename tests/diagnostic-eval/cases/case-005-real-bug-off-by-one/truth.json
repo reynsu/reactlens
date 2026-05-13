@@ -1,0 +1,6 @@
+{
+  "expectedClassification": "real-bug",
+  "minimumConfidence": "high",
+  "category": "off-by-one",
+  "notes": "Pagination footer renders pageCount = Math.floor(total / pageSize) instead of Math.ceil. The last partial page is dropped, so users with a count of 11 see only 2 pages of 5 instead of 3."
+}

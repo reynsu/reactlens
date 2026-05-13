@@ -1,0 +1,6 @@
+{
+  "expectedClassification": "flaky",
+  "minimumConfidence": "low",
+  "category": "test-ordering",
+  "notes": "Spec passes when run alone but fails when a previous test leaves data in localStorage (a cart with one item). Specs share storage state across the worker. Component and spec are individually correct; the test set is order-dependent."
+}

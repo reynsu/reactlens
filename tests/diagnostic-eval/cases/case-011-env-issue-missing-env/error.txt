@@ -1,0 +1,3 @@
+TimeoutError: page.waitForSelector: Timeout 5000ms exceeded.
+  Network log shows GET undefined/articles → 404 (x3 retries).
+  process.env.VITE_API_BASE_URL is undefined at build time.

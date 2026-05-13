@@ -1,5 +1,3 @@
-// Component source as it exists in the repo (no recent changes).
-// The error banner is `data-testid="login-error"` — has been for months.
 export function LoginPage(): JSX.Element {
   return (
     <div data-testid="login-card">

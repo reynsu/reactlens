@@ -1,0 +1,5 @@
+TimeoutError: locator.waitFor: Timeout 5000ms exceeded.
+Expected: getByTestId("cart-empty") visible
+Actual: getByTestId("cart-count") rendered with text "1 items"
+Browser storage at time of failure: localStorage = { cart: '[{"id":"abc"}]' }
+Failure correlates with running after "adds item to cart" spec; passes in isolation. No spec or component change in 60 days.

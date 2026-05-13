@@ -1,0 +1,2 @@
+Error: page.goto: net::ERR_CONNECTION_REFUSED at http://localhost:5173/
+    at /tests/cases/case-010-env-issue-port-conflict/spec.ts:6:14

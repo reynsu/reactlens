@@ -1,0 +1,6 @@
+{
+  "expectedClassification": "env-issue",
+  "minimumConfidence": "medium",
+  "category": "port-conflict",
+  "notes": "Playwright's webServer config points at port 5173 but another process on the developer's machine is already bound to that port. The dev server fails to start; every spec fails with ERR_CONNECTION_REFUSED on goto. Not a code or spec bug."
+}

@@ -424,15 +424,17 @@ This is capability 4.3, the second core differentiator.
 
 ### 6.1 Eval set scaffolding
 
-- [~] Create `tests/diagnostic-eval/cases/` with at least 12 hand-crafted failure cases — **2 representative cases authored** (case-001 stale-selector / test-bug, case-002 validation-regression / real-bug). Remaining 10 cases (4 real-bug, 3 test-bug, 2 flaky, 2 env-issue) deferred — listed as a Phase 7 follow-up.
-  - [~] 4 `real-bug` cases (different categories: validation logic, API contract, race in business logic, off-by-one)
-  - [~] 4 `test-bug` cases (stale selector, incorrect assumption about timing, wrong fixture data, copied-spec drift)
-  - [~] 2 `flaky` cases
-  - [~] 2 `env-issue` cases (port conflict, missing env var)
-- [x] Each case directory contains: a snapshot of the fixture's source code, the spec, the failure trace/screenshot, the component snapshot at failure, AND a `truth.json` with the expected classification + minimum acceptable diagnosis quality (snapshot/trace optional fields wired)
-- [x] Create `tests/diagnostic-eval/eval-runner.ts` that runs the diagnosis agent on each case and computes accuracy, recall, false-confidence rate (smoke test runs; live API metric collection skipped without ANTHROPIC_API_KEY)
+- [~] Create `tests/diagnostic-eval/cases/` with at least 12 hand-crafted failure cases — **11 cases authored** spanning all 4 classifications. One `test-bug` case (copied-spec drift) still pending; bumping the set to 12+ deferred to a follow-up cut.
+  - [x] 4 `real-bug` cases: CVV validation regression, API contract drift, effect-ordering race, off-by-one pagination
+  - [~] 3/4 `test-bug` cases: stale selector, timing assumption, stale fixture data (copied-spec drift pending)
+  - [x] 2 `flaky` cases: render-timing race, test-ordering state-leakage
+  - [x] 2 `env-issue` cases: port conflict, missing env var
+- [x] Each case directory contains: `component.tsx`, `spec.ts`, `truth.json` (validated by `parseTruth` + zod) and — where the failure isn't fully inferable from source — `error.txt` with the trace/context. `snapshot.json` is optional; capturing real probe snapshots from the fixture is deferred.
+- [x] Smoke test gate fails fast if a case dir has `truth.json` without `component.tsx`/`spec.ts`, or with a malformed `truth.json`. Pure helpers (`compareToTruth`, `aggregateMetrics`) live in `src/analyzer/eval-metrics.ts` with full unit-test coverage.
+- [x] `tests/diagnostic-eval/eval-runner.test.ts` runs the diagnosis agent against each case via `it.each` (per-case timeout, `vitest -t` filter for dry-runs, `afterAll` aggregate). Unlocks on `ANTHROPIC_API_KEY` (token-billed) or `REACTLENS_USE_CLAUDE_CODE=1` (Max-billed via local `claude` CLI).
+- [x] `src/analyzer/eval-pipeline.ts` sandboxes the agent's `cwd` in a tmpdir containing only the input files (`component.tsx`, `spec.ts`, `error.txt`, `snapshot.json`). `truth.json` is never visible to the agent — closes the obvious calibration leak.
 
-**Acceptance:** `pnpm test:eval` runs end-to-end and prints metrics. Initial baseline: any non-zero accuracy is acceptable; we improve it.
+**Acceptance:** `pnpm test:eval` runs end-to-end and prints metrics. **First honest baseline (Max-billed, sandboxed cwd, spoiler-free cases): 10/11 (90.9%) overall accuracy, 9/10 (90%) high-confidence accuracy, 1/11 (9.1%) false-confidence.** The single false-confidence case is case-009 (test-ordering, labelled `flaky` per CLAUDE.md §4.3, classified as `test-bug` by the agent — taxonomy edge case to clarify in `classify-bug.md`). Wall-clock: ~3.5 min for 11 cases.
 
 ### 6.2 Git context gatherer
 
@@ -465,6 +467,7 @@ This is capability 4.3, the second core differentiator.
 **Acceptance:**
 - For each case in `tests/diagnostic-eval/cases/`, the agent produces a valid `Diagnosis`
 - Run `pnpm test:eval`; record the baseline accuracy. Target for v0.1.0: ≥ 80% classification accuracy on the eval set, with `high` confidence accuracy ≥ 95%.
+- **Current baseline: 90.9% overall (≥80% ✓), 90% high-confidence (≥95% ✗).** One false-confidence case (case-009 flaky/test-ordering classified as test-bug high). The high-confidence gap is not yet closed; needs either prompt refinement in `classify-bug.md` for ordering-flake or more cases in the `flaky` bucket so a single error doesn't dominate the recall metric.
 
 ### 6.5 Wire diagnosis into run flow
 
