@@ -16,6 +16,7 @@ const REPO_ROOT = join(__dirname, '..', '..');
 
 const FIXTURES = [
   { name: 'vite-react-router', path: join(REPO_ROOT, 'tests', 'fixtures', 'vite-react-router') },
+  { name: 'vite-react-router-19', path: join(REPO_ROOT, 'tests', 'fixtures', 'vite-react-router-19') },
   { name: 'next-app-router', path: join(REPO_ROOT, 'tests', 'fixtures', 'next-app-router') },
   { name: 'tanstack-router', path: join(REPO_ROOT, 'tests', 'fixtures', 'tanstack-router') },
 ] as const;
