@@ -32,6 +32,15 @@ body {
   padding: 4px 12px; font-size: 12px; border-radius: 4px; cursor: pointer; margin-left: 4px;
 }
 .header button:hover { background: var(--border); }
+.run-picker { display: flex; align-items: center; gap: 8px; }
+.run-picker select {
+  background: var(--panel-2); color: var(--text); border: 1px solid var(--border);
+  padding: 4px 8px; font-size: 12px; border-radius: 4px; font-family: inherit;
+  min-width: 220px;
+}
+.run-picker select:disabled { opacity: 0.6; cursor: wait; }
+.run-picker-status { font-size: 11px; color: var(--muted); }
+.run-picker-status.err { color: var(--fail); }
 .layout { display: grid; grid-template-columns: 320px 1fr 360px; height: 100%; overflow: hidden; }
 .panel { background: var(--panel); border-right: 1px solid var(--border); overflow: auto; }
 .panel:last-child { border-right: none; border-left: 1px solid var(--border); }

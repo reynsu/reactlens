@@ -20,3 +20,21 @@ export type TestRow = {
   duration?: number;
   error?: string;
 };
+
+// Frames arrive two ways: live runs ship base64 JPEGs over the WS (cheap to
+// inline), past runs are addressed by HTTP URL into the /api/runs/:id/frames
+// route. Discriminating at storage time keeps the BrowserPreview component
+// agnostic of which mode produced the frame.
+export type FrameSource =
+  | { kind: 'base64'; data: string }
+  | { kind: 'url'; url: string };
+
+export type PastRun = {
+  runId: string;
+  startedAt?: number;
+  totalTests?: number;
+  passed?: number;
+  failed?: number;
+  skipped?: number;
+  duration?: number;
+};
