@@ -118,7 +118,11 @@ async function main(argv: readonly string[]): Promise<number> {
     return 0;
   } catch (err) {
     if (err instanceof ReactLensError) {
-      logger.error({ code: err.code, helpUrl: err.helpUrl }, err.message);
+      // helpUrl is surfaced both as structured metadata (for JSON logger
+      // consumers) AND inline in the message so a human reading stderr can
+      // jump straight to the remediation page without scanning fields.
+      const message = err.helpUrl !== undefined ? `${err.message}\n  see: ${err.helpUrl}` : err.message;
+      logger.error({ code: err.code, helpUrl: err.helpUrl }, message);
       return 1;
     }
     logger.error({ err }, 'unexpected error');

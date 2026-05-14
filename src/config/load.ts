@@ -9,7 +9,6 @@ export class ConfigError extends ReactLensError {
   constructor(message: string, opts: { cause?: unknown } = {}) {
     super(message, {
       code: 'REACTLENS_CONFIG_ERROR',
-      helpUrl: 'docs/troubleshooting.md#config',
       ...opts,
     });
   }

@@ -55,7 +55,7 @@ export async function ensureClaudeCli(): Promise<void> {
   if (!(await isClaudeCliAvailable())) {
     throw new ReactLensError(
       'REACTLENS_USE_CLAUDE_CODE is set but `claude` CLI was not found in PATH. Install Claude Code and run `claude login` first, or unset the variable to use the SDK + ANTHROPIC_API_KEY.',
-      { code: 'CLI_RUNNER_NOT_FOUND', helpUrl: 'docs/troubleshooting.md#use-claude-code' },
+      { code: 'CLI_RUNNER_NOT_FOUND' },
     );
   }
 }
