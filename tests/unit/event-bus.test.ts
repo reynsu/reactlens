@@ -19,10 +19,10 @@ describe('EventBus', () => {
     const bus = new EventBus();
     const handler = vi.fn();
     const dispose = bus.on('run:start', handler);
-    bus.emit({ t: 'run:start', totalTests: 1, timestamp: 0 });
+    bus.emit({ t: 'run:start', runId: 'test-run-id', totalTests: 1, timestamp: 0 });
     expect(handler).toHaveBeenCalledTimes(1);
     dispose();
-    bus.emit({ t: 'run:start', totalTests: 1, timestamp: 0 });
+    bus.emit({ t: 'run:start', runId: 'test-run-id', totalTests: 1, timestamp: 0 });
     expect(handler).toHaveBeenCalledTimes(1);
   });
 
@@ -33,7 +33,7 @@ describe('EventBus', () => {
       throw new Error('boom');
     });
     bus.on('run:start', good);
-    bus.emit({ t: 'run:start', totalTests: 1, timestamp: 0 });
+    bus.emit({ t: 'run:start', runId: 'test-run-id', totalTests: 1, timestamp: 0 });
     expect(good).toHaveBeenCalledTimes(1);
   });
 
@@ -51,7 +51,7 @@ describe('EventBus', () => {
 
   it('rejects emitting an event shape that does not match its `t`', () => {
     const bus = new EventBus();
-    // @ts-expect-error missing required field `totalTests` for run:start
+    // @ts-expect-error missing required fields `runId` and `totalTests` for run:start
     const bad: RunEvent = { t: 'run:start', timestamp: 0 };
     void bad;
   });

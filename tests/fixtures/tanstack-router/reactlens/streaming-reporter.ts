@@ -17,7 +17,7 @@ type Attachment = { name: string; path: string; contentType?: string };
 // src/runner/events.ts; duplicated here so the template stays self-contained
 // when copied into a user's project.
 type RunEvent =
-  | { t: 'run:start'; totalTests: number; timestamp: number }
+  | { t: 'run:start'; runId: string; totalTests: number; timestamp: number }
   | { t: 'run:end'; passed: number; failed: number; skipped: number; duration: number }
   | { t: 'test:start'; id: string; title: string; file: string; suite: string }
   | {
@@ -82,7 +82,13 @@ class ReactLensStreamingReporter implements Reporter {
 
   onBegin(_config: FullConfig, suite: Suite): void {
     this.startedAt = Date.now();
-    emit({ t: 'run:start', totalTests: suite.allTests().length, timestamp: this.startedAt });
+    // runId is injected by `reactlens run` via REACTLENS_RUN_ID. When the user
+    // invokes `playwright test` directly (no reactlens wrapper), we synthesize
+    // a fallback so downstream consumers can still depend on the field's
+    // presence — but the value is marked "standalone" so persistence layers
+    // can choose to skip it.
+    const runId = process.env['REACTLENS_RUN_ID'] ?? `standalone-${this.startedAt}`;
+    emit({ t: 'run:start', runId, totalTests: suite.allTests().length, timestamp: this.startedAt });
   }
 
   onTestBegin(test: TestCase): void {

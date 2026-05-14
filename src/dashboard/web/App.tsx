@@ -8,6 +8,9 @@ import { DiagnosticsPanel } from './components/DiagnosticsPanel';
 type ActiveStep = { stepId: string; title: string };
 
 type State = {
+  // Active run identifier — set on run:start, kept across the run so the P8
+  // persistence layer + future "past runs" picker can address this run by id.
+  runId: string | null;
   tests: Map<string, TestRow>;
   totalTests: number;
   passed: number;
@@ -25,6 +28,7 @@ type State = {
 };
 
 const initialState: State = {
+  runId: null,
   tests: new Map(),
   totalTests: 0,
   passed: 0,
@@ -45,7 +49,7 @@ function reducer(state: State, e: Action): State {
     case 'select':
       return { ...state, selectedTestId: e.id };
     case 'run:start':
-      return { ...state, totalTests: e.totalTests, tests: new Map(), passed: 0, failed: 0, skipped: 0 };
+      return { ...state, runId: e.runId, totalTests: e.totalTests, tests: new Map(), passed: 0, failed: 0, skipped: 0 };
     case 'run:end':
       return { ...state, passed: e.passed, failed: e.failed, skipped: e.skipped, durationMs: e.duration };
     case 'test:start': {

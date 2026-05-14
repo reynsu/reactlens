@@ -11,6 +11,7 @@ import { ALL_EVENT_TYPES, type ComponentNode } from '../runner/events';
 import { runTests, type RunSummary } from '../runner/playwright-runner';
 import { persistSnapshots } from '../runner/snapshot-sink';
 import { logger } from '../utils/logger';
+import { generateRunId } from '../utils/run-id';
 
 export type RunCommandOptions = {
   cwd: string;
@@ -107,6 +108,8 @@ export async function runRun(opts: RunCommandOptions): Promise<number> {
   const cwd = resolve(opts.cwd);
   const config = await loadConfig(cwd);
   const bus = new EventBus();
+  const runId = generateRunId();
+  logger.info({ runId }, 'run starting');
 
   const wantDashboard = opts.noDashboard !== true && opts.reporter !== 'json';
 
@@ -130,6 +133,7 @@ export async function runRun(opts: RunCommandOptions): Promise<number> {
     const summary = await runTests({
       cwd,
       bus,
+      runId,
       skipWebServer: opts.skipWebServer,
       probeWsUrl: dashboard?.probeWsUrl,
       probePath: locatePackagedProbe(),
@@ -224,6 +228,7 @@ export async function runRun(opts: RunCommandOptions): Promise<number> {
     summary = await runTests({
       cwd,
       bus,
+      runId,
       skipWebServer: opts.skipWebServer,
       probeWsUrl: dashboard?.probeWsUrl,
       probePath: locatePackagedProbe(),

@@ -39,7 +39,7 @@ export type Diagnosis = {
 };
 
 export type RunEvent =
-  | { t: 'run:start'; totalTests: number; timestamp: number }
+  | { t: 'run:start'; runId: string; totalTests: number; timestamp: number }
   | { t: 'run:end'; passed: number; failed: number; skipped: number; duration: number }
   | { t: 'test:start'; id: string; title: string; file: string; suite: string }
   | {

@@ -21,6 +21,10 @@ export type RunnerOptions = {
   // project's node_modules); in published use, the fixtures.ts default
   // resolution via require.resolve('reactlens/package.json') is preferred.
   probePath?: string;
+  // Run identifier propagated to the streaming reporter via REACTLENS_RUN_ID.
+  // The reporter stamps it on the run:start event so persistence + dashboard
+  // can key past runs by this id.
+  runId?: string;
 };
 
 export type RunSummary = {
@@ -88,6 +92,7 @@ export async function runTests(opts: RunnerOptions): Promise<RunSummary> {
   if (opts.skipWebServer === true) env['REACTLENS_NO_WEB_SERVER'] = '1';
   if (opts.probeWsUrl !== undefined) env['REACTLENS_WS_URL'] = opts.probeWsUrl;
   if (opts.probePath !== undefined) env['REACTLENS_PROBE_PATH'] = opts.probePath;
+  if (opts.runId !== undefined) env['REACTLENS_RUN_ID'] = opts.runId;
 
   const child = execa('npx', args, {
     cwd: opts.cwd,

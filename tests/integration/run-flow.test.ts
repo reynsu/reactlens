@@ -53,6 +53,7 @@ describe('reactlens run flow', () => {
       // Track per-event details we want to assert on. Keeping these light to
       // avoid bloating the test's memory profile on long Next runs.
       let sawSnapshotWithStepRewrite = false;
+      let observedRunId: string | undefined;
       let resolveDone: (() => void) | undefined;
       const done = new Promise<void>((resolve) => {
         resolveDone = resolve;
@@ -86,9 +87,17 @@ describe('reactlens run flow', () => {
 
       ws.on('message', (data) => {
         try {
-          const ev = JSON.parse(data.toString()) as { t?: string; testId?: string; stepId?: string };
+          const ev = JSON.parse(data.toString()) as {
+            t?: string;
+            testId?: string;
+            stepId?: string;
+            runId?: string;
+          };
           if (typeof ev.t === 'string') {
             events[ev.t] = (events[ev.t] ?? 0) + 1;
+            if (ev.t === 'run:start' && typeof ev.runId === 'string') {
+              observedRunId = ev.runId;
+            }
             if (
               ev.t === 'component:snapshot' &&
               typeof ev.testId === 'string' &&
@@ -127,6 +136,12 @@ describe('reactlens run flow', () => {
       // testId default the fixture bakes in). This proves end-to-end that
       // step:start → activeStep → snapshot rewrite is wired correctly.
       expect(sawSnapshotWithStepRewrite, `stepId rewrite never fired in ${fixture.name}`).toBe(true);
+      // P8 task 1: run:start.runId is the directory key for future persistence
+      // and the addressing token for the past-runs picker. It must arrive
+      // non-empty and stamped by `reactlens run` (not the reporter's fallback).
+      expect(observedRunId, `runId never observed in ${fixture.name}`).toBeDefined();
+      expect(observedRunId).not.toMatch(/^standalone-/);
+      expect(observedRunId?.length).toBeGreaterThan(10);
 
       await proc.catch(() => undefined);
     },
