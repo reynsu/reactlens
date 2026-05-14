@@ -12,6 +12,7 @@ import { EventPersistor } from '../runner/event-persistor';
 import { runTests, type RunSummary } from '../runner/playwright-runner';
 import { persistSnapshots } from '../runner/snapshot-sink';
 import { logger } from '../utils/logger';
+import { ensureGitignore } from '../utils/paths';
 import { generateRunId } from '../utils/run-id';
 
 export type RunCommandOptions = {
@@ -114,7 +115,9 @@ export async function runRun(opts: RunCommandOptions): Promise<number> {
 
   // Persist every event for v0.2 time-travel. Attached before any other
   // subscriber so the on-disk log is the most complete record of the run.
-  const runDir = join(cwd, '.reactlens', 'runs', runId);
+  const reactlensDir = join(cwd, '.reactlens');
+  await ensureGitignore(reactlensDir);
+  const runDir = join(reactlensDir, 'runs', runId);
   const persistor = new EventPersistor({ runDir });
   persistor.attach(bus);
 
