@@ -29,6 +29,40 @@ export type HookSnapshot = {
   name?: string;
 };
 
+// Accessibility tree node — mirrors Playwright's page.accessibility.snapshot()
+// shape (a subset of the W3C ARIA tree). Captured per test at end-of-test by
+// the reactlens fixture and shipped as `a11y:snapshot` events (P12 part 2).
+// Used by src/analyzer/a11y-diff.ts for semantic visual regression that
+// reads what a screen-reader user perceives rather than pixels.
+export type AxNode = {
+  role: string;
+  name?: string;
+  value?: string | number;
+  description?: string;
+  keyshortcuts?: string;
+  roledescription?: string;
+  valuetext?: string;
+  disabled?: boolean;
+  expanded?: boolean;
+  focused?: boolean;
+  modal?: boolean;
+  multiline?: boolean;
+  multiselectable?: boolean;
+  readonly?: boolean;
+  required?: boolean;
+  selected?: boolean;
+  checked?: boolean | 'mixed';
+  pressed?: boolean | 'mixed';
+  level?: number;
+  valuemin?: number;
+  valuemax?: number;
+  autocomplete?: string;
+  haspopup?: string;
+  invalid?: string;
+  orientation?: string;
+  children: AxNode[];
+};
+
 export type Diagnosis = {
   classification: 'real-bug' | 'test-bug' | 'flaky' | 'env-issue';
   confidence: 'high' | 'medium' | 'low';
@@ -76,6 +110,10 @@ export type RunEvent =
       componentName: string;
       props?: Record<string, unknown>;
     }
+  // P12 part 2: end-of-test snapshot of the accessibility tree, emitted by
+  // the Playwright fixture via page.accessibility.snapshot(). Drives
+  // semantic visual regression — diff a11y trees instead of pixels.
+  | { t: 'a11y:snapshot'; testId: string; stepId: string; tree: AxNode }
   | { t: 'diagnosis:start'; testId: string }
   | { t: 'diagnosis:chunk'; testId: string; text: string }
   | { t: 'diagnosis:end'; testId: string; result: Diagnosis };
@@ -96,6 +134,7 @@ export const ALL_EVENT_TYPES = [
   'frame',
   'component:snapshot',
   'component:event',
+  'a11y:snapshot',
   'diagnosis:start',
   'diagnosis:chunk',
   'diagnosis:end',

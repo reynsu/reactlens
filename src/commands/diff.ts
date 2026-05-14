@@ -10,8 +10,9 @@ import { readFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { ReactLensError } from '../utils/errors';
 import { logger } from '../utils/logger';
-import type { ComponentNode } from '../runner/events';
+import type { AxNode, ComponentNode } from '../runner/events';
 import { diffComponentTree, type SemanticDiff } from '../analyzer/tree-diff';
+import { diffA11yTree, type A11ySemanticDiff } from '../analyzer/a11y-diff';
 
 export type DiffCommandOptions = {
   cwd: string;
@@ -20,7 +21,7 @@ export type DiffCommandOptions = {
   json?: boolean;
 };
 
-type FinalSnapshot = { testId: string; testTitle: string; tree: ComponentNode };
+type FinalSnapshot = { testId: string; testTitle: string; tree: ComponentNode; a11y?: AxNode };
 
 export async function runDiff(opts: DiffCommandOptions): Promise<number> {
   const cwd = resolve(opts.cwd);
@@ -42,13 +43,25 @@ export async function runDiff(opts: DiffCommandOptions): Promise<number> {
     return 0;
   }
 
-  type PerTest = { testId: string; testTitle: string; diffs: SemanticDiff[] };
+  type PerTest = {
+    testId: string;
+    testTitle: string;
+    diffs: SemanticDiff[];
+    a11yDiffs: A11ySemanticDiff[];
+  };
   const perTest: PerTest[] = [];
   for (const id of sharedIds) {
     const b = before.get(id)!;
     const a = after.get(id)!;
     const diffs = diffComponentTree(b.tree, a.tree);
-    if (diffs.length > 0) perTest.push({ testId: id, testTitle: a.testTitle, diffs });
+    // Only diff a11y when both sides captured it. Mixed runs (one with,
+    // one without) skip a11y silently — that mismatch is informational,
+    // not a regression signal.
+    const a11yDiffs =
+      b.a11y !== undefined && a.a11y !== undefined ? diffA11yTree(b.a11y, a.a11y) : [];
+    if (diffs.length > 0 || a11yDiffs.length > 0) {
+      perTest.push({ testId: id, testTitle: a.testTitle, diffs, a11yDiffs });
+    }
   }
 
   if (opts.json === true) {
@@ -84,17 +97,44 @@ async function loadFinalSnapshots(eventsPath: string): Promise<Map<string, Final
       if (testId === undefined || tree === undefined) continue;
       // Last snapshot per test wins — that's the "end-of-test" state, the
       // most useful comparison point for regression detection.
+      const existing = final.get(testId);
       final.set(testId, {
         testId,
         testTitle: titles.get(testId) ?? testId,
         tree,
+        ...(existing?.a11y !== undefined ? { a11y: existing.a11y } : {}),
       });
+    } else if (t === 'a11y:snapshot') {
+      const testId = parsed['testId'] as string | undefined;
+      const tree = parsed['tree'] as AxNode | undefined;
+      if (testId === undefined || tree === undefined) continue;
+      // a11y captured once at end-of-test by the fixture — last write wins
+      // if a future change captures per-step. Carry forward the component
+      // snapshot if one already arrived earlier in the log.
+      const existing = final.get(testId);
+      if (existing !== undefined) {
+        final.set(testId, { ...existing, a11y: tree });
+      } else {
+        // Synthesize a placeholder so the test shows up even when only
+        // the a11y snapshot survived. The component diff side just won't
+        // produce diffs for this test.
+        final.set(testId, {
+          testId,
+          testTitle: titles.get(testId) ?? testId,
+          tree: { id: '0', name: 'Root', props: {}, children: [] },
+          a11y: tree,
+        });
+      }
     }
   }
   return final;
 }
 
-function renderText(runIdA: string, runIdB: string, perTest: Array<{ testId: string; testTitle: string; diffs: SemanticDiff[] }>): string {
+function renderText(
+  runIdA: string,
+  runIdB: string,
+  perTest: Array<{ testId: string; testTitle: string; diffs: SemanticDiff[]; a11yDiffs: A11ySemanticDiff[] }>,
+): string {
   if (perTest.length === 0) {
     return `No semantic differences between ${runIdA} and ${runIdB}.\n`;
   }
@@ -103,8 +143,13 @@ function renderText(runIdA: string, runIdB: string, perTest: Array<{ testId: str
   lines.push('');
   for (const test of perTest) {
     lines.push(`■ ${test.testTitle}`);
-    for (const d of test.diffs) {
-      lines.push(`  · ${renderDiffLine(d)}`);
+    if (test.diffs.length > 0) {
+      lines.push('  components:');
+      for (const d of test.diffs) lines.push(`    · ${renderDiffLine(d)}`);
+    }
+    if (test.a11yDiffs.length > 0) {
+      lines.push('  a11y:');
+      for (const d of test.a11yDiffs) lines.push(`    · ${renderA11yDiffLine(d)}`);
     }
     lines.push('');
   }
@@ -119,6 +164,17 @@ function renderDiffLine(d: SemanticDiff): string {
       return `- ${d.path}`;
     case 'prop-changed':
       return `~ ${d.path} · ${d.prop}: ${shortValue(d.before)} → ${shortValue(d.after)}`;
+  }
+}
+
+function renderA11yDiffLine(d: A11ySemanticDiff): string {
+  switch (d.kind) {
+    case 'node-added':
+      return `+ ${d.path}`;
+    case 'node-removed':
+      return `- ${d.path}`;
+    case 'attr-changed':
+      return `~ ${d.path} · @${d.attr}: ${shortValue(d.before)} → ${shortValue(d.after)}`;
   }
 }
 

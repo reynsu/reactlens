@@ -105,6 +105,155 @@ function openFrameSocket(wsUrl: string): FrameSocket {
   };
 }
 
+// P12 part 2: capture the accessibility tree once at end-of-test and ship
+// it as `a11y:snapshot` over the same probe socket.
+//
+// Playwright removed page.accessibility.snapshot() in 1.45+, so we call
+// CDP's Accessibility.getFullAXTree directly and flatten the parent/child
+// array into our nested AxNode shape. Wrapped in try/catch because CDP
+// can fail on a closed page or in non-Chromium browsers.
+type CdpAxValue = { type?: string; value?: unknown };
+type CdpAxProp = { name: string; value: CdpAxValue };
+type CdpAxNode = {
+  nodeId: string;
+  ignored?: boolean;
+  role?: CdpAxValue;
+  name?: CdpAxValue;
+  value?: CdpAxValue;
+  description?: CdpAxValue;
+  properties?: CdpAxProp[];
+  parentId?: string;
+  childIds?: string[];
+};
+
+type AxNodeOut = {
+  role: string;
+  name?: string;
+  value?: string | number;
+  description?: string;
+  disabled?: boolean;
+  expanded?: boolean;
+  focused?: boolean;
+  modal?: boolean;
+  multiline?: boolean;
+  multiselectable?: boolean;
+  readonly?: boolean;
+  required?: boolean;
+  selected?: boolean;
+  checked?: boolean | 'mixed';
+  pressed?: boolean | 'mixed';
+  level?: number;
+  valuemin?: number;
+  valuemax?: number;
+  autocomplete?: string;
+  haspopup?: string;
+  invalid?: string;
+  orientation?: string;
+  keyshortcuts?: string;
+  roledescription?: string;
+  valuetext?: string;
+  children: AxNodeOut[];
+};
+
+// CDP property names we surface 1:1 onto our AxNode. Keep in sync with
+// AxNode in src/runner/events.ts; unknown keys are dropped silently.
+const KNOWN_AX_PROPS = new Set([
+  'disabled', 'expanded', 'focused', 'modal', 'multiline', 'multiselectable',
+  'readonly', 'required', 'selected', 'checked', 'pressed', 'level',
+  'valuemin', 'valuemax', 'autocomplete', 'haspopup', 'invalid',
+  'orientation', 'keyshortcuts', 'roledescription', 'valuetext',
+]);
+
+function cdpAxToTree(nodes: CdpAxNode[]): AxNodeOut | null {
+  const byId = new Map<string, CdpAxNode>();
+  for (const n of nodes) byId.set(n.nodeId, n);
+  // Root = first non-ignored node without a parentId, or the first node
+  // outright. CDP's getFullAXTree typically returns root first.
+  let root: CdpAxNode | undefined = nodes.find((n) => n.parentId === undefined);
+  if (root === undefined) root = nodes[0];
+  if (root === undefined) return null;
+  return convert(root, byId);
+}
+
+function convert(node: CdpAxNode, byId: Map<string, CdpAxNode>): AxNodeOut {
+  const out: AxNodeOut = {
+    role: typeof node.role?.value === 'string' ? node.role.value : 'unknown',
+    children: [],
+  };
+  if (typeof node.name?.value === 'string') out.name = node.name.value;
+  if (typeof node.value?.value === 'string' || typeof node.value?.value === 'number') {
+    out.value = node.value.value;
+  }
+  if (typeof node.description?.value === 'string') out.description = node.description.value;
+  for (const prop of node.properties ?? []) {
+    if (!KNOWN_AX_PROPS.has(prop.name)) continue;
+    const v = prop.value?.value;
+    if (v !== undefined) (out as unknown as Record<string, unknown>)[prop.name] = v;
+  }
+  for (const childId of node.childIds ?? []) {
+    const childCdp = byId.get(childId);
+    if (childCdp !== undefined && childCdp.ignored !== true) {
+      out.children.push(convert(childCdp, byId));
+    }
+  }
+  return out;
+}
+
+async function captureA11ySnapshot(page: Page, testId: string, frameSocket: FrameSocket): Promise<void> {
+  let cdp: Awaited<ReturnType<Page['context']>['newCDPSession']> | null = null;
+  try {
+    cdp = await page.context().newCDPSession(page);
+    await cdp.send('Accessibility.enable');
+    // Walk the tree via getChildAXNodes so the CDP backend builds each level
+    // on demand. getFullAXTree returned the root but its childIds came back
+    // empty in real fixture contexts — likely a CDP+Chromium edge case
+    // where the on-demand cache isn't populated until the protocol explicitly
+    // descends. Manual descent forces the build.
+    const rootResult = (await cdp.send('Accessibility.getRootAXNode')) as { node: CdpAxNode };
+    const tree = await descendAx(cdp, rootResult.node);
+    frameSocket.send({ t: 'a11y:snapshot', testId, stepId: testId, tree });
+  } catch {
+    /* CDP unavailable, page closed, or non-Chromium browser */
+  } finally {
+    try {
+      await cdp?.detach();
+    } catch {
+      /* already detached */
+    }
+  }
+}
+
+type CdpSession = Awaited<ReturnType<Page['context']>['newCDPSession']>;
+
+async function descendAx(cdp: CdpSession, node: CdpAxNode): Promise<AxNodeOut> {
+  const out: AxNodeOut = {
+    role: typeof node.role?.value === 'string' ? node.role.value : 'unknown',
+    children: [],
+  };
+  if (typeof node.name?.value === 'string') out.name = node.name.value;
+  if (typeof node.value?.value === 'string' || typeof node.value?.value === 'number') {
+    out.value = node.value.value;
+  }
+  if (typeof node.description?.value === 'string') out.description = node.description.value;
+  for (const prop of node.properties ?? []) {
+    if (!KNOWN_AX_PROPS.has(prop.name)) continue;
+    const v = prop.value?.value;
+    if (v !== undefined) (out as unknown as Record<string, unknown>)[prop.name] = v;
+  }
+  try {
+    const result = (await cdp.send('Accessibility.getChildAXNodes', { id: node.nodeId })) as {
+      nodes: CdpAxNode[];
+    };
+    for (const child of result.nodes) {
+      if (child.ignored === true) continue;
+      out.children.push(await descendAx(cdp, child));
+    }
+  } catch {
+    /* leaf or CDP refused — leave children empty */
+  }
+  return out;
+}
+
 async function attachScreencast(page: Page, testId: string, frameSocket: FrameSocket): Promise<() => Promise<void>> {
   const cdp = await page.context().newCDPSession(page);
   cdp.on('Page.screencastFrame', async (params: { data: string; sessionId: number }) => {
@@ -161,7 +310,14 @@ export const test = base.extend<{ reactlens: void }>({
       try {
         await use();
       } finally {
+        // Capture a11y BEFORE detaching the CDP session — the page must
+        // still be alive and the screencast still streaming so the WS has
+        // an open path to the server. The send is buffered if the socket
+        // is mid-handshake; the small 100 ms grace below gives the buffer
+        // a chance to drain before close().
+        await captureA11ySnapshot(page, testInfo.testId, frameSocket);
         await detach();
+        await new Promise((r) => setTimeout(r, 100));
         frameSocket.close();
       }
     },

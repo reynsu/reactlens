@@ -45,6 +45,7 @@ const KNOWN_EVENT_TYPES = new Set<RunEventType>([
   'frame',
   'component:snapshot',
   'component:event',
+  'a11y:snapshot',
   'diagnosis:start',
   'diagnosis:chunk',
   'diagnosis:end',
