@@ -1,9 +1,43 @@
 import { useMemo, useState } from 'react';
 import type { ComponentNode, HookSnapshot } from '../types';
 
-type Props = { tree?: ComponentNode };
+type Props = {
+  tree?: ComponentNode;
+  // The step Playwright is currently inside (set by the parent from
+  // step:start/step:end events). When provided we surface the step title as
+  // a context banner and try to highlight any tree node whose name maps to
+  // a testid mentioned in the step. The mapping is a heuristic — data-testid
+  // values live on DOM children, not on captured component props — so the
+  // highlight may miss; it's a hint, not ground truth.
+  activeStep?: { title: string };
+};
 
 type FlatNode = { node: ComponentNode; path: number[]; depth: number };
+
+// Convert "checkout-submit" → "CheckoutSubmit" so we can fuzzy-match a
+// testid against a typical PascalCase component name. Returns lower-case for
+// case-insensitive comparison.
+function kebabToPascalLower(s: string): string {
+  return s
+    .split('-')
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join('')
+    .toLowerCase();
+}
+
+// Extract testid strings from a step title like:
+//   Click getByTestId('checkout-submit')
+//   Fill "ada@example.com" getByTestId('email')
+//   Expect "toBeVisible" getByTestId('checkout-card')
+// Returns lower-case PascalCase forms ready to compare against component names.
+function activeComponentMatchers(stepTitle: string): string[] {
+  const matches = stepTitle.matchAll(/getByTestId\(['"]([^'"]+)['"]\)/g);
+  const out: string[] = [];
+  for (const m of matches) {
+    if (m[1] !== undefined) out.push(kebabToPascalLower(m[1]));
+  }
+  return out;
+}
 
 function flatten(tree: ComponentNode | undefined, expanded: Set<string>): FlatNode[] {
   if (tree === undefined) return [];
@@ -59,11 +93,16 @@ function PropsTable({ props }: { props: Record<string, unknown> }): JSX.Element 
   );
 }
 
-export function ComponentInspector({ tree }: Props): JSX.Element {
+export function ComponentInspector({ tree, activeStep }: Props): JSX.Element {
   const [expanded, setExpanded] = useState<Set<string>>(new Set(['']));
   const [selectedPath, setSelectedPath] = useState<string | null>(null);
 
   const flat = useMemo(() => flatten(tree, expanded), [tree, expanded]);
+  // Lower-case PascalCase forms of every testid mentioned in the active step.
+  // We compare against each tree node's name (also lower-cased) — a hit means
+  // the user is interacting with a DOM child of that component, more often
+  // than not. Miss-case is fine: nothing gets the active class.
+  const matchers = useMemo(() => (activeStep !== undefined ? activeComponentMatchers(activeStep.title) : []), [activeStep]);
   const selectedNode = useMemo(() => {
     if (selectedPath === null) return undefined;
     return flat.find((f) => f.path.join('.') === selectedPath)?.node;
@@ -91,16 +130,36 @@ export function ComponentInspector({ tree }: Props): JSX.Element {
   return (
     <>
       <div className="panel-header">Component Tree</div>
+      {activeStep !== undefined && (
+        <div
+          className="active-step-banner"
+          style={{
+            padding: '6px 10px',
+            fontSize: 12,
+            color: 'var(--muted)',
+            borderBottom: '1px solid var(--border)',
+            fontFamily: 'ui-monospace, monospace',
+          }}
+          title="The Playwright step currently in flight. Highlighted tree nodes are heuristic matches against the step's testid."
+        >
+          ▸ {activeStep.title}
+        </div>
+      )}
       <div className="tree">
         {flat.map(({ node, path, depth }) => {
           const key = path.join('.');
           const open = expanded.has(key);
           const hasChildren = node.children.length > 0;
+          const nameLower = node.name.toLowerCase();
+          const isActive = matchers.some((m) => nameLower === m || nameLower.includes(m));
           return (
             <div
               key={key}
-              className={`tree-node ${selectedPath === key ? 'selected' : ''}`}
-              style={{ paddingLeft: depth * 12 }}
+              className={`tree-node ${selectedPath === key ? 'selected' : ''}${isActive ? ' tree-node--active' : ''}`}
+              style={{
+                paddingLeft: depth * 12,
+                ...(isActive ? { background: 'var(--active-bg, rgba(255,200,0,0.12))' } : {}),
+              }}
             >
               <span className="label" onClick={() => setSelectedPath(key)}>
                 <span
@@ -115,6 +174,11 @@ export function ComponentInspector({ tree }: Props): JSX.Element {
                 {node.name}
                 {node.key !== undefined && node.key !== null && (
                   <span style={{ color: 'var(--muted)', marginLeft: 4 }}>key={node.key}</span>
+                )}
+                {isActive && (
+                  <span style={{ color: 'var(--muted)', marginLeft: 6, fontSize: 11 }} title="Heuristic match against the active step's testid">
+                    · active
+                  </span>
                 )}
               </span>
             </div>

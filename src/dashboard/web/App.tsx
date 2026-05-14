@@ -5,6 +5,8 @@ import { BrowserPreview } from './components/BrowserPreview';
 import { ComponentInspector } from './components/ComponentInspector';
 import { DiagnosticsPanel } from './components/DiagnosticsPanel';
 
+type ActiveStep = { stepId: string; title: string };
+
 type State = {
   tests: Map<string, TestRow>;
   totalTests: number;
@@ -16,6 +18,10 @@ type State = {
   framesByTest: Map<string, string>;
   componentsByTest: Map<string, ComponentNode>;
   diagnosesByTest: Map<string, { streamingText: string; final?: Diagnosis }>;
+  // The latest step:start that hasn't been closed by step:end yet, per test.
+  // Drives the "currently executing" indicator in the inspector header.
+  // Cleared on step:end + test:end.
+  activeStepByTest: Map<string, ActiveStep>;
 };
 
 const initialState: State = {
@@ -29,6 +35,7 @@ const initialState: State = {
   framesByTest: new Map(),
   componentsByTest: new Map(),
   diagnosesByTest: new Map(),
+  activeStepByTest: new Map(),
 };
 
 type Action = RunEvent | { t: 'select'; id: string };
@@ -52,7 +59,25 @@ function reducer(state: State, e: Action): State {
       if (existing !== undefined) {
         tests.set(e.id, { ...existing, status: e.status, duration: e.duration, error: e.error });
       }
-      return { ...state, tests };
+      const activeStepByTest = new Map(state.activeStepByTest);
+      activeStepByTest.delete(e.id);
+      return { ...state, tests, activeStepByTest };
+    }
+    case 'step:start': {
+      const activeStepByTest = new Map(state.activeStepByTest);
+      activeStepByTest.set(e.testId, { stepId: e.stepId, title: e.title });
+      return { ...state, activeStepByTest };
+    }
+    case 'step:end': {
+      // Only clear if the closing step matches the active one — protects
+      // against out-of-order events where a later step:start arrived before
+      // an earlier step:end. In practice Playwright doesn't interleave, but
+      // we'd rather show a slightly-stale step than no step at all.
+      const current = state.activeStepByTest.get(e.testId);
+      if (current === undefined || current.stepId !== e.stepId) return state;
+      const activeStepByTest = new Map(state.activeStepByTest);
+      activeStepByTest.delete(e.testId);
+      return { ...state, activeStepByTest };
     }
     case 'frame': {
       // Same testId + same data ⇒ skip the Map clone so React doesn't rerender
@@ -142,6 +167,8 @@ export function App(): JSX.Element {
   const selectedFrame = state.selectedTestId !== null ? state.framesByTest.get(state.selectedTestId) : undefined;
   const selectedTree = state.selectedTestId !== null ? state.componentsByTest.get(state.selectedTestId) : undefined;
   const selectedDiagnosis = state.selectedTestId !== null ? state.diagnosesByTest.get(state.selectedTestId) : undefined;
+  const selectedActiveStep =
+    state.selectedTestId !== null ? state.activeStepByTest.get(state.selectedTestId) : undefined;
 
   return (
     <div className="app">
@@ -162,7 +189,7 @@ export function App(): JSX.Element {
         <TestList tests={sortedTests} selectedId={state.selectedTestId} onSelect={(id) => dispatch({ t: 'select', id })} />
         <BrowserPreview frame={selectedFrame} test={selected} />
         <div className="panel">
-          <ComponentInspector tree={selectedTree} />
+          <ComponentInspector tree={selectedTree} activeStep={selectedActiveStep} />
           <DiagnosticsPanel test={selected} diagnosis={selectedDiagnosis} />
         </div>
       </div>
