@@ -113,13 +113,29 @@ The dashboard runs at `localhost:7777` and shows three live panels:
 
 - **Test list** with status (passed / failed / running) and duration
 - **Browser preview** via CDP screencast (~30 fps)
-- **Component inspector** showing the React tree at the currently selected step, with props/state expandable per component
+- **Component inspector** showing the React tree at the currently selected step, with props/state expandable per component. The active step highlights the **exact owning fiber** (not a name heuristic) — the probe attributes every `data-testid` to its enclosing component fiber and ships a `testIdIndex` alongside each snapshot (P9, shipped v0.2).
 
 The component inspector is the part nobody else has. It looks like React DevTools but synced to the test timeline.
 
-### 4.5 Time-travel debugging (v0.2.0)
+### 4.5 Time-travel debugging (v0.2.0 — shipped)
 
-Once we have screencast + component snapshots per step, a slider lets the developer scrub through any test and see the DOM, the component tree, and the props/state at every moment. This is roadmap, not v0.1, but the data we capture in v0.1.0 must be sufficient to support it later.
+A slider lets the developer scrub through any past test and see the DOM, the component tree, and the props/state at every step. Implementation (P8, 7 sub-tasks): every run gets a sortable `runId` and writes its full event stream + per-step JPEGs to `.reactlens/runs/<runId>/`. The dashboard exposes `GET /api/runs` + `/events` + `/frames/...` for past-run replay; a `RunPicker` in the header switches the reducer to replay mode (single-render hydration, WS gated). The `TimelineSlider` rewires head-of-test maps so existing rendering stays unchanged. A self-defensive `.reactlens/.gitignore` keeps run artifacts out of user repos regardless of upstream config.
+
+### 4.6 Watch mode (v0.2.0 — shipped)
+
+`reactlens run --watch` (P10): after the initial run, chokidar watches `<cwd>/src` and `<cwd>/e2e` and re-runs on any change (debounced 250 ms; `isRunning`/`pendingRerun` flags serialize re-runs). Dashboard + bus + cost tracker persist across iterations; each iteration rotates the persistor for a fresh `runs/<id>/` directory.
+
+### 4.7 Behavior contracts (v0.2.0 — shipped)
+
+Every `reactlens generate` (P11) writes `<ComponentName>.contract.md` next to the spec, documenting the visual-state set the AST analyzer enumerated — conditions, hooks, discovered endpoints. Living documentation of the AST→test mapping, legible to humans, not just the agent.
+
+### 4.8 Semantic visual regression (v0.2.0 — shipped)
+
+`reactlens diff <runIdA> <runIdB>` (P12): structural changes in the component tree (alignment by React key, ordinal fallback) AND the accessibility tree (alignment by role+name; reorders ignored). The fixture captures the a11y tree at end-of-test via CDP `Accessibility.getRootAXNode` + recursive `getChildAXNodes` and emits `a11y:snapshot`. Lower flake rate than pixel diffing because it ignores subpixel rendering, animation timing, and framework-internal object identity at non-semantic boundaries.
+
+### 4.9 Built-in accessibility (v0.2.0 — shipped)
+
+axe-core runs against the rendered DOM at end-of-test (P13). Each `result.violations[]` entry becomes one `a11y:violation` event (ruleId, impact, help, helpUrl, flattened CSS-selector targets) persisted alongside snapshots so dashboard + diff tooling can light up on regressions without a separate pipeline.
 
 ---
 
@@ -136,6 +152,8 @@ Once we have screencast + component snapshots per step, a slider lets the develo
 | **AST parsing** | `ts-morph` | For component-aware generation |
 | **React tree capture** | Custom probe + `bippy` lib | `bippy` provides safe access to React internals across versions |
 | **API mocking** | `msw` | Generated tests use MSW handlers to provoke component states |
+| **File watching** | `chokidar` v5+ | Watch mode (capability 4.6); only cross-platform recursive watcher (`fs.watch` lacks recursive on Linux) |
+| **Accessibility audit** | `axe-core` | Injected into the page at end-of-test for capability 4.9 |
 | Dashboard backend | `express` + `ws` | Plain WebSocket; no socket.io |
 | Dashboard frontend | React 18 + Vite + Tailwind | Bundled at build time, served as static files |
 | Process orchestration | `execa` | Better than child_process |
@@ -147,6 +165,8 @@ Once we have screencast + component snapshots per step, a slider lets the develo
 - **`ts-morph`**: stable AST API over TypeScript. Needed for capability 4.2 (enumerating component states from source). Lower-level alternatives like `@babel/parser` force walking untyped trees.
 - **`bippy`**: small library that wraps React's internal fiber access in a version-safe way. Without it, every React minor version risks breaking our component tree capture. Use this rather than touching `__REACT_DEVTOOLS_GLOBAL_HOOK__` directly.
 - **`msw`**: necessary because our generated tests need to mock APIs to provoke loading/error states. Generating tests that depend on a real backend would make them flaky and useless.
+- **`chokidar`**: capability 4.6 (watch mode). `fs.watch({ recursive: true })` is unsupported on Linux, so the built-in API can't drive a portable watch loop. chokidar normalizes macOS FSEvents, Linux inotify, and Windows watchers under one event surface and handles debouncing + symlink edge cases.
+- **`axe-core`**: capability 4.9 (a11y violations). Source bundled and injected into the page via `page.evaluate(axeSource)` at end-of-test — no separate runner. The fixture reads `REACTLENS_AXE_PATH` first (set by the runner for dev with pnpm strict isolation), then falls back to `require.resolve('axe-core/axe.min.js')` in user installs.
 
 ---
 
@@ -207,44 +227,53 @@ reactlens/
 │   ├── commands/
 │   │   ├── init.ts
 │   │   ├── generate.ts
-│   │   ├── run.ts
+│   │   ├── run.ts                ← watch loop + per-iteration persistor (P10)
+│   │   ├── diff.ts                ← P12: reactlens diff <runA> <runB>
 │   │   ├── analyze.ts
 │   │   └── regen.ts
 │   ├── runner/
 │   │   ├── playwright-runner.ts
 │   │   ├── reporter.ts
-│   │   └── event-bus.ts
-│   ├── component-bridge/         ← NEW: in-app probe
+│   │   ├── event-bus.ts
+│   │   ├── event-persistor.ts    ← P8.2: writes .reactlens/runs/<id>/
+│   │   └── snapshot-sink.ts       ← --save-snapshots-to harvest
+│   ├── component-bridge/         ← in-app probe
 │   │   ├── probe.ts              ← injected into user's app
-│   │   ├── snapshot.ts           ← serializes fiber tree
+│   │   ├── snapshot.ts           ← serializes fiber tree + testIdIndex (P9)
 │   │   └── transport.ts          ← WS back to dashboard server
-│   ├── ast/                      ← NEW: component analysis
+│   ├── ast/                      ← component analysis
 │   │   ├── component-analyzer.ts ← extracts state machine from source
 │   │   ├── route-analyzer.ts     ← finds routes per stack
 │   │   └── visual-states.ts      ← enumerates render branches
 │   ├── dashboard/
-│   │   ├── server.ts
+│   │   ├── server.ts             ← + past-runs API routes (P8.3)
+│   │   ├── runs-index.ts          ← P8.3: listRuns/loadRunEvents helpers
 │   │   ├── web/
 │   │   │   ├── index.html
-│   │   │   ├── App.tsx
+│   │   │   ├── App.tsx           ← + replay mode, RunPicker wiring (P8.5)
+│   │   │   ├── replay-timeline.ts ← P8.6: pure JSONL → TimelineStep[]
 │   │   │   ├── components/
 │   │   │   │   ├── TestList.tsx
-│   │   │   │   ├── BrowserPreview.tsx
-│   │   │   │   ├── ComponentInspector.tsx  ← NEW
+│   │   │   │   ├── BrowserPreview.tsx ← FrameSource (base64 | url)
+│   │   │   │   ├── ComponentInspector.tsx ← + exact testid match (P9)
 │   │   │   │   ├── DiagnosticsPanel.tsx
-│   │   │   │   └── TimelineSlider.tsx       ← v0.2.0 stub
+│   │   │   │   ├── RunPicker.tsx          ← P8.5: past-run dropdown
+│   │   │   │   └── TimelineSlider.tsx     ← P8.6: scrub replay steps
 │   │   │   └── main.tsx
 │   │   └── terminal.tsx
 │   ├── analyzer/
 │   │   ├── failure-agent.ts
-│   │   ├── git-context.ts        ← NEW: git blame & diff for diagnosis
+│   │   ├── git-context.ts        ← git blame & diff for diagnosis
+│   │   ├── tree-diff.ts          ← P12.1: component-tree differ
+│   │   ├── a11y-diff.ts          ← P12.2: a11y-tree differ
 │   │   └── prompts/
 │   │       ├── diagnose.md
-│   │       └── classify-bug.md   ← NEW: test-bug vs real-bug rubric
+│   │       └── classify-bug.md
 │   ├── generator/
 │   │   ├── delegate.ts
 │   │   ├── stack-detector.ts
-│   │   ├── state-machine.ts      ← NEW: bridges AST → test cases
+│   │   ├── state-machine.ts      ← bridges AST → test cases
+│   │   ├── contract.ts            ← P11: renders <Component>.contract.md
 │   │   └── prompts/
 │   │       └── generate-suite.md
 │   ├── cdp/
@@ -254,29 +283,37 @@ reactlens/
 │   │   └── load.ts
 │   └── utils/
 │       ├── logger.ts
-│       └── paths.ts
+│       ├── paths.ts              ← + ensureGitignore (P8.4)
+│       └── run-id.ts             ← P8.1: generateRunId()
 ├── templates/
 │   ├── playwright.config.ts
 │   ├── streaming-reporter.ts
 │   ├── global-setup.ts            ← injects component bridge
+│   ├── fixtures.ts                ← + a11y tree capture (P12.2) + axe (P13)
 │   └── reactlens.config.ts
 ├── tests/
 │   ├── unit/
 │   ├── integration/
-│   ├── diagnostic-eval/           ← NEW: ground-truth eval set
+│   │   ├── run-flow.test.ts       ← live WS protocol across 4 stacks
+│   │   ├── replay-from-disk.test.ts ← P8.7: cold-open replay
+│   │   └── watch-mode.test.ts     ← P10: re-run on file change
+│   ├── diagnostic-eval/           ← ground-truth eval set (16 cases)
 │   │   ├── cases/
 │   │   │   ├── case-001-stale-selector/
 │   │   │   ├── case-002-real-bug-validation/
 │   │   │   └── ...
 │   │   └── eval-runner.ts
 │   └── fixtures/
-│       ├── vite-react-router/
+│       ├── vite-react-router/      ← React 18
+│       ├── vite-react-router-19/   ← React 19 (Gap 6)
 │       ├── next-app-router/
 │       └── tanstack-router/
 └── dist/
 ```
 
-The two new directories beyond a traditional E2E tool layout are `src/component-bridge/` and `src/ast/`. These are where the moat lives. Treat them with extra care.
+The directories beyond a traditional E2E tool layout where the moat lives: `src/component-bridge/`, `src/ast/`, `src/analyzer/{tree,a11y}-diff.ts`, and the persistence layer in `src/runner/event-persistor.ts` + `src/dashboard/runs-index.ts`. Treat them with extra care.
+
+**Runtime data layout**: every run writes to `<cwd>/.reactlens/runs/<runId>/` (per-run directory with `events.jsonl` + `frames/<testId>/<stepId>.jpg`). Auto-gitignored via a self-defensive `.reactlens/.gitignore` that ships `*` on first run.
 
 ---
 
@@ -317,8 +354,9 @@ Everything that flows between the runner, the dashboard server, the dashboard fr
 
 ```ts
 type RunEvent =
-  // Run lifecycle
-  | { t: 'run:start'; totalTests: number; timestamp: number }
+  // Run lifecycle. runId added v0.2 (P8.1) — sortable ISO+hex string,
+  // doubles as the directory key for .reactlens/runs/<runId>/.
+  | { t: 'run:start'; runId: string; totalTests: number; timestamp: number }
   | { t: 'run:end'; passed: number; failed: number; skipped: number; duration: number }
 
   // Test lifecycle
@@ -332,9 +370,33 @@ type RunEvent =
   // Browser preview
   | { t: 'frame'; testId: string; data: string /* base64 jpeg */; sessionId: string }
 
-  // Component bridge — NEW for v0.1.0
-  | { t: 'component:snapshot'; testId: string; stepId: string; tree: ComponentNode }
+  // Component bridge — v0.1.0. testIdIndex added v0.2 (P9): probe-built
+  // map of data-testid → ComponentNode.id of the nearest enclosing
+  // component fiber. Optional for back-compat with pre-P9 persisted runs.
+  | {
+      t: 'component:snapshot';
+      testId: string;
+      stepId: string;
+      tree: ComponentNode;
+      testIdIndex?: Record<string, string>;
+    }
   | { t: 'component:event'; testId: string; stepId: string; kind: 'mount' | 'unmount' | 'update'; componentName: string; props?: Record<string, unknown> }
+
+  // Accessibility — v0.2 (P12.2 + P13). a11y:snapshot is the end-of-test
+  // ax tree captured via CDP Accessibility.getRootAXNode + recursive
+  // getChildAXNodes; a11y:violation is one event per axe-core finding.
+  | { t: 'a11y:snapshot'; testId: string; stepId: string; tree: AxNode }
+  | {
+      t: 'a11y:violation';
+      testId: string;
+      stepId: string;
+      ruleId: string;
+      impact: 'minor' | 'moderate' | 'serious' | 'critical' | null;
+      description: string;
+      help: string;
+      helpUrl: string;
+      targets: string[];  // flattened CSS selector paths
+    }
 
   // Diagnosis
   | { t: 'diagnosis:start'; testId: string }
@@ -342,6 +404,9 @@ type RunEvent =
   | { t: 'diagnosis:end'; testId: string; result: Diagnosis };
 
 type ComponentNode = {
+  // Per-snapshot stable id assigned by the probe (P9). Optional on the
+  // wire so older persisted runs still parse. Used by testIdIndex.
+  id?: string;
   name: string;            // component display name
   key?: string | null;
   props: Record<string, unknown>;  // serialized, depth-limited
@@ -354,6 +419,20 @@ type HookSnapshot = {
   kind: 'state' | 'effect' | 'memo' | 'ref' | 'context' | 'reducer' | 'other';
   value?: unknown;
   name?: string;  // when source-mapped (e.g. "useAuthStatus")
+};
+
+// Accessibility tree node — mirrors Playwright's a11y snapshot shape
+// (subset of the W3C ARIA tree). Captured at end-of-test via CDP because
+// page.accessibility.snapshot() was removed in Playwright 1.45+.
+type AxNode = {
+  role: string;
+  name?: string;
+  value?: string | number;
+  description?: string;
+  // … 20 standard ARIA attrs: disabled, expanded, focused, checked,
+  // pressed, level, valuemin/max, autocomplete, haspopup, invalid,
+  // orientation, etc. See src/runner/events.ts for the full list.
+  children: AxNode[];
 };
 
 type Diagnosis = {
@@ -414,11 +493,15 @@ pnpm install
 pnpm dev                # rebuild on save
 pnpm typecheck
 pnpm test               # unit
-pnpm test:integration   # against fixtures (slow)
+pnpm test:integration   # against fixtures (slow ~60 s; serial — fileParallelism: false)
 pnpm test:eval          # diagnostic accuracy eval (slow, costs API tokens)
 pnpm build
 pnpm build && cd ../some-react-app && pnpm link ../reactlens
 pnpm build && node bin/reactlens.js run --cwd tests/fixtures/vite-react-router
+
+# v0.2 capabilities (P8 — P13)
+pnpm build && node bin/reactlens.js run --cwd <app> --watch          # re-run on src/ + e2e/ changes
+pnpm build && node bin/reactlens.js diff <runIdA> <runIdB> --cwd <app>  # semantic diff (component + a11y)
 ```
 
 ---
@@ -461,3 +544,10 @@ pnpm build && node bin/reactlens.js run --cwd tests/fixtures/vite-react-router
 - **Diagnosis** — Claude's classified analysis of one failure
 - **Classification** — `real-bug | test-bug | flaky | env-issue`
 - **Eval set** — `tests/diagnostic-eval/cases/`, hand-labeled failures used to measure diagnosis accuracy
+- **Run id** — sortable ISO-timestamp + 8-hex suffix; doubles as the directory key for `.reactlens/runs/<runId>/` (v0.2 / P8.1).
+- **Persisted run** — the on-disk artifact for a single Playwright invocation: `events.jsonl` + `frames/<testId>/<stepId>.jpg`. Source of truth for time-travel replay.
+- **Replay mode** — dashboard mode where the reducer hydrates from a past run's JSONL instead of the live WS. Activated by selecting a run in the `RunPicker`.
+- **testIdIndex** — probe-built `Record<testid, fiberId>` shipped with each `component:snapshot`; lets the inspector resolve a Playwright locator to the exact owning fiber (v0.2 / P9).
+- **Behavior contract** — `<ComponentName>.contract.md` written next to each generated spec, documenting the visual-state set the analyzer enumerated (v0.2 / P11).
+- **Semantic diff** — structural difference between two persisted runs over the component tree AND the a11y tree, exposed by `reactlens diff`. Not pixel-level (v0.2 / P12).
+- **A11y violation** — one axe-core finding emitted per test as an `a11y:violation` event (v0.2 / P13).
