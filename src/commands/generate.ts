@@ -1,10 +1,12 @@
 import { existsSync } from 'node:fs';
+import { mkdir, writeFile } from 'node:fs/promises';
 import { resolve, join } from 'node:path';
 import { execa } from 'execa';
 import { CostTracker, withCostTracking } from '../agent/cost';
 import { pickAgentRunner } from '../agent/select';
 import { loadConfig } from '../config/load';
-import { analyzeComponent } from '../ast/component-analyzer';
+import { analyzeComponent, type ComponentAnalysis } from '../ast/component-analyzer';
+import { renderContract } from '../generator/contract';
 import { generateTests } from '../generator/delegate';
 import { ReactLensError } from '../utils/errors';
 import { logger } from '../utils/logger';
@@ -36,6 +38,7 @@ export async function runGenerate(opts: GenerateCommandOptions): Promise<number>
 
   logger.info({ count: components.length }, 'analyzing components');
   let written = 0;
+  let contractsWritten = 0;
   for (const componentPath of components) {
     try {
       const analysis = analyzeComponent(componentPath);
@@ -53,6 +56,17 @@ export async function runGenerate(opts: GenerateCommandOptions): Promise<number>
         },
       });
       written += result.filesWritten.length;
+      // P11: write the behavior contract alongside the spec. Best-effort —
+      // a write failure here doesn't fail generation; the spec itself is
+      // already on disk and useful without the contract.
+      await writeContract(cwd, config.output.specs, analysis).then(
+        (path) => {
+          contractsWritten += 1;
+          logger.info({ file: path }, 'wrote contract');
+        },
+        (err: unknown) =>
+          logger.warn({ err, component: analysis.componentName }, 'contract write failed'),
+      );
     } catch (err) {
       if (err instanceof ReactLensError) throw err;
       logger.error({ err, component: componentPath }, 'generation failed for component');
@@ -64,8 +78,17 @@ export async function runGenerate(opts: GenerateCommandOptions): Promise<number>
   }
   const total = tracker.total();
   if (total.calls > 0) logger.info({ cost: total }, 'agent cost summary');
-  logger.info({ filesWritten: written }, 'generate complete');
+  logger.info({ filesWritten: written, contractsWritten }, 'generate complete');
   return 0;
+}
+
+async function writeContract(cwd: string, specsDir: string, analysis: ComponentAnalysis): Promise<string> {
+  const dir = resolve(cwd, specsDir);
+  await mkdir(dir, { recursive: true });
+  const path = join(dir, `${analysis.componentName}.contract.md`);
+  const generatedAt = new Date().toISOString().slice(0, 10);
+  await writeFile(path, renderContract(analysis, { generatedAt }), 'utf8');
+  return path;
 }
 
 async function runTscOnGenerated(cwd: string, output: { pages: string; specs: string }): Promise<void> {
