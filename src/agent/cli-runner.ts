@@ -10,7 +10,7 @@ import { ReactLensError } from '../utils/errors';
 import { logger } from '../utils/logger';
 import type { AgentMessage, AgentQueryOptions, AgentRunner } from './runner';
 
-async function isClaudeCliAvailable(): Promise<boolean> {
+export async function isClaudeCliAvailable(): Promise<boolean> {
   try {
     const { exitCode } = await execa('claude', ['--version'], { reject: false });
     return exitCode === 0;
@@ -54,7 +54,7 @@ async function* readLines(stream: NodeJS.ReadableStream): AsyncIterable<string> 
 export async function ensureClaudeCli(): Promise<void> {
   if (!(await isClaudeCliAvailable())) {
     throw new ReactLensError(
-      'REACTLENS_USE_CLAUDE_CODE is set but `claude` CLI was not found in PATH. Install Claude Code and run `claude login` first, or unset the variable to use the SDK + ANTHROPIC_API_KEY.',
+      'Claude Code CLI requested (--use-claude-code or REACTLENS_USE_CLAUDE_CODE=1) but the `claude` binary was not found in PATH. Install Claude Code and run `claude login` first, or pass --force-api to use the SDK + ANTHROPIC_API_KEY instead.',
       { code: 'CLI_RUNNER_NOT_FOUND' },
     );
   }

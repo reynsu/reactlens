@@ -2,7 +2,7 @@ import { existsSync } from 'node:fs';
 import { resolve, join } from 'node:path';
 import { spawn } from 'node:child_process';
 import { CostTracker, withCostTracking } from '../agent/cost';
-import { pickAgentRunner } from '../agent/select';
+import { canResolveAgent, pickAgentRunner } from '../agent/select';
 import { diagnose } from '../analyzer/failure-agent';
 import { loadConfig } from '../config/load';
 import { startDashboardServer } from '../dashboard/server';
@@ -27,9 +27,16 @@ export type RunCommandOptions = {
   noAnalyze?: boolean;
   // CI mode: serialize diagnoses to a JSON artifact and skip the dashboard.
   ci?: boolean;
-  // Route diagnosis through the local `claude` CLI (Max-billed) instead of
-  // the SDK. Local development only.
+  // Strict opt-in for the local Claude CLI (subscription billing). Fails if
+  // the binary isn't installed. By default reactlens already prefers the
+  // CLI when available; this flag is for callers who want to be sure they
+  // are NOT silently falling back to the API.
   useClaudeCode?: boolean;
+  // Strict opt-in for ANTHROPIC_API_KEY billing, even when a local Claude
+  // Code subscription is available. Required for CI environments without a
+  // logged-in CLI, or when the developer deliberately wants per-token
+  // billing for this run.
+  forceApi?: boolean;
   // Directory to write per-test component snapshots into. One <testId>.json
   // per failing test, plus a manifest.json mapping ids to titles/spec files.
   // Used by the diagnostic-eval pipeline to harvest real bridge captures.
@@ -193,13 +200,13 @@ export async function runRun(opts: RunCommandOptions): Promise<number> {
   });
   const diagnosisPromises: Array<Promise<void>> = [];
   const ciDiagnoses: Array<{ testId: string; title: string; diagnosis: unknown }> = [];
-  // Diagnosis is opt-in: requires either an API key or --use-claude-code.
-  // We resolve the runner lazily so a no-failure run never spins up the agent.
+  // Diagnosis is opt-in: needs an agent reachable per the new selection
+  // policy (subscription preferred, API as fallback). Mirroring
+  // pickAgentRunner's logic via canResolveAgent prevents the wiring from
+  // happening when neither a Claude CLI nor an API key are available.
   const canDiagnose =
     opts.noAnalyze !== true &&
-    (opts.useClaudeCode === true ||
-      process.env.REACTLENS_USE_CLAUDE_CODE === '1' ||
-      process.env.ANTHROPIC_API_KEY !== undefined);
+    (await canResolveAgent({ useClaudeCode: opts.useClaudeCode, forceApi: opts.forceApi }));
   const costTracker = new CostTracker(opts.maxCost !== undefined ? { maxUsd: opts.maxCost } : {});
   if (canDiagnose) {
     let agentPromise: Promise<ReturnType<typeof withCostTracking>> | null = null;
@@ -209,9 +216,11 @@ export async function runRun(opts: RunCommandOptions): Promise<number> {
       if (t === undefined) return;
       bus.emit({ t: 'diagnosis:start', testId: e.id });
       if (agentPromise === null) {
-        agentPromise = pickAgentRunner({ commandName: 'run', useClaudeCode: opts.useClaudeCode }).then(
-          (base) => withCostTracking(base, costTracker),
-        );
+        agentPromise = pickAgentRunner({
+          commandName: 'run',
+          useClaudeCode: opts.useClaudeCode,
+          forceApi: opts.forceApi,
+        }).then((base) => withCostTracking(base, costTracker));
       }
       const promise = agentPromise
         .then((agent) =>

@@ -17,6 +17,7 @@ export type GenerateCommandOptions = {
   pages?: string;
   skipTypecheck?: boolean;
   useClaudeCode?: boolean;
+  forceApi?: boolean;
   // Hard cap on aggregate USD across all query() calls. The decorator throws
   // AGENT_COST_EXCEEDED at the next message boundary once the cap is hit.
   maxCost?: number;
@@ -25,7 +26,11 @@ export type GenerateCommandOptions = {
 export async function runGenerate(opts: GenerateCommandOptions): Promise<number> {
   const cwd = resolve(opts.cwd);
   const config = await loadConfig(cwd);
-  const baseAgent = await pickAgentRunner({ commandName: 'generate', useClaudeCode: opts.useClaudeCode });
+  const baseAgent = await pickAgentRunner({
+    commandName: 'generate',
+    useClaudeCode: opts.useClaudeCode,
+    forceApi: opts.forceApi,
+  });
   const tracker = new CostTracker(opts.maxCost !== undefined ? { maxUsd: opts.maxCost } : {});
   const agent = withCostTracking(baseAgent, tracker);
 

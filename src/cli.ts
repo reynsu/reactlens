@@ -46,14 +46,16 @@ function buildProgram(): Command {
     .option('--cwd <path>', 'project directory', process.cwd())
     .option('--pages <glob>', 'limit generation to a subset of components')
     .option('--skip-typecheck', 'skip running tsc on generated tests', false)
-    .option('--use-claude-code', 'route through local claude CLI (Max-billed; local-dev only)', false)
+    .option('--use-claude-code', 'require the local Claude CLI (subscription billing); fail if not installed', false)
+    .option('--force-api', 'force ANTHROPIC_API_KEY billing, bypassing any local Claude Code subscription', false)
     .option('--max-cost <usd>', 'abort the command once aggregate cost crosses this USD value', parseFloat)
-    .action(async (opts: { cwd: string; pages?: string; skipTypecheck: boolean; useClaudeCode: boolean; maxCost?: number }) => {
+    .action(async (opts: { cwd: string; pages?: string; skipTypecheck: boolean; useClaudeCode: boolean; forceApi: boolean; maxCost?: number }) => {
       const code = await runGenerate({
         cwd: opts.cwd,
         pages: opts.pages,
         skipTypecheck: opts.skipTypecheck,
         useClaudeCode: opts.useClaudeCode,
+        forceApi: opts.forceApi,
         ...(opts.maxCost !== undefined ? { maxCost: opts.maxCost } : {}),
       });
       process.exitCode = code;
@@ -68,11 +70,12 @@ function buildProgram(): Command {
     .option('--no-open', 'do not auto-open the dashboard in a browser')
     .option('--no-analyze', 'skip Claude diagnosis of failed tests')
     .option('--ci', 'CI mode: no dashboard, no auto-open, JUnit-friendly output', false)
-    .option('--use-claude-code', 'route diagnosis through local claude CLI (Max-billed; local-dev only)', false)
+    .option('--use-claude-code', 'require the local Claude CLI for diagnosis (subscription billing); fail if not installed', false)
+    .option('--force-api', 'force ANTHROPIC_API_KEY billing for diagnosis, bypassing any local Claude Code subscription', false)
     .option('--save-snapshots-to <dir>', 'write per-test component snapshots (one <testId>.json + manifest.json) into <dir> after the run')
     .option('--max-cost <usd>', 'abort the command once aggregate cost crosses this USD value', parseFloat)
     .option('--watch', 'after the initial run, re-run on changes under <cwd>/src and <cwd>/e2e (P10)', false)
-    .action(async (opts: { cwd: string; reporter: string; skipWebServer: boolean; dashboard: boolean; open: boolean; analyze: boolean; ci: boolean; useClaudeCode: boolean; saveSnapshotsTo?: string; maxCost?: number; watch: boolean }) => {
+    .action(async (opts: { cwd: string; reporter: string; skipWebServer: boolean; dashboard: boolean; open: boolean; analyze: boolean; ci: boolean; useClaudeCode: boolean; forceApi: boolean; saveSnapshotsTo?: string; maxCost?: number; watch: boolean }) => {
       const reporter = opts.reporter === 'json' ? 'json' : 'text';
       const code = await runRun({
         cwd: opts.cwd,
@@ -83,6 +86,7 @@ function buildProgram(): Command {
         noAnalyze: !opts.analyze,
         ci: opts.ci,
         useClaudeCode: opts.useClaudeCode,
+        forceApi: opts.forceApi,
         watch: opts.watch,
         ...(opts.saveSnapshotsTo !== undefined ? { saveSnapshotsTo: opts.saveSnapshotsTo } : {}),
         ...(opts.maxCost !== undefined ? { maxCost: opts.maxCost } : {}),
@@ -95,14 +99,16 @@ function buildProgram(): Command {
     .argument('<report>', 'path to the Playwright JSON report')
     .option('--cwd <path>', 'project directory', process.cwd())
     .option('--out <file>', 'write Markdown to this file instead of stdout')
-    .option('--use-claude-code', 'route through local claude CLI (Max-billed; local-dev only)', false)
+    .option('--use-claude-code', 'require the local Claude CLI (subscription billing); fail if not installed', false)
+    .option('--force-api', 'force ANTHROPIC_API_KEY billing, bypassing any local Claude Code subscription', false)
     .option('--max-cost <usd>', 'abort the command once aggregate cost crosses this USD value', parseFloat)
-    .action(async (report: string, opts: { cwd: string; out?: string; useClaudeCode: boolean; maxCost?: number }) => {
+    .action(async (report: string, opts: { cwd: string; out?: string; useClaudeCode: boolean; forceApi: boolean; maxCost?: number }) => {
       const code = await runAnalyze({
         cwd: opts.cwd,
         reportPath: report,
         outFile: opts.out,
         useClaudeCode: opts.useClaudeCode,
+        forceApi: opts.forceApi,
         ...(opts.maxCost !== undefined ? { maxCost: opts.maxCost } : {}),
       });
       process.exitCode = code;
@@ -122,12 +128,14 @@ function buildProgram(): Command {
     .command('regen')
     .description('regenerate tests for changed components')
     .option('--cwd <path>', 'project directory', process.cwd())
-    .option('--use-claude-code', 'route through local claude CLI (Max-billed; local-dev only)', false)
+    .option('--use-claude-code', 'require the local Claude CLI (subscription billing); fail if not installed', false)
+    .option('--force-api', 'force ANTHROPIC_API_KEY billing, bypassing any local Claude Code subscription', false)
     .option('--max-cost <usd>', 'abort the command once aggregate cost crosses this USD value', parseFloat)
-    .action(async (opts: { cwd: string; useClaudeCode: boolean; maxCost?: number }) => {
+    .action(async (opts: { cwd: string; useClaudeCode: boolean; forceApi: boolean; maxCost?: number }) => {
       const code = await runRegen({
         cwd: opts.cwd,
         useClaudeCode: opts.useClaudeCode,
+        forceApi: opts.forceApi,
         ...(opts.maxCost !== undefined ? { maxCost: opts.maxCost } : {}),
       });
       process.exitCode = code;

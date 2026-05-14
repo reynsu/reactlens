@@ -37,10 +37,14 @@ async function saveCache(cwd: string, cache: CacheShape): Promise<void> {
   await writeFile(path, JSON.stringify(cache, null, 2));
 }
 
-export async function runRegen(opts: { cwd: string; useClaudeCode?: boolean; maxCost?: number }): Promise<number> {
+export async function runRegen(opts: { cwd: string; useClaudeCode?: boolean; forceApi?: boolean; maxCost?: number }): Promise<number> {
   const cwd = resolve(opts.cwd);
   const config = await loadConfig(cwd);
-  const baseAgent = await pickAgentRunner({ commandName: 'regen', useClaudeCode: opts.useClaudeCode });
+  const baseAgent = await pickAgentRunner({
+    commandName: 'regen',
+    useClaudeCode: opts.useClaudeCode,
+    forceApi: opts.forceApi,
+  });
   const tracker = new CostTracker(opts.maxCost !== undefined ? { maxUsd: opts.maxCost } : {});
   const agent = withCostTracking(baseAgent, tracker);
 

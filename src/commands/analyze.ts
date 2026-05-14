@@ -16,6 +16,7 @@ export type AnalyzeCommandOptions = {
   reportPath: string;
   outFile?: string;
   useClaudeCode?: boolean;
+  forceApi?: boolean;
   maxCost?: number;
 };
 
@@ -104,7 +105,11 @@ export async function runAnalyze(opts: AnalyzeCommandOptions): Promise<number> {
   if (!existsSync(reportPath)) {
     throw new ReactLensError(`report file not found: ${reportPath}`, { code: 'ANALYZE_NO_REPORT' });
   }
-  const baseAgent = await pickAgentRunner({ commandName: 'analyze', useClaudeCode: opts.useClaudeCode });
+  const baseAgent = await pickAgentRunner({
+    commandName: 'analyze',
+    useClaudeCode: opts.useClaudeCode,
+    forceApi: opts.forceApi,
+  });
   const tracker = new CostTracker(opts.maxCost !== undefined ? { maxUsd: opts.maxCost } : {});
   const agent = withCostTracking(baseAgent, tracker);
 
