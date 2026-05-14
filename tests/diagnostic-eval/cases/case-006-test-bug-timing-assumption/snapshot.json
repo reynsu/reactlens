@@ -1,0 +1,25 @@
+{
+  "name": "UserList",
+  "key": null,
+  "props": {},
+  "children": [],
+  "hooks": [
+    {
+      "kind": "state",
+      "value": null
+    },
+    {
+      "kind": "other",
+      "value": {
+        "tag": 8,
+        "create": "[Function]",
+        "deps": [],
+        "next": "[Circular]"
+      }
+    }
+  ],
+  "source": {
+    "file": "tests/diagnostic-eval/cases/case-006-test-bug-timing-assumption/component.tsx",
+    "line": 5
+  }
+}

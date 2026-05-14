@@ -1,0 +1,19 @@
+{
+  "name": "ProductCard",
+  "key": null,
+  "props": {
+    "product": {
+      "id": "abc",
+      "name": "Widget",
+      "price": {
+        "amount": 12,
+        "currency": "USD"
+      }
+    }
+  },
+  "children": [],
+  "source": {
+    "file": "tests/diagnostic-eval/cases/case-007-test-bug-stale-fixture/component.tsx",
+    "line": 4
+  }
+}
