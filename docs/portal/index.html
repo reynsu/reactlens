@@ -43,7 +43,7 @@
       <div><strong>16 / 16</strong>cases in eval set</div>
       <div><strong>100%</strong>diagnosis accuracy (n=16)</div>
       <div><strong>4 / 4</strong>fixture stacks live</div>
-      <div><strong>P8 done</strong>time-travel shipped · P9 queued</div>
+      <div><strong>7 / 9 v0.2 phases</strong>P8–P13 done · P14 queued</div>
     </div>
   </div>
 </section>
@@ -316,7 +316,7 @@ flowchart LR
   P5["P5 Generate (AST → suites)"]:::partial
   P6["P6 Diagnose + eval"]:::partial
   P7["P7 CI, docs, publish"]:::partial
-  V2["v0.2 · P8 done · P9 → P16 queued"]:::partial
+  V2["v0.2 · P8–P13 done · P14 → P16 queued"]:::partial
 
   P0 --> P1 --> P2 --> P3 --> P4 --> P5 --> P6 --> P7 --> V2
           </div>
@@ -363,20 +363,22 @@ flowchart LR
             <div class="kan-card"><span class="meta">P8.5 · RunPicker</span><strong>Dropdown + replay mode.</strong> Header dropdown lists past runs newest-first. Selection triggers <code>loadPastRun()</code>: fetches the JSONL, reduces it locally with the same reducer, dispatches a single <code>replace</code> action — one React render for the whole hydration. WS handler reads a <code>modeRef</code> and drops live events during replay so a fresh run can't overwrite the inspected one. <code>FrameSource</code> discriminator lets <code>BrowserPreview</code> render base64 (live) or URL (replay) without caring which.</div>
             <div class="kan-card"><span class="meta">P8.6 · slider</span><strong><code>TimelineSlider</code> scrubs replay steps.</strong> Side-pass during hydration builds <code>timelineByTest: Map&lt;testId, TimelineStep[]&gt;</code> with frame URL + tree per step. Slider <code>onChange</code> dispatches <code>select:step</code> which rewires head-of-test <code>framesByTest</code> + <code>componentsByTest</code> to the chosen step — existing rendering stays unchanged. Auto-hides for 0-1 step tests.</div>
             <div class="kan-card"><span class="meta">P8.7 · integration</span><strong>Replay-from-disk end-to-end test.</strong> Spawns reactlens once, spins up a fresh dashboard server with no bus traffic against the just-written runsDir, asserts <code>/api/runs</code> + timeline + JPEG bytes via the same <code>buildTimelineFromEvents()</code> the frontend uses. Caught a <code>send.sendFile()</code> dotfiles bug the unit tests missed (tmpdir runsDirs have no <code>.</code>-prefixed segments).</div>
+            <div class="kan-card"><span class="meta">P9 · accuracy · 44c71da</span><strong>DOM→fiber locator backtracking.</strong> Probe walks host descendants of every component fiber (stopping at nested components) and attributes <code>data-testid</code> to the owning fiber. <code>ComponentNode.id</code> (sequential per snapshot) + <code>testIdIndex: Record&lt;testid, id&gt;</code> shipped on <code>component:snapshot</code>. Inspector swaps the Gap 4 kebab→Pascal heuristic for exact id match; badge reads <code>active (exact)</code> when the index resolved and plain <code>active</code> for fallback. 4 new tests covering attribution to nested subcomponents. End-to-end against the vite-RR fixture: 6 testIds correctly mapped per snapshot.</div>
+            <div class="kan-card"><span class="meta">P10 · DX · 201fa24</span><strong>Watch mode (<code>--watch</code>).</strong> chokidar watches <code>&lt;cwd&gt;/src</code> + <code>e2e</code>; debounced 250 ms with <code>isRunning</code>/<code>pendingRerun</code> so two rapid saves yield one re-run. Each iteration rotates the persistor for a fresh <code>.reactlens/runs/&lt;id&gt;/</code>. Dashboard + bus + costTracker persist across iterations. <code>fileParallelism: false</code> on the integration project so concurrent reactlens spawns don't collide on port 7777. Integration test asserts a second runs/&lt;id&gt;/ appears within the deadline after writing a trigger file.</div>
+            <div class="kan-card"><span class="meta">P11 · spec gen · 876d8c4</span><strong>Behavior contracts.</strong> Every <code>reactlens generate</code> now writes a <code>&lt;ComponentName&gt;.contract.md</code> next to the spec — visual states with conditions, hooks with initial values, discovered endpoints. Pure renderer + 6 unit tests covering empty / nested / deterministic output. Smoke-verified against <code>CheckoutPage.tsx</code>: 4 states correctly enumerated.</div>
+            <div class="kan-card"><span class="meta">P12.1 · regression · 33c0782</span><strong>Component-tree diff CLI.</strong> New <code>reactlens diff &lt;runIdA&gt; &lt;runIdB&gt;</code>. Aligns same-name siblings by React key when present, ordinal fallback otherwise. Renames at the same position report as remove+add (no synthetic heuristic). 9 unit tests; exit code mirrors <code>git diff</code> (0 identical, 1 differences). Honest limitation documented: framework-context internals (RouterProvider, Context(...)) re-render with new object identity each run, producing legible but noisy diffs at those boundaries.</div>
+            <div class="kan-card"><span class="meta">P12.2 · a11y · 8314230</span><strong>A11y tree capture + diff.</strong> Fixture opens a CDP session at end-of-test, walks <code>Accessibility.getRootAXNode</code> + recursive <code>getChildAXNodes</code> (Playwright 1.45+ removed <code>page.accessibility.snapshot()</code> AND <code>getFullAXTree</code> returns the root with empty childIds in real contexts — manual descent forces the build). Emits <code>a11y:snapshot</code> per test (~42 semantic nodes on the fixture's checkout page). <code>diffA11yTree</code> aligns by (role, name); reorders don't surface; role changes report as remove+add. <code>reactlens diff</code> now sections output as <code>components:</code> and <code>a11y:</code>. 8 unit tests.</div>
+            <div class="kan-card"><span class="meta">P13 · a11y · eada73e</span><strong>axe-core violations per test.</strong> Fixture injects axe-core via <code>page.evaluate(axeSource)</code> and runs it after each test body. Each <code>result.violations[]</code> entry becomes one <code>a11y:violation</code> event with <code>ruleId</code> / <code>impact</code> / <code>help</code> / <code>helpUrl</code> / flattened CSS-selector <code>targets</code>. Real output on vite-RR fixture: 50 violations across 14 tests (e.g. <code>color-contrast · serious</code> on nav links). Runner sets <code>REACTLENS_AXE_PATH</code> to side-step pnpm strict isolation; user-installed reactlens gets <code>require.resolve('axe-core')</code> for free.</div>
           </div>
           <div class="kan-col progress">
             <h4>In progress <span class="count" id="count-progress">—</span></h4>
-            <div class="kan-card"><span class="meta">v0.2 · next</span><strong>P9 queued — DOM→fiber locator backtracking.</strong> P8 shipped (7 commits, 110/110 unit + 7/7 integration green). Next tier-1 phase: replace Gap 4's heuristic kebab→Pascal match with a probe-emitted <code>WeakMap&lt;Element, FiberId&gt;</code> so the inspector resolves Playwright's selectors to exact fibers.</div>
+            <div class="kan-card"><span class="meta">v0.2 · next</span><strong>P14 queued — Auto-PR mode.</strong> Tier 1 + Tier 2 closed (P8–P13 across 11 commits, 137/137 unit + 8/8 integration green). Next: when CI emits a <code>real-bug · high</code> diagnosis with a patch, open a PR with the suggested fix on a new branch. Strict opt-in per CLAUDE.md §13 — never auto-applied locally.</div>
           </div>
           <div class="kan-col pending">
             <h4>To do <span class="count" id="count-pending">—</span></h4>
             <div class="kan-card"><span class="meta">Front H · ship</span><strong>npm publish (DoD #11).</strong> Version bump, <code>npm pack</code>, smoke install into a throwaway React app, then <code>npm publish</code>. Manual decision — operator chose to defer.</div>
-            <div class="kan-card"><span class="meta">v0.2 · accuracy</span><strong>P9 — True DOM→fiber locator backtracking.</strong> Replace Gap 4's heuristic kebab→Pascal name match with a real "click target → exact fiber" mapping. Probe must emit a <code>WeakMap&lt;Element, FiberId&gt;</code> alongside the tree.</div>
-            <div class="kan-card"><span class="meta">v0.2 · DX</span><strong>P10 — Watch mode (<code>--watch</code>).</strong> chokidar-driven regen + re-run loop. Deferred from P7.2.</div>
-            <div class="kan-card"><span class="meta">v0.2 · spec gen</span><strong>P11 — Behavior contracts.</strong> Emit <code>&lt;Component&gt;.contract.md</code> alongside specs — living documentation of the visual-state set the analyzer enumerated.</div>
-            <div class="kan-card"><span class="meta">v0.2 · regression</span><strong>P12 — Semantic visual regression.</strong> Diff a11y tree + component tree instead of pixels. Lower flake rate than pixel diffing on real apps.</div>
-            <div class="kan-card"><span class="meta">v0.2 · a11y</span><strong>P13 — axe-core per step.</strong> Promote accessibility to first-class evidence in every snapshot.</div>
             <div class="kan-card"><span class="meta">v0.2 · CI</span><strong>P14 — Auto-PR mode.</strong> When CI run produces a <code>real-bug · high</code> diagnosis with a patch, open a PR. Strict opt-in.</div>
+            <div class="kan-card"><span class="meta">P13 follow-up</span><strong>Dashboard surfacing of a11y violations.</strong> Persistence channel is live; UI to render violations in the inspector or a dedicated <code>A11yPanel</code> is the next small slice. Cross-run diff of violation counts is a parallel follow-up on the diff CLI.</div>
             <div class="kan-card"><span class="meta">v0.2 · stretch</span><strong>P15 — Multi-user concurrent flows.</strong> Two browsers, two users, collaborative flows in one spec.</div>
             <div class="kan-card"><span class="meta">v0.2 · stretch</span><strong>P16 — Telemetry (opt-in).</strong> Local-first remains the default; opt-in stream for project-health metrics only.</div>
           </div>
@@ -416,12 +418,12 @@ flowchart LR
           <div class="gantt-row"><div class="gantt-label">Gaps 1–6</div><div class="gantt-track"><span class="gantt-bar done" style="left: 60%; width: 3%;">done</span></div></div>
           <div class="gantt-row"><div class="gantt-label">Front H · npm publish</div><div class="gantt-track"><span class="gantt-bar pending" style="left: 63%; width: 2%;">deferred</span></div></div>
           <div class="gantt-row"><div class="gantt-label">P8 · Time-travel (v0.2)</div><div class="gantt-track"><span class="gantt-bar done" style="left: 65%; width: 4%;">done · 7/7 ✓</span></div></div>
-          <div class="gantt-row"><div class="gantt-label">P9 · Locator backtracking (v0.2)</div><div class="gantt-track"><span class="gantt-bar progress" style="left: 69%; width: 4%;">queued · next</span></div></div>
-          <div class="gantt-row"><div class="gantt-label">P10 · Watch mode (v0.2)</div><div class="gantt-track"><span class="gantt-bar pending" style="left: 73%; width: 4%;">queued</span></div></div>
-          <div class="gantt-row"><div class="gantt-label">P11 · Behavior contracts (v0.2)</div><div class="gantt-track"><span class="gantt-bar pending" style="left: 77%; width: 4%;">queued</span></div></div>
-          <div class="gantt-row"><div class="gantt-label">P12 · Semantic visual regression (v0.2)</div><div class="gantt-track"><span class="gantt-bar pending" style="left: 81%; width: 4%;">queued</span></div></div>
-          <div class="gantt-row"><div class="gantt-label">P13 · axe-core per step (v0.2)</div><div class="gantt-track"><span class="gantt-bar pending" style="left: 85%; width: 4%;">queued</span></div></div>
-          <div class="gantt-row"><div class="gantt-label">P14 · Auto-PR mode (v0.2)</div><div class="gantt-track"><span class="gantt-bar pending" style="left: 89%; width: 4%;">queued</span></div></div>
+          <div class="gantt-row"><div class="gantt-label">P9 · Locator backtracking (v0.2)</div><div class="gantt-track"><span class="gantt-bar done" style="left: 69%; width: 4%;">done · 44c71da</span></div></div>
+          <div class="gantt-row"><div class="gantt-label">P10 · Watch mode (v0.2)</div><div class="gantt-track"><span class="gantt-bar done" style="left: 73%; width: 4%;">done · 201fa24</span></div></div>
+          <div class="gantt-row"><div class="gantt-label">P11 · Behavior contracts (v0.2)</div><div class="gantt-track"><span class="gantt-bar done" style="left: 77%; width: 4%;">done · 876d8c4</span></div></div>
+          <div class="gantt-row"><div class="gantt-label">P12 · Semantic visual regression (v0.2)</div><div class="gantt-track"><span class="gantt-bar done" style="left: 81%; width: 4%;">done · parts 1+2</span></div></div>
+          <div class="gantt-row"><div class="gantt-label">P13 · axe-core per step (v0.2)</div><div class="gantt-track"><span class="gantt-bar done" style="left: 85%; width: 4%;">done · eada73e</span></div></div>
+          <div class="gantt-row"><div class="gantt-label">P14 · Auto-PR mode (v0.2)</div><div class="gantt-track"><span class="gantt-bar progress" style="left: 89%; width: 4%;">queued · next</span></div></div>
           <div class="gantt-row"><div class="gantt-label">P15 · Multi-user flows (v0.2 stretch)</div><div class="gantt-track"><span class="gantt-bar pending" style="left: 93%; width: 3%;">stretch</span></div></div>
           <div class="gantt-row"><div class="gantt-label">P16 · Telemetry opt-in (v0.2 stretch)</div><div class="gantt-track"><span class="gantt-bar pending" style="left: 96%; width: 4%;">stretch</span></div></div>
         </div>
@@ -468,14 +470,14 @@ flowchart LR
 
   subgraph T1["Tier 1 · closes v0.1 compromises"]
     P8["P8 Time-travel debugging ✓"]:::foundation
-    P9["P9 DOM→fiber locator backtracking"]:::tier1
-    P10["P10 Watch mode --watch"]:::tier1
+    P9["P9 DOM→fiber locator backtracking ✓"]:::foundation
+    P10["P10 Watch mode --watch ✓"]:::foundation
   end
 
   subgraph T2["Tier 2 · expand observable surface"]
-    P11["P11 Behavior contracts (.contract.md)"]:::tier2
-    P12["P12 Semantic visual regression"]:::tier2
-    P13["P13 axe-core per step"]:::tier2
+    P11["P11 Behavior contracts (.contract.md) ✓"]:::foundation
+    P12["P12 Semantic visual regression ✓"]:::foundation
+    P13["P13 axe-core per step ✓"]:::foundation
     P14["P14 Auto-PR mode (CI only)"]:::tier2
   end
 
@@ -495,20 +497,20 @@ flowchart LR
 
         <div class="kanban">
           <div class="kan-col done">
-            <h4>Tier 1 · shipped <span class="count">1</span></h4>
-            <div class="kan-card"><span class="meta">P8 · done · 545a70c → 362993f</span><strong>Time-travel debugging.</strong> 7 commits, 110/110 unit + 7/7 integration green. <em>Capabilities shipped:</em> sortable <code>runId</code> stamped on <code>run:start</code>, every event + per-step JPEG persisted to <code>.reactlens/runs/&lt;id&gt;/</code>, <code>/api/runs</code> + <code>/api/runs/:id/events</code> + frame static, self-defensive <code>.gitignore</code>, <code>RunPicker</code> dropdown, replay mode (single-render hydration + WS gating), <code>TimelineSlider</code> scrubbing through per-step DOM frame + React tree, end-to-end replay-from-disk test. <em>Bug caught en route:</em> <code>send.sendFile()</code> rejects dotfile path segments by default — invisible in tmpdir tests, fatal on real <code>.reactlens/</code> paths.</div>
+            <h4>Tier 1 · shipped <span class="count">3</span></h4>
+            <div class="kan-card"><span class="meta">P8 · 545a70c → 362993f</span><strong>Time-travel debugging.</strong> 7 sub-tasks: <code>runId</code> on <code>run:start</code>, <code>EventPersistor</code> to <code>.reactlens/runs/&lt;id&gt;/</code>, past-runs HTTP API, self-defensive <code>.gitignore</code>, <code>RunPicker</code> + replay mode (single-render hydration, WS gating, <code>FrameSource</code> discriminator), <code>TimelineSlider</code>, end-to-end replay-from-disk test. <em>Bug caught:</em> <code>send.sendFile()</code> rejects dotfile path segments by default — invisible in tmpdir tests.</div>
+            <div class="kan-card"><span class="meta">P9 · 44c71da</span><strong>DOM→fiber locator backtracking.</strong> Probe attributes <code>data-testid</code> to the owning fiber via host descent; <code>ComponentNode.id</code> + <code>testIdIndex</code> ship on <code>component:snapshot</code>; inspector renders <code>active (exact)</code> when the index resolved, falls back to the Gap 4 heuristic otherwise. End-to-end: 6 testIds correctly mapped on the vite-RR fixture.</div>
+            <div class="kan-card"><span class="meta">P10 · 201fa24</span><strong>Watch mode.</strong> chokidar watches <code>src/</code> + <code>e2e/</code>; debounce 250 ms; <code>isRunning</code>/<code>pendingRerun</code> serialize reruns; each iteration rotates the persistor. <code>fileParallelism: false</code> on the integration project keeps concurrent spawns off port 7777. Integration test asserts re-run on file change.</div>
+          </div>
+          <div class="kan-col done">
+            <h4>Tier 2 · shipped <span class="count">3</span></h4>
+            <div class="kan-card"><span class="meta">P11 · 876d8c4</span><strong>Behavior contracts.</strong> <code>reactlens generate</code> writes <code>&lt;ComponentName&gt;.contract.md</code> next to each spec — visual states with conditions, hooks with initial values, discovered endpoints. Pure renderer + 6 unit tests. Verified against <code>CheckoutPage.tsx</code>: 4 states correctly enumerated.</div>
+            <div class="kan-card"><span class="meta">P12 · 33c0782 + 8314230</span><strong>Semantic visual regression (parts 1 + 2).</strong> <code>reactlens diff &lt;runIdA&gt; &lt;runIdB&gt;</code> reports component-tree changes (alignment by React key with ordinal fallback; renames as remove+add) AND a11y-tree changes (alignment by role+name; reorders ignored). Fixture captures the a11y tree via CDP <code>Accessibility.getRootAXNode</code> + recursive <code>getChildAXNodes</code> (~42 nodes / test). 17 unit tests across both differs.</div>
+            <div class="kan-card"><span class="meta">P13 · eada73e</span><strong>axe-core per test.</strong> Fixture injects axe at end-of-test; each <code>result.violations[]</code> entry becomes one <code>a11y:violation</code> event with <code>ruleId</code> / <code>impact</code> / <code>help</code> / <code>targets</code>. 50 real violations / 14-test run on the vite-RR fixture (e.g. <code>color-contrast · serious</code>). Runner sets <code>REACTLENS_AXE_PATH</code> for dev; published users get <code>require.resolve('axe-core')</code>.</div>
           </div>
           <div class="kan-col progress">
-            <h4>Tier 1 · queued <span class="count">2</span></h4>
-            <div class="kan-card"><span class="meta">P9 · accuracy · next</span><strong>True DOM→fiber locator backtracking.</strong> <em>Why now:</em> Gap 4 shipped a heuristic kebab→Pascal name match because the bridge doesn't carry DOM↔fiber mapping. <em>Shape:</em> probe emits <code>WeakMap&lt;Element, FiberId&gt;</code> alongside the tree, transported per snapshot. Inspector resolves Playwright's resolved locator to an exact fiber. <em>Acceptance:</em> highlight is correct on a target with a dynamic <code>data-testid</code>.</div>
-            <div class="kan-card"><span class="meta">P10 · DX</span><strong>Watch mode (<code>--watch</code>).</strong> <em>Why now:</em> deferred from P7.2; the inner dev loop is the main reason a developer would run reactlens locally instead of in CI. <em>Shape:</em> chokidar watches <code>src/**</code> + <code>e2e/**</code>; on change, regen affected specs (AST diff) and re-run only the impacted suites; dashboard stays open across runs. <em>Acceptance:</em> editing a component triggers a sub-2s re-run cycle.</div>
-          </div>
-          <div class="kan-col pending">
-            <h4>Tier 2 · expand observable surface <span class="count">4</span></h4>
-            <div class="kan-card"><span class="meta">P11 · spec gen</span><strong>Behavior contracts.</strong> Emit <code>&lt;Component&gt;.contract.md</code> alongside generated specs — the enumerated visual-state set as living documentation. Keeps the AST→test mapping legible to humans, not just to the agent.</div>
-            <div class="kan-card"><span class="meta">P12 · regression</span><strong>Semantic visual regression.</strong> Diff a11y tree + component tree instead of pixels. Lower flake rate on real apps with animations / scrollbars / OS-level rendering drift. Builds on the snapshot stream we already capture.</div>
-            <div class="kan-card"><span class="meta">P13 · a11y</span><strong>axe-core per step.</strong> Run axe at every step; emit <code>a11y:violation</code> events on the bus; surface them in the inspector alongside props/state. Promotes accessibility to first-class evidence — and a new diagnosis class.</div>
-            <div class="kan-card"><span class="meta">P14 · CI</span><strong>Auto-PR mode.</strong> When CI runs reactlens and a diagnosis returns <code>real-bug · high</code> with a patch, open a PR with the suggested fix on a new branch. <strong>Strict opt-in</strong> per CLAUDE.md §13 — never auto-applied locally.</div>
+            <h4>Tier 2 · queued <span class="count">1</span></h4>
+            <div class="kan-card"><span class="meta">P14 · CI · next</span><strong>Auto-PR mode.</strong> When CI runs reactlens and a diagnosis returns <code>real-bug · high</code> with a patch, open a PR with the suggested fix on a new branch. <strong>Strict opt-in</strong> per CLAUDE.md §13 — never auto-applied locally.</div>
           </div>
           <div class="kan-col blocked">
             <h4>Tier 3 · stretch <span class="count">2</span></h4>
@@ -519,9 +521,10 @@ flowchart LR
 
         <h4>Current state · 2026-05-14</h4>
         <ul>
-          <li><strong>P8 shipped</strong> — 7 commits (<code>545a70c</code> → <code>362993f</code>), 110/110 unit + 7/7 integration green. JSONL backend on disk + per-step granularity were the decisions taken; both validated by the end-to-end replay test.</li>
-          <li><strong>Active</strong> — P9 queued (DOM→fiber locator backtracking). No code yet; design decision pending: per-snapshot <code>WeakMap&lt;Element, FiberId&gt;</code> transport size vs. selectivity (full map vs. lazy lookup-on-demand).</li>
-          <li><strong>Not started</strong> — P10 through P16.</li>
+          <li><strong>Tier 1 + Tier 2 shipped</strong> — P8 → P13 across 11 commits (<code>545a70c</code> → <code>eada73e</code>), <strong>137/137 unit + 8/8 integration green</strong>. Every event channel from §9 plus four new variants (<code>a11y:snapshot</code>, <code>a11y:violation</code>, <code>component:snapshot</code> gains <code>testIdIndex</code>, <code>run:start</code> gains <code>runId</code>) shipped without breaking older persisted runs.</li>
+          <li><strong>Active</strong> — P14 queued (Auto-PR mode). Open question for the design: what's the patch-acceptance contract — a freshly-cut branch with a single commit, or attach the patch to a draft PR for review? Either way, strict opt-in (no auto-merge ever).</li>
+          <li><strong>Not started</strong> — P15 + P16 (Tier 3 stretch).</li>
+          <li><strong>P13 follow-up</strong> — dashboard surfacing of violations in the inspector; cross-run diff of violation counts in the diff CLI. Persistence channel is live; UI is the next small slice.</li>
           <li><strong>Foundations already in place</strong> — stepId per snapshot (Gap 3), per-step frame stream (P4), AST visual-state enumeration (P5), 16-case calibrated eval (P6), 4 fixture stacks live (Gap 6).</li>
           <li><strong>Out of scope for v0.2</strong> — Vue/Svelte/Angular support, cloud sync, hosted dashboard, auto-applying patches without confirmation. These remain non-goals per CLAUDE.md §3.</li>
         </ul>
