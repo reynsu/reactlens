@@ -8,6 +8,7 @@ import { loadConfig } from '../config/load';
 import { startDashboardServer } from '../dashboard/server';
 import { EventBus } from '../runner/event-bus';
 import { ALL_EVENT_TYPES, type ComponentNode } from '../runner/events';
+import { EventPersistor } from '../runner/event-persistor';
 import { runTests, type RunSummary } from '../runner/playwright-runner';
 import { persistSnapshots } from '../runner/snapshot-sink';
 import { logger } from '../utils/logger';
@@ -111,6 +112,12 @@ export async function runRun(opts: RunCommandOptions): Promise<number> {
   const runId = generateRunId();
   logger.info({ runId }, 'run starting');
 
+  // Persist every event for v0.2 time-travel. Attached before any other
+  // subscriber so the on-disk log is the most complete record of the run.
+  const runDir = join(cwd, '.reactlens', 'runs', runId);
+  const persistor = new EventPersistor({ runDir });
+  persistor.attach(bus);
+
   const wantDashboard = opts.noDashboard !== true && opts.reporter !== 'json';
 
   let dashboard: Awaited<ReturnType<typeof startDashboardServer>> | null = null;
@@ -139,6 +146,8 @@ export async function runRun(opts: RunCommandOptions): Promise<number> {
       probePath: locatePackagedProbe(),
     });
     if (dashboard !== null) await dashboard.close();
+    await persistor.flush();
+    persistor.detach();
     return summary.exitCode;
   }
 
@@ -258,6 +267,9 @@ export async function runRun(opts: RunCommandOptions): Promise<number> {
       );
     }
     if (dashboard !== null) await dashboard.close();
+    await persistor.flush();
+    persistor.detach();
+    logger.info({ runDir }, 'persisted run');
   }
 
   process.stdout.write(

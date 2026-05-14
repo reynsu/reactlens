@@ -8,6 +8,7 @@
 // `pnpm test:integration`.
 import { execa, type ResultPromise } from 'execa';
 import { existsSync } from 'node:fs';
+import { readFile, readdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import WebSocket from 'ws';
@@ -143,7 +144,26 @@ describe('reactlens run flow', () => {
       expect(observedRunId).not.toMatch(/^standalone-/);
       expect(observedRunId?.length).toBeGreaterThan(10);
 
+      // P8 task 2: EventPersistor must have written events.jsonl + at least
+      // one frame jpeg under .reactlens/runs/<runId>/ in the fixture's cwd
+      // (that's where the dashboard process resolves its runDir).
       await proc.catch(() => undefined);
+
+      const runDir = join(fixture.path, '.reactlens', 'runs', observedRunId!);
+      const eventsPath = join(runDir, 'events.jsonl');
+      expect(existsSync(eventsPath), `events.jsonl missing in ${fixture.name}`).toBe(true);
+      const lines = (await readFile(eventsPath, 'utf8'))
+        .trimEnd()
+        .split('\n')
+        .map((l) => JSON.parse(l) as { t: string });
+      const types = new Set(lines.map((l) => l.t));
+      expect(types.has('run:start')).toBe(true);
+      expect(types.has('run:end')).toBe(true);
+      expect(types.has('frame')).toBe(true);
+      const framesRoot = join(runDir, 'frames');
+      expect(existsSync(framesRoot), `frames dir missing in ${fixture.name}`).toBe(true);
+      const testDirs = await readdir(framesRoot);
+      expect(testDirs.length, `no per-test frame dirs in ${fixture.name}`).toBeGreaterThan(0);
     },
     180_000
   );
