@@ -44,8 +44,14 @@ declare global {
     try {
       // FiberRoot has a `current` field that points at the root HostRoot fiber.
       const root = (fiberRoot as { current?: unknown }).current ?? fiberRoot;
-      const tree = serializeFiber(root as never);
-      transport.send({ t: 'component:snapshot', testId: ctx.testId, stepId: ctx.stepId, tree });
+      const { tree, testIdIndex } = serializeFiber(root as never);
+      transport.send({
+        t: 'component:snapshot',
+        testId: ctx.testId,
+        stepId: ctx.stepId,
+        tree,
+        testIdIndex,
+      });
     } catch (err) {
       // Don't let probe errors break the host app.
       // eslint-disable-next-line no-console

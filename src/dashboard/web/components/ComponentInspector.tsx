@@ -4,12 +4,15 @@ import type { ComponentNode, HookSnapshot } from '../types';
 type Props = {
   tree?: ComponentNode;
   // The step Playwright is currently inside (set by the parent from
-  // step:start/step:end events). When provided we surface the step title as
-  // a context banner and try to highlight any tree node whose name maps to
-  // a testid mentioned in the step. The mapping is a heuristic — data-testid
-  // values live on DOM children, not on captured component props — so the
-  // highlight may miss; it's a hint, not ground truth.
+  // step:start/step:end events). When provided we surface the step title
+  // as a context banner and highlight the owning component fiber.
   activeStep?: { title: string };
+  // P9: data-testid → ComponentNode.id, built by the probe during snapshot
+  // serialization. When present and a step's testid is in the index, we
+  // highlight the exact owning fiber by id (ground truth). When absent or
+  // the testid isn't indexed (older probe build, getByRole locator, etc.),
+  // we fall back to Gap 4's name heuristic.
+  testIdIndex?: Record<string, string>;
 };
 
 type FlatNode = { node: ComponentNode; path: number[]; depth: number };
@@ -25,18 +28,24 @@ function kebabToPascalLower(s: string): string {
     .toLowerCase();
 }
 
-// Extract testid strings from a step title like:
+// Extract raw testid strings from a step title like:
 //   Click getByTestId('checkout-submit')
 //   Fill "ada@example.com" getByTestId('email')
 //   Expect "toBeVisible" getByTestId('checkout-card')
-// Returns lower-case PascalCase forms ready to compare against component names.
-function activeComponentMatchers(stepTitle: string): string[] {
+function testIdsFromStep(stepTitle: string): string[] {
   const matches = stepTitle.matchAll(/getByTestId\(['"]([^'"]+)['"]\)/g);
   const out: string[] = [];
   for (const m of matches) {
-    if (m[1] !== undefined) out.push(kebabToPascalLower(m[1]));
+    if (m[1] !== undefined) out.push(m[1]);
   }
   return out;
+}
+
+// Heuristic fallback when testIdIndex is unavailable or a particular testid
+// isn't in the index. Returns lower-case PascalCase forms ready to compare
+// against component names.
+function activeComponentMatchers(stepTitle: string): string[] {
+  return testIdsFromStep(stepTitle).map(kebabToPascalLower);
 }
 
 function flatten(tree: ComponentNode | undefined, expanded: Set<string>): FlatNode[] {
@@ -93,16 +102,34 @@ function PropsTable({ props }: { props: Record<string, unknown> }): JSX.Element 
   );
 }
 
-export function ComponentInspector({ tree, activeStep }: Props): JSX.Element {
+export function ComponentInspector({ tree, activeStep, testIdIndex }: Props): JSX.Element {
   const [expanded, setExpanded] = useState<Set<string>>(new Set(['']));
   const [selectedPath, setSelectedPath] = useState<string | null>(null);
 
   const flat = useMemo(() => flatten(tree, expanded), [tree, expanded]);
-  // Lower-case PascalCase forms of every testid mentioned in the active step.
-  // We compare against each tree node's name (also lower-cased) — a hit means
-  // the user is interacting with a DOM child of that component, more often
-  // than not. Miss-case is fine: nothing gets the active class.
-  const matchers = useMemo(() => (activeStep !== undefined ? activeComponentMatchers(activeStep.title) : []), [activeStep]);
+
+  // P9: resolve the active step's testids against the probe-built index.
+  // Each testid produces either an exact id match (ground truth) or falls
+  // back to a name-heuristic matcher. We keep the two channels separate so
+  // the banner can be honest about which one fired.
+  const { exactIds, fallbackMatchers } = useMemo(() => {
+    if (activeStep === undefined) return { exactIds: new Set<string>(), fallbackMatchers: [] as string[] };
+    const ids = new Set<string>();
+    const fallbacks: string[] = [];
+    for (const testid of testIdsFromStep(activeStep.title)) {
+      const id = testIdIndex?.[testid];
+      if (id !== undefined) ids.add(id);
+      else fallbacks.push(kebabToPascalLower(testid));
+    }
+    return { exactIds: ids, fallbackMatchers: fallbacks };
+  }, [activeStep, testIdIndex]);
+  // Retained for the "no testIdIndex at all" path — when the snapshot
+  // predates P9 we still get the Gap 4 highlight.
+  const matchers = useMemo(
+    () =>
+      activeStep !== undefined && testIdIndex === undefined ? activeComponentMatchers(activeStep.title) : fallbackMatchers,
+    [activeStep, testIdIndex, fallbackMatchers],
+  );
   const selectedNode = useMemo(() => {
     if (selectedPath === null) return undefined;
     return flat.find((f) => f.path.join('.') === selectedPath)?.node;
@@ -140,9 +167,18 @@ export function ComponentInspector({ tree, activeStep }: Props): JSX.Element {
             borderBottom: '1px solid var(--border)',
             fontFamily: 'ui-monospace, monospace',
           }}
-          title="The Playwright step currently in flight. Highlighted tree nodes are heuristic matches against the step's testid."
+          title={
+            exactIds.size > 0
+              ? 'The Playwright step currently in flight. Highlighted tree nodes are exact matches via the probe-built testIdIndex (P9).'
+              : "The Playwright step currently in flight. Highlighted tree nodes are heuristic name matches against the step's testid."
+          }
         >
           ▸ {activeStep.title}
+          {(exactIds.size > 0 || matchers.length > 0) && (
+            <span style={{ marginLeft: 6, fontSize: 10, opacity: 0.7 }}>
+              · {exactIds.size > 0 ? 'exact' : 'heuristic'}
+            </span>
+          )}
         </div>
       )}
       <div className="tree">
@@ -151,7 +187,12 @@ export function ComponentInspector({ tree, activeStep }: Props): JSX.Element {
           const open = expanded.has(key);
           const hasChildren = node.children.length > 0;
           const nameLower = node.name.toLowerCase();
-          const isActive = matchers.some((m) => nameLower === m || nameLower.includes(m));
+          // Prefer the exact id match (P9 ground truth). Fall back to the
+          // name heuristic only when this snapshot's testIdIndex didn't
+          // resolve the active step's testid.
+          const isExact = node.id !== undefined && exactIds.has(node.id);
+          const isActive =
+            isExact || matchers.some((m) => nameLower === m || nameLower.includes(m));
           return (
             <div
               key={key}
@@ -176,8 +217,15 @@ export function ComponentInspector({ tree, activeStep }: Props): JSX.Element {
                   <span style={{ color: 'var(--muted)', marginLeft: 4 }}>key={node.key}</span>
                 )}
                 {isActive && (
-                  <span style={{ color: 'var(--muted)', marginLeft: 6, fontSize: 11 }} title="Heuristic match against the active step's testid">
-                    · active
+                  <span
+                    style={{ color: 'var(--muted)', marginLeft: 6, fontSize: 11 }}
+                    title={
+                      isExact
+                        ? 'Exact match: the active step\'s testid resolves to this fiber via the probe-built index (P9).'
+                        : "Heuristic match: this component's name kebab-cased equals the active step's testid."
+                    }
+                  >
+                    · {isExact ? 'active (exact)' : 'active'}
                   </span>
                 )}
               </span>

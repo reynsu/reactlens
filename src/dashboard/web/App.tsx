@@ -25,6 +25,11 @@ type State = {
   selectedTestId: string | null;
   framesByTest: Map<string, FrameSource>;
   componentsByTest: Map<string, ComponentNode>;
+  // P9: per-test data-testid → fiber-id index, shipped alongside each
+  // component:snapshot. Used by ComponentInspector to highlight the exact
+  // owning fiber instead of relying on a name match. Replaced when a new
+  // snapshot arrives for the same test.
+  testIdIndexByTest: Map<string, Record<string, string>>;
   diagnosesByTest: Map<string, { streamingText: string; final?: Diagnosis }>;
   // The latest step:start that hasn't been closed by step:end yet, per test.
   // Drives the "currently executing" indicator in the inspector header.
@@ -50,6 +55,7 @@ const initialState: State = {
   selectedTestId: null,
   framesByTest: new Map(),
   componentsByTest: new Map(),
+  testIdIndexByTest: new Map(),
   diagnosesByTest: new Map(),
   activeStepByTest: new Map(),
   timelineByTest: new Map(),
@@ -153,7 +159,16 @@ function reducer(state: State, e: Action): State {
     case 'component:snapshot': {
       const componentsByTest = new Map(state.componentsByTest);
       componentsByTest.set(e.testId, e.tree);
-      return { ...state, componentsByTest };
+      // P9: capture testIdIndex when present (probe ≥ P9 build). When the
+      // event lacks the field we don't overwrite an existing index — keeps
+      // the inspector functional during the rollout window where some
+      // snapshots ship the index and others don't.
+      let testIdIndexByTest = state.testIdIndexByTest;
+      if (e.testIdIndex !== undefined) {
+        testIdIndexByTest = new Map(testIdIndexByTest);
+        testIdIndexByTest.set(e.testId, e.testIdIndex);
+      }
+      return { ...state, componentsByTest, testIdIndexByTest };
     }
     case 'diagnosis:start': {
       const diagnosesByTest = new Map(state.diagnosesByTest);
@@ -309,6 +324,8 @@ export function App(): JSX.Element {
   const selectedDiagnosis = state.selectedTestId !== null ? state.diagnosesByTest.get(state.selectedTestId) : undefined;
   const selectedActiveStep =
     state.selectedTestId !== null ? state.activeStepByTest.get(state.selectedTestId) : undefined;
+  const selectedTestIdIndex =
+    state.selectedTestId !== null ? state.testIdIndexByTest.get(state.selectedTestId) : undefined;
 
   return (
     <div className="app">
@@ -356,7 +373,11 @@ export function App(): JSX.Element {
           })()}
         </div>
         <div className="panel">
-          <ComponentInspector tree={selectedTree} activeStep={selectedActiveStep} />
+          <ComponentInspector
+            tree={selectedTree}
+            activeStep={selectedActiveStep}
+            testIdIndex={selectedTestIdIndex}
+          />
           <DiagnosticsPanel test={selected} diagnosis={selectedDiagnosis} />
         </div>
       </div>

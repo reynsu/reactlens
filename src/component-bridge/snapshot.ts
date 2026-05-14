@@ -38,12 +38,26 @@ type AnyFiber = {
 };
 
 export type ComponentNode = {
+  // Per-snapshot stable id for the fiber. Assigned sequentially in walk
+  // order, so deterministic across re-serialization of the same tree but
+  // not stable across renders. Used by testIdIndex to point a Playwright
+  // locator at the exact fiber that owns the matching host element — P9.
+  id: string;
   name: string;
   key?: string | null;
   props: Record<string, unknown>;
   hooks?: HookSnapshot[];
   source?: { file: string; line: number };
   children: ComponentNode[];
+};
+
+export type SerializedSnapshot = {
+  tree: ComponentNode;
+  // Maps each data-testid value found anywhere in the rendered DOM to the
+  // ComponentNode.id of the nearest user-component fiber that wraps it.
+  // Replaces Gap 4's name-heuristic match in the inspector. Empty when no
+  // data-testid props were captured (e.g. tests that use getByRole / text).
+  testIdIndex: Record<string, string>;
 };
 
 export type HookSnapshot = {
@@ -203,7 +217,34 @@ function source(fiber: AnyFiber): { file: string; line: number } | undefined {
   return { file: dbg.fileName, line: dbg.lineNumber };
 }
 
-export function serializeFiber(root: AnyFiber): ComponentNode {
+// Walks host fibers under a component fiber (stopping at any nested
+// component) and collects every data-testid prop encountered. The host
+// fibers themselves are dropped from the emitted tree, but their testids
+// belong to the component above them — Playwright's locator targets the
+// DOM element, but the developer's mental model is the component.
+function collectTestIdsUnder(fiber: AnyFiber, depth: number, out: string[]): void {
+  if (depth > MAX_DEPTH) return;
+  let child = fiber.child ?? null;
+  while (child !== null) {
+    const cls = classifyFiber(child);
+    if (cls.kind === 'component') {
+      // Nested component — its testids belong to it, not to us. Stop.
+    } else {
+      const props = child.memoizedProps;
+      if (props !== null && props !== undefined && typeof props === 'object') {
+        const testid = (props as Record<string, unknown>)['data-testid'];
+        if (typeof testid === 'string' && testid.length > 0) out.push(testid);
+      }
+      collectTestIdsUnder(child, depth + 1, out);
+    }
+    child = child.sibling ?? null;
+  }
+}
+
+export function serializeFiber(root: AnyFiber): SerializedSnapshot {
+  const testIdIndex: Record<string, string> = {};
+  let nextId = 0;
+
   // Returns a list (not a single node) so passthrough/host fibers can flatten
   // their children up to the parent. Components return a one-element list
   // containing themselves; passthrough/host fibers return their children
@@ -224,7 +265,10 @@ export function serializeFiber(root: AnyFiber): ComponentNode {
       return childList;
     }
 
+    const id = String(nextId);
+    nextId += 1;
     const node: ComponentNode = {
+      id,
       name: cls.name,
       key: fiber.key === undefined || fiber.key === null ? null : String(fiber.key),
       props: sanitizeProps(fiber.memoizedProps),
@@ -234,10 +278,20 @@ export function serializeFiber(root: AnyFiber): ComponentNode {
     if (hooks !== undefined) node.hooks = hooks;
     const src = source(fiber);
     if (src !== undefined) node.source = src;
+    // Attribute every testid found under this component (but not under
+    // nested components) to its id. First component to claim a testid wins
+    // — duplicates would only happen with portals or repeated host
+    // attributes, both rare and ambiguous on purpose.
+    const owned: string[] = [];
+    collectTestIdsUnder(fiber, 0, owned);
+    for (const testid of owned) {
+      if (!(testid in testIdIndex)) testIdIndex[testid] = id;
+    }
     return [node];
   }
 
   const top = walk(root, 0);
-  if (top.length === 1 && top[0] !== undefined) return top[0];
-  return { name: 'Root', props: {}, children: top };
+  if (top.length === 1 && top[0] !== undefined) return { tree: top[0], testIdIndex };
+  const rootId = String(nextId);
+  return { tree: { id: rootId, name: 'Root', props: {}, children: top }, testIdIndex };
 }

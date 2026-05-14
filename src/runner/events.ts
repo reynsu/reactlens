@@ -11,6 +11,10 @@ export type Attachment = {
 };
 
 export type ComponentNode = {
+  // Per-snapshot stable id assigned by the probe (P9). Optional on the
+  // wire so older persisted runs (events.jsonl from pre-P9 builds) still
+  // parse — consumers must tolerate its absence.
+  id?: string;
   name: string;
   key?: string | null;
   props: Record<string, unknown>;
@@ -53,7 +57,17 @@ export type RunEvent =
   | { t: 'step:start'; testId: string; stepId: string; title: string }
   | { t: 'step:end'; testId: string; stepId: string; status: 'passed' | 'failed' }
   | { t: 'frame'; testId: string; data: string; sessionId: string }
-  | { t: 'component:snapshot'; testId: string; stepId: string; tree: ComponentNode }
+  | {
+      t: 'component:snapshot';
+      testId: string;
+      stepId: string;
+      tree: ComponentNode;
+      // P9: probe-built map of data-testid → ComponentNode.id of the
+      // nearest enclosing user-component fiber. Optional for back-compat
+      // with snapshots persisted before P9 shipped. When absent, the
+      // dashboard falls back to Gap 4's name heuristic.
+      testIdIndex?: Record<string, string>;
+    }
   | {
       t: 'component:event';
       testId: string;

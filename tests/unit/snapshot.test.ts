@@ -23,8 +23,8 @@ function fn(name: string): FakeFiber {
   return { type: f, memoizedProps: {}, child: null, sibling: null };
 }
 
-function host(tag: string): FakeFiber {
-  return { type: tag, memoizedProps: {}, child: null, sibling: null };
+function host(tag: string, props: Record<string, unknown> = {}): FakeFiber {
+  return { type: tag, memoizedProps: props, child: null, sibling: null };
 }
 
 function withChildren(parent: FakeFiber, ...children: FakeFiber[]): FakeFiber {
@@ -43,7 +43,7 @@ function withChildren(parent: FakeFiber, ...children: FakeFiber[]): FakeFiber {
 
 describe('serializeFiber', () => {
   it('returns Root with empty children for an empty fiber', () => {
-    const tree = serializeFiber({ type: null });
+    const { tree } = serializeFiber({ type: null });
     expect(tree.name).toBe('Root');
     expect(tree.children).toEqual([]);
   });
@@ -57,7 +57,7 @@ describe('serializeFiber', () => {
     const root: FakeFiber = { type: null };
     withChildren(root, app);
 
-    const tree = serializeFiber(root);
+    const { tree } = serializeFiber(root);
     expect(tree.name).toBe('App');
     expect(tree.children).toHaveLength(1);
     expect(tree.children[0]?.name).toBe('Button');
@@ -68,14 +68,14 @@ describe('serializeFiber', () => {
     const child = fn('Child');
     withChildren(fragment, child);
 
-    const tree = serializeFiber(fragment);
+    const { tree } = serializeFiber(fragment);
     expect(tree.name).toBe('Child');
   });
 
   it('captures source location when _debugSource is present', () => {
     const f = fn('Loc');
     f._debugSource = { fileName: '/tmp/Loc.tsx', lineNumber: 42 };
-    const tree = serializeFiber(f);
+    const { tree } = serializeFiber(f);
     expect(tree.source).toEqual({ file: '/tmp/Loc.tsx', line: 42 });
   });
 
@@ -90,7 +90,7 @@ describe('serializeFiber', () => {
         next: null,
       },
     };
-    const tree = serializeFiber(f);
+    const { tree } = serializeFiber(f);
     expect(tree.hooks).toHaveLength(2);
     expect(tree.hooks?.[0]?.kind).toBe('state');
   });
@@ -104,6 +104,62 @@ describe('serializeFiber', () => {
       cursor = next;
     }
     expect(() => serializeFiber(root)).not.toThrow();
+  });
+
+  it('assigns a stable id to every emitted ComponentNode', () => {
+    const app = fn('App');
+    const button = fn('Button');
+    withChildren(app, button);
+    const { tree } = serializeFiber(app);
+    expect(tree.id).toBeDefined();
+    expect(tree.children[0]?.id).toBeDefined();
+    expect(tree.id).not.toBe(tree.children[0]?.id);
+  });
+
+  it('attributes a data-testid on a host child to the nearest enclosing component', () => {
+    // <App>
+    //   <div>
+    //     <button data-testid="submit-btn" />
+    const app = fn('App');
+    const div = host('div');
+    const button = host('button', { 'data-testid': 'submit-btn' });
+    withChildren(div, button);
+    withChildren(app, div);
+    const { tree, testIdIndex } = serializeFiber(app);
+    expect(tree.name).toBe('App');
+    expect(testIdIndex['submit-btn']).toBe(tree.id);
+  });
+
+  it('credits testid to the nested component that wraps the host element, not its ancestor', () => {
+    // <CheckoutPage>
+    //   <div>
+    //     <Submit>
+    //       <button data-testid="checkout-submit" />
+    const checkoutPage = fn('CheckoutPage');
+    const wrapperDiv = host('div');
+    const submit = fn('Submit');
+    const innerBtn = host('button', { 'data-testid': 'checkout-submit' });
+    withChildren(submit, innerBtn);
+    withChildren(wrapperDiv, submit);
+    withChildren(checkoutPage, wrapperDiv);
+
+    const { tree, testIdIndex } = serializeFiber(checkoutPage);
+    expect(tree.name).toBe('CheckoutPage');
+    const submitNode = tree.children[0];
+    expect(submitNode?.name).toBe('Submit');
+    expect(testIdIndex['checkout-submit']).toBe(submitNode?.id);
+    expect(testIdIndex['checkout-submit']).not.toBe(tree.id);
+  });
+
+  it('handles multiple testids and skips host props that are not data-testid', () => {
+    const page = fn('Page');
+    const headerHost = host('header', { 'data-testid': 'page-header', role: 'banner' });
+    const footerHost = host('footer', { 'data-testid': 'page-footer' });
+    withChildren(page, headerHost, footerHost);
+    const { tree, testIdIndex } = serializeFiber(page);
+    expect(testIdIndex['page-header']).toBe(tree.id);
+    expect(testIdIndex['page-footer']).toBe(tree.id);
+    expect(Object.keys(testIdIndex)).toHaveLength(2);
   });
 });
 
