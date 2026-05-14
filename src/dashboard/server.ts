@@ -106,14 +106,35 @@ export async function startDashboardServer(opts: DashboardServerOptions): Promis
     client.on('error', (err) => logger.warn({ err }, 'probe client error'));
   });
 
+  // Express error middleware: a safety net for any future route that throws.
+  // Existing routes are trivial sends and can't fail, but registering this
+  // means a regression doesn't silently 500 — it lands in our pino stream
+  // with the same {err, route} shape as our WS handlers. Must come AFTER
+  // all routes are mounted, which is the case here.
+  app.use((err: unknown, req: express.Request, res: express.Response, _next: express.NextFunction) => {
+    logger.warn({ err, method: req.method, path: req.path }, 'dashboard route error');
+    if (!res.headersSent) res.status(500).type('text').send('internal error');
+  });
+
   server.on('upgrade', (req, socket, head) => {
-    const url = req.url ?? '';
-    if (url.startsWith('/ws/dashboard')) {
-      dashboardWss.handleUpgrade(req, socket, head, (ws) => dashboardWss.emit('connection', ws, req));
-    } else if (url.startsWith('/ws/probe')) {
-      probeWss.handleUpgrade(req, socket, head, (ws) => probeWss.emit('connection', ws, req));
-    } else {
-      socket.destroy();
+    try {
+      const url = req.url ?? '';
+      if (url.startsWith('/ws/dashboard')) {
+        dashboardWss.handleUpgrade(req, socket, head, (ws) => dashboardWss.emit('connection', ws, req));
+      } else if (url.startsWith('/ws/probe')) {
+        probeWss.handleUpgrade(req, socket, head, (ws) => probeWss.emit('connection', ws, req));
+      } else {
+        socket.destroy();
+      }
+    } catch (err) {
+      // handleUpgrade can throw on malformed requests. Log and drop the socket
+      // rather than letting the exception bubble into the http server.
+      logger.warn({ err, url: req.url }, 'ws upgrade failed');
+      try {
+        socket.destroy();
+      } catch {
+        /* already dead */
+      }
     }
   });
 
