@@ -1,0 +1,6 @@
+{
+  "expectedClassification": "flaky",
+  "minimumConfidence": "high",
+  "category": "msw-handler-residual",
+  "notes": "Spec expects /api/coupons to fall through to the default (empty) handler. A previous spec called worker.use(rest.get('/api/coupons', () => HttpResponse.json([{code:'SAVE10',pctOff:10}]))) to test the populated state but never called worker.resetHandlers() in afterEach. MSW handlers added via worker.use persist for the lifetime of the worker (one per page in this fixture), so the residual handler returns the populated list and the empty-state assertion fails."
+}

@@ -1,0 +1,6 @@
+{
+  "expectedClassification": "flaky",
+  "minimumConfidence": "high",
+  "category": "indexeddb-residual",
+  "notes": "Spec asserts the first-time onboarding card. A previous spec in the same worker completed the onboarding flow which writes `completed: true` to IndexedDB. Spec does not clear IndexedDB on setup and Playwright does not wipe origin storage between specs by default — only between contexts. The component reads IDB at mount, sees the residual flag, and renders the 'welcome back' skip path instead."
+}

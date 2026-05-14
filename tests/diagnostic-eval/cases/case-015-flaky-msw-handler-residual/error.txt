@@ -1,0 +1,4 @@
+Error: expect(getByTestId('coupons-empty')).toBeVisible() — element not found
+DOM contains getByTestId('coupons-list') with one child: "SAVE10 — 10% off".
+Network at time of failure: GET /api/coupons → 200 [{"code":"SAVE10","pctOff":10}]
+Failure correlates with running after "displays available coupons when API returns a list" spec; passes in isolation. Failure rate over the last 100 CI runs: 9/100 — depends on spec ordering within the same browser context.

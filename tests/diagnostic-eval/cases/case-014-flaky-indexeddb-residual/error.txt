@@ -1,0 +1,4 @@
+Error: expect(getByTestId('onboarding-card')).toBeVisible() — element not found
+DOM contains getByTestId('onboarding-skipped') instead.
+Browser storage at time of failure: indexedDB databases = [{ name: 'reactlens-eval', stores: ['onboarding'], onboarding: { completed: true } }]
+Failure correlates with running after "user completes onboarding wizard" spec; passes in isolation. Failure rate over the last 100 CI runs: 11/100 — only when this spec runs in the same worker after the wizard spec.
