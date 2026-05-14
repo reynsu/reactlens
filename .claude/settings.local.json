@@ -41,7 +41,8 @@
       "Bash(sed -i.bak -e 's|<button class=\"tab-btn |<button type=\"button\" class=\"tab-btn |g' -e 's|<button class=\"zoom-btn |<button type=\"button\" class=\"zoom-btn |g' -e 's|<div class=\"demo-wrap\" aria-label=\"Dashboard mockup \\(animated\\)\">|<div class=\"demo-wrap\" role=\"img\" aria-label=\"Dashboard mockup, animated\">|g' docs/portal/index.html)",
       "Bash(npx --yes html-validate docs/portal/index.html)",
       "Bash(open docs/portal/index.html)",
-      "Bash(tee eval-baseline-prompt-refined.log)"
+      "Bash(tee eval-baseline-prompt-refined.log)",
+      "Bash(git commit *)"
     ]
   },
   "enabledPlugins": {
