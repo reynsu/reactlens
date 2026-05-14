@@ -19,3 +19,6 @@ captured-*/
 .agents/
 .claude/skills/
 skills-lock.json
+
+# Generated explainer artifacts (regenerable from docs/explainer.html via Playwright).
+Tabs-Testing-Proposal.pdf

@@ -1,0 +1,657 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Arquitectura agent-agnostic para reactlens</title>
+<style>
+  :root {
+    --bg: #f7f8fb;
+    --panel: #ffffff;
+    --panel-soft: #f0f3f7;
+    --text: #14171c;
+    --muted: #5d6675;
+    --line: #dce2ea;
+    --accent: #2563eb;
+    --accent-dark: #1e40af;
+    --good: #15803d;
+    --bad: #b42318;
+    --warn: #b45309;
+    --shadow: 0 16px 50px rgba(20, 23, 28, 0.08);
+  }
+
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0;
+    background:
+      radial-gradient(circle at top left, rgba(37, 99, 235, 0.10), transparent 34rem),
+      var(--bg);
+    color: var(--text);
+    font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  a { color: var(--accent-dark); text-decoration-thickness: 1px; text-underline-offset: 3px; }
+  code {
+    padding: 0.12rem 0.35rem;
+    border: 1px solid var(--line);
+    border-radius: 0.35rem;
+    background: var(--panel-soft);
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 0.9em;
+  }
+
+  .page {
+    width: min(1120px, calc(100% - 32px));
+    margin: 0 auto;
+  }
+
+  header {
+    padding: 52px 0 30px;
+  }
+
+  .topbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 16px;
+    margin-bottom: 42px;
+    color: var(--muted);
+    font-size: 13px;
+  }
+
+  .brand {
+    color: var(--text);
+    font-weight: 720;
+    letter-spacing: 0.02em;
+  }
+
+  .hero {
+    display: grid;
+    grid-template-columns: minmax(0, 1.35fr) minmax(280px, 0.65fr);
+    gap: 34px;
+    align-items: end;
+    padding-bottom: 44px;
+    border-bottom: 1px solid var(--line);
+  }
+
+  h1 {
+    max-width: 820px;
+    margin: 0 0 18px;
+    font-size: clamp(38px, 6vw, 68px);
+    line-height: 0.98;
+    letter-spacing: 0;
+  }
+
+  .lead {
+    max-width: 720px;
+    margin: 0;
+    color: var(--muted);
+    font-size: clamp(18px, 2vw, 21px);
+  }
+
+  .verdict {
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.82);
+    box-shadow: var(--shadow);
+    padding: 22px;
+  }
+
+  .eyebrow {
+    margin: 0 0 10px;
+    color: var(--accent-dark);
+    font-size: 12px;
+    font-weight: 760;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+  }
+
+  .verdict p {
+    margin: 0;
+    font-size: 18px;
+  }
+
+  nav {
+    position: sticky;
+    top: 0;
+    z-index: 5;
+    border-bottom: 1px solid var(--line);
+    background: rgba(247, 248, 251, 0.86);
+    backdrop-filter: blur(14px);
+  }
+
+  nav .page {
+    display: flex;
+    gap: 18px;
+    overflow-x: auto;
+    padding: 14px 0;
+  }
+
+  nav a {
+    flex: 0 0 auto;
+    color: var(--muted);
+    text-decoration: none;
+    font-size: 14px;
+    font-weight: 650;
+  }
+
+  nav a:hover { color: var(--text); }
+
+  main {
+    padding: 24px 0 72px;
+  }
+
+  section {
+    padding: 48px 0;
+    border-bottom: 1px solid var(--line);
+  }
+
+  section:last-child { border-bottom: 0; }
+
+  h2 {
+    margin: 0 0 18px;
+    font-size: clamp(26px, 3vw, 36px);
+    line-height: 1.12;
+    letter-spacing: 0;
+  }
+
+  h3 {
+    margin: 0 0 10px;
+    font-size: 18px;
+    letter-spacing: 0;
+  }
+
+  p { margin: 0 0 16px; }
+  .muted { color: var(--muted); }
+  .tight { margin-bottom: 8px; }
+
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 16px;
+    margin-top: 22px;
+  }
+
+  .grid.two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+
+  .card {
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: var(--panel);
+    padding: 20px;
+  }
+
+  .card.recommended {
+    border-color: rgba(37, 99, 235, 0.55);
+    box-shadow: var(--shadow);
+  }
+
+  .tag {
+    display: inline-flex;
+    align-items: center;
+    min-height: 24px;
+    margin-bottom: 14px;
+    padding: 0 9px;
+    border-radius: 999px;
+    background: var(--panel-soft);
+    color: var(--muted);
+    font-size: 12px;
+    font-weight: 720;
+  }
+
+  .tag.blue { background: #dbeafe; color: var(--accent-dark); }
+  .tag.green { background: #dcfce7; color: var(--good); }
+  .tag.red { background: #fee2e2; color: var(--bad); }
+  .tag.amber { background: #fef3c7; color: var(--warn); }
+
+  ul {
+    margin: 12px 0 0;
+    padding-left: 20px;
+  }
+
+  li { margin: 6px 0; }
+
+  table {
+    width: 100%;
+    margin: 20px 0 6px;
+    border-collapse: collapse;
+    overflow: hidden;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: var(--panel);
+    font-size: 14px;
+  }
+
+  th, td {
+    padding: 14px;
+    border-bottom: 1px solid var(--line);
+    text-align: left;
+    vertical-align: top;
+  }
+
+  th {
+    background: var(--panel-soft);
+    color: var(--muted);
+    font-size: 12px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  tr:last-child td { border-bottom: 0; }
+  td:first-child, th:first-child { font-weight: 760; color: var(--text); }
+
+  .score {
+    display: inline-flex;
+    width: 100%;
+    justify-content: space-between;
+    gap: 10px;
+  }
+
+  .good { color: var(--good); font-weight: 700; }
+  .bad { color: var(--bad); font-weight: 700; }
+  .warn { color: var(--warn); font-weight: 700; }
+
+  .architecture {
+    display: grid;
+    grid-template-columns: 1fr auto 1fr auto 1fr;
+    align-items: center;
+    gap: 10px;
+    margin: 22px 0;
+  }
+
+  .box {
+    min-height: 76px;
+    display: grid;
+    place-items: center;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: var(--panel);
+    padding: 14px;
+    text-align: center;
+    font-weight: 720;
+  }
+
+  .arrow {
+    color: var(--muted);
+    font-weight: 800;
+  }
+
+  .callout {
+    margin: 22px 0 0;
+    border-left: 4px solid var(--accent);
+    border-radius: 0 8px 8px 0;
+    background: #eff6ff;
+    padding: 18px 20px;
+  }
+
+  footer {
+    padding: 32px 0 54px;
+    border-top: 1px solid var(--line);
+    color: var(--muted);
+    font-size: 13px;
+  }
+
+  footer .page {
+    display: flex;
+    justify-content: space-between;
+    gap: 16px;
+    flex-wrap: wrap;
+  }
+
+  footer a { color: var(--muted); }
+
+  @media (max-width: 820px) {
+    .hero, .grid, .grid.two { grid-template-columns: 1fr; }
+    .architecture { grid-template-columns: 1fr; }
+    .arrow { transform: rotate(90deg); justify-self: center; }
+    table { display: block; overflow-x: auto; white-space: nowrap; }
+  }
+</style>
+</head>
+<body>
+  <header>
+    <div class="page">
+      <div class="topbar">
+        <span class="brand">reactlens / nota de arquitectura</span>
+        <span>Agent layer &middot; versión corta</span>
+      </div>
+
+      <div class="hero">
+        <div>
+          <p class="eyebrow">Decisión técnica</p>
+          <h1>Una capa de agentes sin casarnos con un proveedor.</h1>
+          <p class="lead">
+            reactlens necesita modelos para generar tests, diagnosticar fallos y explicar causas.
+            La pregunta no es si podemos soportar Claude, OpenAI, Gemini o modelos locales. Podemos.
+            La pregunta es cuánto coste permanente aceptamos por esa flexibilidad.
+          </p>
+        </div>
+        <aside class="verdict">
+          <p class="eyebrow">Veredicto</p>
+          <p><strong>Abstraer ahora. Añadir backends después.</strong> Mantener Claude como backend principal hasta que haya demanda real o benchmarks que justifiquen otro proveedor.</p>
+        </aside>
+      </div>
+    </div>
+  </header>
+
+  <nav>
+    <div class="page">
+      <a href="#problema">Problema</a>
+      <a href="#comparacion">Comparación</a>
+      <a href="#arquitecturas">Arquitecturas</a>
+      <a href="#costes">Costes</a>
+      <a href="#decision">Decisión</a>
+    </div>
+  </nav>
+
+  <main class="page">
+    <section id="problema">
+      <h2>El problema</h2>
+      <p>
+        Hoy la capa de agentes de reactlens está orientada a Claude. Eso es práctico: los prompts,
+        las evaluaciones y el flujo de herramientas ya están afinados ahí. Pero deja cuatro riesgos:
+        dependencia de precio, cambios de API, preferencias del usuario y restricciones de privacidad.
+      </p>
+      <div class="grid">
+        <article class="card">
+          <span class="tag blue">Necesario</span>
+          <h3>Un contrato común</h3>
+          <p class="muted">Una interfaz propia para streaming, herramientas, JSON estructurado y uso de tokens.</p>
+        </article>
+        <article class="card">
+          <span class="tag amber">Peligroso</span>
+          <h3>Multiproveedor completo</h3>
+          <p class="muted">Cada backend exige prompts, evals, límites, costes y mantenimiento propios.</p>
+        </article>
+        <article class="card">
+          <span class="tag green">Mejor ahora</span>
+          <h3>Claude por defecto</h3>
+          <p class="muted">Menos variabilidad mientras la herramienta todavía está buscando precisión diagnóstica.</p>
+        </article>
+      </div>
+    </section>
+
+    <section id="comparacion">
+      <h2>Comparación directa</h2>
+      <p class="muted">
+        Escala simple: alto, medio, bajo. “Coste” combina dinero por tokens, trabajo de integración y mantenimiento.
+      </p>
+
+      <table>
+        <thead>
+          <tr>
+            <th>Alternativa</th>
+            <th>Mejor para</th>
+            <th>Pros</th>
+            <th>Contras</th>
+            <th>Coste estimado</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Claude Code (subscription)</td>
+            <td>Default recomendado. Mismo modelo, factura contra el plan Pro/Max del usuario.</td>
+            <td><span class="good">Sin gasto API</span>, sin gestión de keys, post-15-jun cubre uso programático de SDK + CLI + apps de terceros.</td>
+            <td>Cap mensual del plan. Reporte de tokens menos exacto desde la CLI.</td>
+            <td><span class="score"><span>Dinero: cubierto por plan</span><span>Mantenimiento: bajo</span></span></td>
+          </tr>
+          <tr>
+            <td>Claude API / SDK (fallback)</td>
+            <td>Diagnóstico profundo cuando no hay subscription disponible o cuando se necesita exactitud de cost-tracking.</td>
+            <td>Streaming estable, tool use sólido, ya integrado.</td>
+            <td><span class="bad">Pitfall: <code>ANTHROPIC_API_KEY</code> en el entorno fuerza facturación API</span> aunque el usuario tenga subscription &mdash; Anthropic lo documenta explícitamente. Hay que detectarlo y avisar.</td>
+            <td><span class="score"><span>Dinero: medio/alto</span><span>Mantenimiento: bajo</span></span></td>
+          </tr>
+          <tr>
+            <td>OpenAI Responses API</td>
+            <td>JSON estricto, agentes con herramientas, equipos ya en OpenAI.</td>
+            <td><span class="good">Mejor salida estructurada</span>, buen ecosistema, modelos de razonamiento fuertes.</td>
+            <td>Comportamiento de herramientas distinto. Requiere baseline propio de precisión.</td>
+            <td><span class="score"><span>Dinero: medio/alto</span><span>Mantenimiento: medio</span></span></td>
+          </tr>
+          <tr>
+            <td>Gemini API / Vertex</td>
+            <td>Coste bajo, contexto largo, empresas en GCP.</td>
+            <td><span class="good">Flash es barato</span>, buen contexto, integración natural con Vertex.</td>
+            <td>Tool use menos predecible. Más cambios de API. Más ajuste fino.</td>
+            <td><span class="score"><span>Dinero: bajo/medio</span><span>Mantenimiento: alto</span></span></td>
+          </tr>
+          <tr>
+            <td>Otros CLI: codex, gemini</td>
+            <td>Devs que ya pagan otra subscription (ChatGPT Plus, Gemini Advanced). Mismo principio que Claude Code: factura contra el plan del usuario.</td>
+            <td>Sin API key del proyecto. Usa la sesión del dev.</td>
+            <td>Coste difícil de medir. Salida menos estructurada. Peor para CI. Cada CLI con su propio binary y formato.</td>
+            <td><span class="score"><span>Dinero: cubierto por plan</span><span>Mantenimiento: medio</span></span></td>
+          </tr>
+          <tr>
+            <td>Modelos locales / self-hosted</td>
+            <td>Privacidad, entornos aislados, tareas simples.</td>
+            <td><span class="good">Datos no salen</span>, coste marginal casi cero, API compatible con OpenAI.</td>
+            <td>Menor precisión, tool use irregular, depende del hardware.</td>
+            <td><span class="score"><span>Dinero: bajo</span><span>Mantenimiento: alto</span></span></td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="callout">
+        <strong>Lectura rápida:</strong> Claude gana por calidad actual. OpenAI es el segundo backend más lógico.
+        Gemini gana cuando el coste manda. Local gana solo cuando privacidad pesa más que precisión.
+      </div>
+    </section>
+
+    <section id="arquitecturas">
+      <h2>Arquitecturas posibles</h2>
+
+      <div class="grid">
+        <article class="card recommended">
+          <span class="tag blue">Recomendada</span>
+          <h3>1. Contrato común, un backend</h3>
+          <p>Crear <code>AgentBackend</code>, mover Claude detrás del contrato y dejar la extensión lista.</p>
+          <ul>
+            <li><span class="good">Pros:</span> barato, reduce lock-in, no multiplica evals.</li>
+            <li><span class="bad">Contras:</span> el usuario aún no puede cambiar de proveedor.</li>
+            <li><strong>Arquitectura:</strong> reactlens → AgentBackend → Claude.</li>
+          </ul>
+        </article>
+
+        <article class="card">
+          <span class="tag amber">Solo con demanda</span>
+          <h3>2. Claude + OpenAI experimental</h3>
+          <p>Añadir OpenAI detrás de una flag y correr los mismos evals con baseline separado.</p>
+          <ul>
+            <li><span class="good">Pros:</span> valida la abstracción, opción real para usuarios.</li>
+            <li><span class="bad">Contras:</span> prompts y confianza dejan de ser universales.</li>
+            <li><strong>Arquitectura:</strong> reactlens → router simple → Claude/OpenAI.</li>
+          </ul>
+        </article>
+
+        <article class="card">
+          <span class="tag red">No ahora</span>
+          <h3>3. Multiproveedor completo</h3>
+          <p>Prompts, evals, costes, límites y routing por tarea para cada backend.</p>
+          <ul>
+            <li><span class="good">Pros:</span> máxima flexibilidad, buen mensaje comercial.</li>
+            <li><span class="bad">Contras:</span> matriz permanente de mantenimiento.</li>
+            <li><strong>Arquitectura:</strong> reactlens → policy router → N backends + eval gates.</li>
+          </ul>
+        </article>
+      </div>
+
+      <div class="architecture" aria-label="Arquitectura recomendada">
+        <div class="box">reactlens<br /><span class="muted">generate / diagnose</span></div>
+        <div class="arrow">→</div>
+        <div class="box">AgentBackend<br /><span class="muted">contrato propio</span></div>
+        <div class="arrow">→</div>
+        <div class="box">ClaudeBackend<br /><span class="muted">implementación inicial</span></div>
+      </div>
+
+      <p class="muted">
+        El punto clave: la abstracción debe normalizar eventos, herramientas, JSON y coste. No debe intentar
+        hacer que todos los modelos “piensen igual”. Eso se mide con evals, no se arregla con tipos.
+      </p>
+    </section>
+
+    <section id="costes">
+      <h2>Costes reales</h2>
+      <div class="grid two">
+        <article class="card">
+          <h3>Costes técnicos</h3>
+          <ul>
+            <li><strong>Interfaz común:</strong> 1-2 días.</li>
+            <li><strong>OpenAI experimental:</strong> ~1 semana + baseline de eval.</li>
+            <li><strong>Gemini:</strong> ~1-2 semanas por ajuste de tool use y streaming.</li>
+            <li><strong>Local/self-hosted:</strong> integración fácil, calidad difícil.</li>
+            <li><strong>Multiproveedor serio:</strong> 1-2 meses iniciales + mantenimiento continuo.</li>
+          </ul>
+        </article>
+        <article class="card">
+          <h3>Costes de producto</h3>
+          <ul>
+            <li><strong>Confianza:</strong> cada backend necesita calibrar <code>high | medium | low</code>.</li>
+            <li><strong>Prompts:</strong> un prompt universal baja calidad; prompts por backend duplican trabajo.</li>
+            <li><strong>Soporte:</strong> cada proveedor añade bugs que parecen de reactlens.</li>
+            <li><strong>CI:</strong> cada backend caro vuelve lento o costoso el release gate.</li>
+            <li><strong>UX:</strong> demasiadas opciones confunden antes de aportar valor.</li>
+          </ul>
+        </article>
+      </div>
+    </section>
+
+    <section id="defaults">
+      <h2>Configuración por defecto: subscription antes que API</h2>
+      <p>
+        Decisión de policy independiente de qué backends soporta reactlens. Aplica al backend Claude
+        que ya está integrado, y a cualquier backend futuro con la misma dualidad subscription/API.
+      </p>
+
+      <div class="callout">
+        <strong>El pitfall.</strong> Si <code>ANTHROPIC_API_KEY</code> está presente en el entorno,
+        Claude Code factura contra la API en vez de contra la Pro/Max subscription &mdash; aunque el
+        usuario haya iniciado sesión en Claude Code y quiera usar el plan que ya paga. Anthropic lo
+        documenta. La consecuencia para reactlens es facturación accidental: una env var olvidada en
+        el shell del developer cuesta dinero real al final del mes.
+      </p>
+
+      <h3>Orden de precedencia</h3>
+      <p>
+        La auto-detección debería preferir subscription siempre que esté disponible. Solo caer a API
+        key cuando no hay otra opción.
+      </p>
+
+      <table>
+        <thead>
+          <tr>
+            <th>Prioridad</th>
+            <th>Fuente</th>
+            <th>Cuándo se elige</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>1</td>
+            <td><code>--agent claude-cli</code> o <code>REACTLENS_AGENT_BACKEND=claude-cli</code></td>
+            <td>Override explícito del usuario. Siempre gana.</td>
+          </tr>
+          <tr>
+            <td>2</td>
+            <td>Claude Code subscription detectada (<code>claude</code> binary en <code>$PATH</code> + sesión activa)</td>
+            <td><span class="good">Default recomendado.</span> Usa la suscripción del developer; cero coste API para el proyecto.</td>
+          </tr>
+          <tr>
+            <td>3</td>
+            <td>Otra CLI con subscription (codex, gemini)</td>
+            <td>Si Claude Code no está pero hay otro CLI autenticado.</td>
+          </tr>
+          <tr>
+            <td>4</td>
+            <td><code>ANTHROPIC_API_KEY</code> en entorno</td>
+            <td><span class="warn">Solo como último recurso.</span> Si las opciones 2 y 3 fallaron.</td>
+          </tr>
+          <tr>
+            <td>5</td>
+            <td>Otra API key (OpenAI, Google)</td>
+            <td>Cuando hay backend correspondiente implementado y autenticado.</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3>Mitigación del pitfall</h3>
+      <ul>
+        <li><strong>Detectar la colisión.</strong> Si Claude Code está disponible Y <code>ANTHROPIC_API_KEY</code> está en el entorno, reactlens elige la subscription pero loguea un aviso explícito: <em>"Detected ANTHROPIC_API_KEY but using Claude Code subscription. Set <code>REACTLENS_FORCE_API=1</code> to override."</em></li>
+        <li><strong>Override explícito y consciente.</strong> Si el usuario realmente quiere facturar contra API (por ejemplo en CI sin subscription disponible), el override debe ser una variable separada, no la presencia accidental de la key.</li>
+        <li><strong>Documentar la jerarquía.</strong> README, <code>--help</code>, y <code>reactlens init</code> deben dejar clara la precedencia. La sorpresa más cara es la que no se vio venir.</li>
+      </ul>
+
+      <div class="callout">
+        <strong>Resumen:</strong> subscription es default; API es fallback consciente; la presencia
+        de una env var nunca debe cambiar billing sin avisar.
+      </div>
+    </section>
+
+    <section id="decision">
+      <h2>Decisión recomendada</h2>
+      <p>
+        Implementar una capa <code>AgentBackend</code> ahora, pero seguir enviando solo Claude.
+        Es la mejor relación coste/beneficio: reduce el acoplamiento, prepara una salida si cambia el mercado
+        y no obliga al equipo a mantener cinco caminos frágiles.
+      </p>
+
+      <table>
+        <thead>
+          <tr>
+            <th>Paso</th>
+            <th>Qué hacer</th>
+            <th>Cuándo</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>1</td>
+            <td>Renombrar runners actuales a <code>ClaudeSDKBackend</code> y <code>ClaudeCLIBackend</code>.</td>
+            <td>Ahora</td>
+          </tr>
+          <tr>
+            <td>2</td>
+            <td>Definir <code>AgentBackend.query()</code> con eventos normalizados, herramientas y uso.</td>
+            <td>Ahora</td>
+          </tr>
+          <tr>
+            <td>3</td>
+            <td>Mover precios, modelos y auth a configuración por backend.</td>
+            <td>Ahora</td>
+          </tr>
+          <tr>
+            <td>4</td>
+            <td>Añadir OpenAI experimental solo si un usuario lo pide o si queremos publicar benchmark.</td>
+            <td>Después</td>
+          </tr>
+          <tr>
+            <td>5</td>
+            <td>Evitar multiproveedor completo hasta que haya equipo y demanda.</td>
+            <td>No ahora</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="callout">
+        <strong>Directo:</strong> no vender “AI-agnostic” todavía. Primero hacer que reactlens diagnostique mejor.
+        La abstracción es seguro barato; el multiproveedor completo es deuda cara.
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <div class="page">
+      <span>reactlens engineering notes &middot; arquitectura agent-agnostic</span>
+      <span>
+        <a href="./explainer.html">Explainer</a> ·
+        <a href="./claude-in-the-workflow.html">Claude × reactlens</a> ·
+        <a href="./portal/index.html">Portal</a>
+      </span>
+    </div>
+  </footer>
+</body>
+</html>

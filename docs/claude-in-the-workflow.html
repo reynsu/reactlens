@@ -1,0 +1,886 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Claude in reactlens — integration, tradeoffs, alternatives</title>
+<style>
+  :root {
+    --bg: #0a0a0c;
+    --bg-soft: #131316;
+    --bg-card: #16161a;
+    --border: rgba(255,255,255,0.08);
+    --border-strong: rgba(255,255,255,0.16);
+    --text: #f5f4ef;
+    --muted: #9a958c;
+    --faint: #5a5650;
+    --accent: #d4b885;
+    --accent-soft: rgba(212,184,133,0.08);
+    --accent-mid: rgba(212,184,133,0.22);
+    --danger: #c87b6e;
+    --good: #8aa980;
+    --code-bg: #0d0d10;
+    --code-keyword: #c8a168;
+    --code-string: #b09c75;
+    --code-comment: #5a5650;
+    --code-fn: #d4b885;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', Roboto, sans-serif;
+    font-size: 16px;
+    line-height: 1.65;
+    color: var(--text);
+    background: var(--bg);
+    -webkit-font-smoothing: antialiased;
+    font-feature-settings: 'ss01', 'cv01';
+  }
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    background:
+      radial-gradient(ellipse at top, rgba(212,184,133,0.05) 0%, transparent 50%),
+      radial-gradient(ellipse at bottom right, rgba(60,70,90,0.10) 0%, transparent 60%);
+    z-index: 0;
+  }
+  main { position: relative; z-index: 1; }
+  code {
+    font-family: ui-monospace, 'SF Mono', Menlo, monospace;
+    font-size: 0.88em;
+    color: var(--accent);
+    background: rgba(255,255,255,0.04);
+    padding: 1px 6px;
+    border-radius: 3px;
+  }
+  pre {
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 18px 22px;
+    overflow-x: auto;
+    font-family: ui-monospace, 'SF Mono', Menlo, monospace;
+    font-size: 13px;
+    line-height: 1.65;
+    color: var(--text);
+    margin: 24px 0;
+  }
+  pre code {
+    background: transparent;
+    padding: 0;
+    border-radius: 0;
+    color: inherit;
+    font-size: inherit;
+  }
+  pre .kw { color: var(--code-keyword); }
+  pre .str { color: var(--code-string); }
+  pre .cm { color: var(--code-comment); font-style: italic; }
+  pre .fn { color: var(--code-fn); }
+  pre .mu { color: var(--muted); }
+
+  a { color: var(--accent); text-decoration: none; border-bottom: 1px solid transparent; transition: border-color 200ms ease; }
+  a:hover { border-bottom-color: var(--accent); }
+
+  .shell { max-width: 880px; margin: 0 auto; padding: 0 32px; }
+  .wider { max-width: 1080px; margin: 0 auto; padding: 0 32px; }
+
+  /* Topbar */
+  .topbar {
+    padding: 24px 0;
+    border-bottom: 1px solid var(--border);
+    font-size: 12px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+  .topbar .shell { display: flex; justify-content: space-between; align-items: center; }
+  .topbar .brand { color: var(--text); font-weight: 600; letter-spacing: 0.2em; }
+  .topbar .meta { color: var(--faint); }
+
+  /* Hero */
+  .hero { padding: 110px 0 90px; }
+  .hero .eyebrow {
+    font-size: 11px;
+    letter-spacing: 0.24em;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin-bottom: 28px;
+    font-weight: 600;
+  }
+  .hero h1 {
+    font-size: clamp(32px, 5vw, 48px);
+    line-height: 1.12;
+    letter-spacing: -0.02em;
+    font-weight: 600;
+    margin: 0 0 24px;
+    color: var(--text);
+    max-width: 820px;
+  }
+  .hero h1 em { font-style: normal; color: var(--accent); }
+  .hero .lede {
+    font-size: 17px;
+    line-height: 1.6;
+    color: var(--muted);
+    max-width: 720px;
+    margin: 0;
+  }
+
+  /* Section frame */
+  section { padding: 80px 0; border-top: 1px solid var(--border); }
+  section .label {
+    font-size: 11px;
+    letter-spacing: 0.24em;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin-bottom: 22px;
+    font-weight: 600;
+  }
+  section h2 {
+    font-size: clamp(24px, 3.2vw, 32px);
+    line-height: 1.18;
+    letter-spacing: -0.015em;
+    font-weight: 600;
+    margin: 0 0 28px;
+    max-width: 740px;
+  }
+  section h2 em { font-style: normal; color: var(--accent); }
+  section h3 {
+    font-size: 19px;
+    font-weight: 600;
+    margin: 32px 0 12px;
+    color: var(--text);
+    letter-spacing: -0.005em;
+  }
+  section p {
+    font-size: 16px;
+    color: var(--text);
+    margin: 0 0 16px;
+    max-width: 720px;
+  }
+  section p.muted { color: var(--muted); }
+  section p.small { font-size: 14px; color: var(--muted); }
+
+  /* Surface table */
+  .surface-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 32px 0 16px;
+    background: var(--bg-soft);
+    border: 1px solid var(--border);
+    font-size: 14px;
+  }
+  .surface-table th, .surface-table td {
+    padding: 16px 20px;
+    text-align: left;
+    border-bottom: 1px solid var(--border);
+    vertical-align: top;
+  }
+  .surface-table th {
+    background: rgba(255,255,255,0.02);
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.16em;
+    color: var(--faint);
+    font-weight: 600;
+  }
+  .surface-table td .name { color: var(--text); font-weight: 600; }
+  .surface-table td .name code { background: transparent; padding: 0; color: var(--accent); font-size: 13px; }
+  .surface-table td .desc { color: var(--muted); display: block; margin-top: 4px; font-size: 13px; }
+  .surface-table td.use { color: var(--text); width: 36%; }
+  .surface-table td.notes { color: var(--muted); width: 28%; font-size: 13px; }
+  .surface-table tr:last-child td { border-bottom: none; }
+  .surface-table .pill {
+    display: inline-block;
+    padding: 1px 8px;
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    border-radius: 3px;
+    font-weight: 600;
+  }
+  .surface-table .pill.used { background: rgba(138,169,128,0.15); color: var(--good); }
+  .surface-table .pill.opt { background: rgba(212,184,133,0.15); color: var(--accent); }
+  .surface-table .pill.no { background: rgba(200,123,110,0.12); color: var(--danger); }
+
+  /* Architecture flow */
+  .arch {
+    background: var(--bg-soft);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 28px 28px 24px;
+    margin: 32px 0 20px;
+    font-family: ui-monospace, 'SF Mono', Menlo, monospace;
+    font-size: 13px;
+    line-height: 1.8;
+    color: var(--text);
+    overflow-x: auto;
+  }
+  .arch .node { color: var(--accent); font-weight: 600; }
+  .arch .arrow { color: var(--faint); }
+  .arch .note { color: var(--muted); }
+
+  /* Pipeline cards */
+  .pipeline {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 1px;
+    background: var(--border);
+    border: 1px solid var(--border);
+    margin: 32px 0 16px;
+  }
+  @media (max-width: 760px) { .pipeline { grid-template-columns: 1fr; } }
+  .pipeline .card {
+    background: var(--bg-soft);
+    padding: 28px 28px 24px;
+  }
+  .pipeline .card .tag {
+    font-size: 11px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--accent);
+    font-weight: 600;
+    margin-bottom: 12px;
+  }
+  .pipeline .card h4 {
+    font-size: 17px;
+    margin: 0 0 12px;
+    font-weight: 600;
+    color: var(--text);
+  }
+  .pipeline .card .meta {
+    font-family: ui-monospace, monospace;
+    font-size: 12px;
+    color: var(--muted);
+    margin-bottom: 12px;
+    line-height: 1.7;
+  }
+  .pipeline .card .meta .k {
+    color: var(--faint);
+    display: inline-block;
+    min-width: 70px;
+  }
+  .pipeline .card .meta .v { color: var(--text); }
+  .pipeline .card p {
+    font-size: 13px;
+    color: var(--muted);
+    line-height: 1.6;
+    margin: 0;
+  }
+
+  /* Pros/cons */
+  .balance {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1px;
+    background: var(--border);
+    border: 1px solid var(--border);
+    margin: 32px 0 16px;
+  }
+  @media (max-width: 760px) { .balance { grid-template-columns: 1fr; } }
+  .balance .col {
+    background: var(--bg-soft);
+    padding: 28px 28px 32px;
+  }
+  .balance .col.good .head { color: var(--good); }
+  .balance .col.bad .head { color: var(--danger); }
+  .balance .head {
+    font-size: 11px;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    margin-bottom: 22px;
+    font-weight: 600;
+  }
+  .balance ul {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+  }
+  .balance li {
+    padding: 14px 0;
+    font-size: 14px;
+    color: var(--text);
+    border-bottom: 1px solid var(--border);
+    line-height: 1.55;
+  }
+  .balance li:last-child { border-bottom: none; }
+  .balance li strong {
+    display: block;
+    font-weight: 600;
+    margin-bottom: 4px;
+    color: var(--text);
+    font-size: 14px;
+  }
+  .balance li span {
+    color: var(--muted);
+    font-size: 13px;
+  }
+  .balance li code {
+    font-size: 0.85em;
+  }
+
+  /* Alternatives list */
+  .alts { margin: 32px 0 16px; }
+  .alt {
+    background: var(--bg-soft);
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--accent);
+    border-radius: 0 4px 4px 0;
+    padding: 24px 28px;
+    margin-bottom: 14px;
+  }
+  .alt .num {
+    font-size: 11px;
+    letter-spacing: 0.18em;
+    color: var(--faint);
+    font-weight: 600;
+    margin-bottom: 8px;
+  }
+  .alt h4 {
+    font-size: 17px;
+    font-weight: 600;
+    margin: 0 0 10px;
+    color: var(--text);
+    letter-spacing: -0.005em;
+  }
+  .alt h4 em { font-style: normal; color: var(--accent); }
+  .alt p {
+    font-size: 14px;
+    color: var(--muted);
+    line-height: 1.6;
+    margin: 0 0 8px;
+  }
+  .alt .effort {
+    display: inline-block;
+    font-size: 10px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--faint);
+    font-weight: 600;
+    margin-top: 8px;
+  }
+  .alt .effort .v { color: var(--accent); margin-left: 6px; }
+
+  /* Numeric callouts */
+  .nums {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1px;
+    background: var(--border);
+    border: 1px solid var(--border);
+    margin: 28px 0 8px;
+  }
+  @media (max-width: 760px) { .nums { grid-template-columns: 1fr; } }
+  .num-stat {
+    background: var(--bg-soft);
+    padding: 26px 24px 22px;
+  }
+  .num-stat .big {
+    font-size: 30px;
+    line-height: 1;
+    font-weight: 600;
+    color: var(--accent);
+    letter-spacing: -0.02em;
+    margin-bottom: 8px;
+    font-variant-numeric: tabular-nums;
+  }
+  .num-stat .cap {
+    font-size: 11px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--muted);
+    line-height: 1.5;
+  }
+
+  /* Closing */
+  .closing { padding: 90px 0 80px; text-align: left; border-top: 1px solid var(--border); }
+  .closing .label {
+    font-size: 11px;
+    letter-spacing: 0.24em;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin-bottom: 22px;
+    font-weight: 600;
+  }
+  .closing h2 {
+    font-size: clamp(26px, 3.5vw, 34px);
+    line-height: 1.15;
+    letter-spacing: -0.018em;
+    font-weight: 600;
+    margin: 0 0 24px;
+    max-width: 780px;
+  }
+  .closing h2 em { font-style: normal; color: var(--accent); }
+  .closing p {
+    font-size: 16px;
+    color: var(--muted);
+    max-width: 700px;
+    line-height: 1.6;
+  }
+
+  /* Footer */
+  footer {
+    padding: 36px 0;
+    border-top: 1px solid var(--border);
+    font-size: 11px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--faint);
+  }
+  footer .shell { display: flex; justify-content: space-between; align-items: center; }
+  footer a { color: var(--muted); border: none; }
+  footer a:hover { color: var(--accent); }
+  footer .links a { margin-left: 24px; }
+  @media (max-width: 600px) {
+    footer .shell { flex-direction: column; gap: 16px; align-items: flex-start; }
+    footer .links a { margin-left: 0; margin-right: 16px; }
+  }
+</style>
+</head>
+<body>
+
+<main>
+
+<div class="topbar">
+  <div class="shell">
+    <span class="brand">CLAUDE × REACTLENS</span>
+    <span class="meta">Engineering doc &middot; ~6-minute read</span>
+  </div>
+</div>
+
+<section class="hero">
+  <div class="shell">
+    <div class="eyebrow">Integration architecture &middot; current tradeoffs &middot; what to improve next</div>
+    <h1>How Claude is plugged into reactlens, <em>and where the implementation has room to grow</em>.</h1>
+    <p class="lede">
+      reactlens uses Claude in two distinct pipelines &mdash; test generation and failure diagnosis &mdash;
+      through a thin <code>AgentRunner</code> abstraction that backs onto either the Anthropic SDK or
+      the local <code>claude</code> CLI. This document walks through which Claude surfaces are wired up,
+      how they're orchestrated, what's working well, where the current design leaves performance and
+      reliability on the table, and the concrete upgrades worth doing next.
+    </p>
+  </div>
+</section>
+
+<section>
+  <div class="shell">
+    <div class="label">01 &mdash; The four Claude surfaces, and which ones reactlens touches</div>
+    <h2>One SDK, one CLI, one HTTP API, one subscription. <em>Three are wired in; one is not.</em></h2>
+
+    <table class="surface-table">
+      <thead>
+        <tr>
+          <th style="width:22%">Surface</th>
+          <th>How reactlens uses it</th>
+          <th>Status</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>
+            <div class="name"><code>@anthropic-ai/claude-agent-sdk</code></div>
+            <div class="desc">npm package &mdash; the <code>query()</code> async-iterable API with tools, streaming, and message-boundary events.</div>
+          </td>
+          <td class="use">Primary orchestration layer. Every code path goes through it. Calls land in <code>src/agent/</code>. Configured with <code>ANTHROPIC_API_KEY</code> from env.</td>
+          <td class="notes"><span class="pill used">In use</span> &middot; default path</td>
+        </tr>
+        <tr>
+          <td>
+            <div class="name">Anthropic HTTP API</div>
+            <div class="desc">Direct <code>POST /v1/messages</code>. Token-billed.</div>
+          </td>
+          <td class="use">Indirectly &mdash; the agent-sdk wraps it. reactlens never hits HTTP directly. All transport (streaming, retries, rate-limit handling) is the SDK's job.</td>
+          <td class="notes"><span class="pill used">In use</span> &middot; via SDK</td>
+        </tr>
+        <tr>
+          <td>
+            <div class="name"><code>claude -p</code> CLI</div>
+            <div class="desc">Claude Code's non-interactive mode. Spawns the binary, pipes a prompt in, reads stdout.</div>
+          </td>
+          <td class="use">Behind the <code>--use-claude-code</code> flag on every agent-driven command. Bills against the developer's Claude Max subscription instead of the API. Local-dev only.</td>
+          <td class="notes"><span class="pill opt">Optional</span> &middot; dev-only path</td>
+        </tr>
+        <tr>
+          <td>
+            <div class="name">Claude Max subscription</div>
+            <div class="desc">The flat-rate subscription that powers Claude.ai and Claude Code.</div>
+          </td>
+          <td class="use">Indirect &mdash; only consumed through <code>claude -p</code> when <code>--use-claude-code</code> is set. Bills the developer, not reactlens. Anthropic's ToS forbids this path for distributed tools, so it stays opt-in for local dev.</td>
+          <td class="notes"><span class="pill opt">Opt-in</span> &middot; via CLI</td>
+        </tr>
+        <tr>
+          <td>
+            <div class="name">Claude.ai chat</div>
+            <div class="desc">The browser chat surface.</div>
+          </td>
+          <td class="use">Not wired up. No programmatic value &mdash; the human-driven surface for one-off questions, not a runtime integration target.</td>
+          <td class="notes"><span class="pill no">Not used</span></td>
+        </tr>
+      </tbody>
+    </table>
+
+    <p class="small">
+      The split between SDK and CLI exists for one reason: cost. The SDK is the only path reactlens
+      can ship to other users. <code>claude -p</code> is faster and cheaper for the developer working
+      on reactlens itself, because it bills against the Max subscription you're already paying for.
+    </p>
+  </div>
+</section>
+
+<section>
+  <div class="shell">
+    <div class="label">02 &mdash; The integration architecture</div>
+    <h2>A thin abstraction, two backends, one cost-tracking decorator. <em>Everything else is prompts and parsers.</em></h2>
+
+    <p>
+      Every Claude-driven command (<code>generate</code>, <code>run</code>'s diagnosis path,
+      <code>analyze</code>, <code>regen</code>) follows the same shape. The wiring lives in
+      <code>src/agent/</code>:
+    </p>
+
+    <div class="arch">
+<span class="note">CLI command (e.g. reactlens run)</span>
+&nbsp;&nbsp;<span class="arrow">↓</span>
+<span class="node">pickAgentRunner({ useClaudeCode? })</span>
+&nbsp;&nbsp;<span class="arrow">├─</span> <span class="node">SDKRunner</span>  &mdash; wraps <span class="node">query()</span> from agent-sdk
+&nbsp;&nbsp;<span class="arrow">└─</span> <span class="node">CLIRunner</span>  &mdash; spawns <span class="node">claude -p</span>, parses stdout
+&nbsp;&nbsp;<span class="arrow">↓</span>
+<span class="node">withCostTracking(runner, costTracker)</span>  <span class="note">// decorator</span>
+&nbsp;&nbsp;<span class="arrow">↓</span>
+<span class="node">diagnose(agent, failure)</span>  |  <span class="node">generateTests(agent, ...)</span>
+&nbsp;&nbsp;<span class="arrow">↓</span>
+<span class="node">Zod schema</span> validates JSON output &middot; retries on bad shape
+&nbsp;&nbsp;<span class="arrow">↓</span>
+Bus events: <span class="node">diagnosis:chunk</span> (stream) &rarr; <span class="node">diagnosis:end</span> (final)
+    </div>
+
+    <h3>The runner abstraction</h3>
+    <p>
+      <code>AgentRunner</code> is the seam. It exposes one method &mdash; an async generator of
+      message events &mdash; that both backends implement. The SDK runner forwards events from
+      <code>query()</code> as-is; the CLI runner reads <code>claude -p</code>'s stdout line by line
+      and synthesizes equivalent events. Call sites don't know which backend they're on.
+    </p>
+
+    <pre><code><span class="cm">// src/agent/select.ts</span>
+<span class="kw">export async function</span> <span class="fn">pickAgentRunner</span>(opts: {
+  commandName: <span class="str">'generate'</span> | <span class="str">'run'</span> | <span class="str">'analyze'</span> | <span class="str">'regen'</span>;
+  useClaudeCode?: <span class="kw">boolean</span>;
+}): <span class="kw">Promise</span>&lt;<span class="fn">AgentRunner</span>&gt; {
+  <span class="kw">const</span> useCLI = opts.useClaudeCode === <span class="kw">true</span>
+    || process.env.REACTLENS_USE_CLAUDE_CODE === <span class="str">'1'</span>;
+  <span class="kw">return</span> useCLI ? <span class="kw">new</span> <span class="fn">CLIRunner</span>() : <span class="kw">new</span> <span class="fn">SDKRunner</span>();
+}
+</code></pre>
+
+    <h3>The cost-tracking decorator</h3>
+    <p>
+      <code>withCostTracking</code> wraps either runner. It listens for the SDK's <code>result</code>
+      events (which carry per-message <code>usage</code>: input tokens, output tokens, cache reads,
+      cache writes) and accumulates dollar cost via a model-pricing table. When the running total
+      crosses <code>--max-cost</code>, the wrapper throws <code>AGENT_COST_EXCEEDED</code> at the
+      next message boundary. Same shape for the CLI runner, but with token counts approximated
+      from response length when not returned.
+    </p>
+
+    <h3>What flows through the pipeline</h3>
+    <p>
+      Prompts live as Markdown templates in <code>src/{analyzer,generator}/prompts/*.md</code> with
+      placeholder substitution. Output is parsed with a Zod schema (<code>Diagnosis</code> for
+      failure analysis; nothing structured for generation &mdash; that path just writes files). On
+      bad JSON, the diagnose path retries once with an explicit "your last reply was not valid
+      JSON" follow-up.
+    </p>
+  </div>
+</section>
+
+<section>
+  <div class="shell">
+    <div class="label">03 &mdash; What Claude is doing at each pipeline point</div>
+    <h2>Two flavors of agent call. Different tools, different output contracts.</h2>
+
+    <div class="pipeline">
+      <div class="card">
+        <div class="tag">A &middot; reactlens generate</div>
+        <h4>Multi-step agent loop with full tool access</h4>
+        <div class="meta">
+          <div><span class="k">Input</span><span class="v">ComponentAnalysis + output paths + MSW config</span></div>
+          <div><span class="k">Tools</span><span class="v">Read, Write, Bash</span></div>
+          <div><span class="k">Loop</span><span class="v">read source → write POM → write spec → tsc → fix</span></div>
+          <div><span class="k">Output</span><span class="v">filesWritten: string[]</span></div>
+          <div><span class="k">Schema</span><span class="v">none (file side-effects only)</span></div>
+        </div>
+        <p>
+          The model is a free-roaming agent. It can read any file, write any file, and run any
+          command in the cwd. reactlens trusts the agent loop to converge &mdash; it only validates
+          the output by running <code>tsc --noEmit</code> after.
+        </p>
+      </div>
+      <div class="card">
+        <div class="tag">B &middot; reactlens run (diagnosis)</div>
+        <h4>Single-shot streaming query with structured output</h4>
+        <div class="meta">
+          <div><span class="k">Input</span><span class="v">failure { testId, title, file, error, snapshot }</span></div>
+          <div><span class="k">Tools</span><span class="v">none</span></div>
+          <div><span class="k">Loop</span><span class="v">single query, streamed text chunks</span></div>
+          <div><span class="k">Output</span><span class="v">Diagnosis (Zod-validated)</span></div>
+          <div><span class="k">Schema</span><span class="v">classification + confidence + evidence + patch?</span></div>
+        </div>
+        <p>
+          Read-only call. The prompt carries every shred of context the model needs &mdash; component
+          source, spec source, last component:snapshot, git context &mdash; and asks for a JSON
+          object. Streaming chunks land on the bus as <code>diagnosis:chunk</code> events for live
+          UI feedback.
+        </p>
+      </div>
+    </div>
+
+    <p class="small" style="margin-top:24px">
+      <code>analyze</code> and <code>regen</code> are variants: <code>analyze</code> hits the
+      diagnose path per failure in a Playwright JSON report; <code>regen</code> hashes component
+      sources, then invokes the <code>generate</code> path only for ones whose hash changed.
+    </p>
+  </div>
+</section>
+
+<section>
+  <div class="shell">
+    <div class="label">04 &mdash; Pros and cons of the current implementation</div>
+    <h2>Clean abstractions, calibrated outputs. <em>Cost and prompt evolution are the weak spots.</em></h2>
+
+    <div class="balance">
+      <div class="col good">
+        <div class="head">What's working</div>
+        <ul>
+          <li>
+            <strong>AgentRunner abstraction is the right seam.</strong>
+            <span>SDK vs CLI swap doesn't touch call sites. Adding a third backend (custom HTTP, a different vendor) is a one-file change.</span>
+          </li>
+          <li>
+            <strong>Zod-validated output + retry.</strong>
+            <span>Bad JSON doesn't crash the pipeline. The schema rejects garbage early, and the prompt retries with explicit feedback.</span>
+          </li>
+          <li>
+            <strong>Cost cap, eval gate, calibration.</strong>
+            <span><code>--max-cost</code> aborts at the next message boundary. The 16-case eval set enforces ≥80% overall accuracy + ≥95% on high-confidence diagnoses before any release.</span>
+          </li>
+          <li>
+            <strong>Streaming feedback in the dashboard.</strong>
+            <span><code>diagnosis:chunk</code> events flow live to the inspector, so the developer sees the model thinking, not a spinner.</span>
+          </li>
+          <li>
+            <strong>Decorator pattern (<code>withCostTracking</code>).</strong>
+            <span>Composable. The cost tracker is one of N decorators the runner could be wrapped in next &mdash; retry, logging, rate limiting all fit the same shape.</span>
+          </li>
+          <li>
+            <strong>Prompts are markdown, in tree, in git.</strong>
+            <span>Iterable. Reviewable in PRs. No external prompt-management service to coordinate.</span>
+          </li>
+        </ul>
+      </div>
+      <div class="col bad">
+        <div class="head">Where the design leaves value on the table</div>
+        <ul>
+          <li>
+            <strong>No prompt caching.</strong>
+            <span>The diagnosis prompt has a large fixed prefix (component source + git context). Anthropic supports <code>cache_control</code>; we're not using it. Multi-failure runs re-tokenize the same context every call.</span>
+          </li>
+          <li>
+            <strong>No model routing.</strong>
+            <span>Sonnet for everything. Trivial classifications (e.g. "is this output a real diagnosis or did the model refuse?") could run on Haiku for ~10× cheaper.</span>
+          </li>
+          <li>
+            <strong>No few-shot from the eval set.</strong>
+            <span>The 16 hand-labeled cases sit unused at inference time. Including 2-3 as in-context demonstrations would likely push accuracy higher on edge cases.</span>
+          </li>
+          <li>
+            <strong>Generic tools for <code>generate</code>.</strong>
+            <span>The agent has Read/Write/Bash &mdash; the default kit. Domain-specific tools (<code>writeSpec</code>, <code>enumerateVisualStates</code>) would shrink the surface for hallucination.</span>
+          </li>
+          <li>
+            <strong>Tool failures don't feed back into the agent loop.</strong>
+            <span>If a <code>Write</code> produces broken TS, <code>tsc</code> fails after the loop, not inside it. The model never sees the error and can't recover.</span>
+          </li>
+          <li>
+            <strong>Cost cap is coarse.</strong>
+            <span>Aborts only at message boundaries. A single long streaming response can overshoot the cap before the next check.</span>
+          </li>
+          <li>
+            <strong>CLI runner is approximate.</strong>
+            <span><code>claude -p</code> doesn't return structured usage counts by default. The CLIRunner estimates from output length, so the cost tracker's numbers under <code>--use-claude-code</code> are directional, not exact.</span>
+          </li>
+          <li>
+            <strong>Hardcoded model selection.</strong>
+            <span>Model strings live in <code>src/config/</code>. Not env-overrideable per-command, which makes A/B comparing Sonnet vs Opus on the eval set a manual edit-and-rerun.</span>
+          </li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="nums">
+      <div class="num-stat">
+        <div class="big">~50%</div>
+        <div class="cap">Estimated token savings on<br />multi-failure runs from prompt caching alone</div>
+      </div>
+      <div class="num-stat">
+        <div class="big">~10×</div>
+        <div class="cap">Cost gap between Sonnet and Haiku<br />for trivially classifiable subtasks</div>
+      </div>
+      <div class="num-stat">
+        <div class="big">2&ndash;3</div>
+        <div class="cap">Few-shot examples from the eval set<br />likely enough to lift edge-case accuracy</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="shell">
+    <div class="label">05 &mdash; Alternatives, in priority order</div>
+    <h2>Cheapest, highest-leverage upgrades first. <em>None of these are research projects.</em></h2>
+
+    <div class="alts">
+      <div class="alt">
+        <div class="num">01 &middot; cheapest win</div>
+        <h4>Prompt caching with <em>Anthropic's <code>cache_control</code></em></h4>
+        <p>
+          The diagnosis prompt's fixed prefix &mdash; component source, git context, schema
+          definitions, prompt template &mdash; is identical across every failure in a single run.
+          Marking that prefix with <code>cache_control: { type: 'ephemeral' }</code> cuts the
+          input-token cost on subsequent calls within the cache TTL (~5 min) by roughly half. The
+          SDK supports it directly; the change is a single decorator on the prompt.
+        </p>
+        <div class="effort">Effort:<span class="v">one afternoon</span></div>
+      </div>
+
+      <div class="alt">
+        <div class="num">02 &middot; high-leverage</div>
+        <h4>Model routing: <em>Haiku for triage, Sonnet for diagnosis, Opus for low-confidence retries</em></h4>
+        <p>
+          Today every diagnose call goes to Sonnet. Two tiers of cheaper traffic are sitting unused.
+          Pre-screen with Haiku (does this look like a flaky test, a real bug, or a test bug?
+          one-line classification). If Sonnet's first-pass diagnosis comes back with
+          <code>confidence: low</code>, retry on Opus before giving up. The router lives next to
+          <code>pickAgentRunner</code> and decides per-call which model the runner targets.
+        </p>
+        <div class="effort">Effort:<span class="v">a few days &middot; needs eval-set re-baseline</span></div>
+      </div>
+
+      <div class="alt">
+        <div class="num">03 &middot; accuracy</div>
+        <h4>Few-shot examples drawn from <em>the eval set itself</em></h4>
+        <p>
+          16 hand-labeled failure cases sit in <code>tests/diagnostic-eval/cases/</code>. Sampling
+          2-3 of them (by category &mdash; one real-bug, one test-bug, one flaky) into the
+          diagnosis prompt as in-context demonstrations would calibrate the model on the project's
+          own conventions. Anthropic's prompt caching is the right home for these &mdash; they
+          don't change between calls.
+        </p>
+        <div class="effort">Effort:<span class="v">one day &middot; iterate on which examples</span></div>
+      </div>
+
+      <div class="alt">
+        <div class="num">04 &middot; correctness</div>
+        <h4>Domain-specific tools for the <em><code>generate</code> agent</em></h4>
+        <p>
+          Replace generic <code>Read</code>/<code>Write</code>/<code>Bash</code> with a tighter kit:
+          <code>readComponentSource(file)</code>, <code>writeSpec({ name, states, fileContents })</code>,
+          <code>writePOM({...})</code>, <code>runTypecheck()</code>. Schemas on these tools shrink
+          the surface for hallucination (the model can't invent invalid file paths or skip the
+          structure we want) and let reactlens validate inputs at the tool boundary instead of
+          discovering errors post-hoc with <code>tsc</code>.
+        </p>
+        <div class="effort">Effort:<span class="v">a week &middot; touches the generate prompt</span></div>
+      </div>
+
+      <div class="alt">
+        <div class="num">05 &middot; robustness</div>
+        <h4>Tool failure feedback <em>inside the agent loop</em></h4>
+        <p>
+          When a generated spec fails to typecheck today, the run ends and the engineer is left
+          with broken output. The fix: catch the <code>tsc</code> output, surface it to the agent
+          as a follow-up message ("your spec doesn't typecheck; here's the error; try again"), and
+          give it one more iteration. The SDK's tool-use loop handles this natively &mdash; we just
+          need the tools wired right and a max-iterations cap.
+        </p>
+        <div class="effort">Effort:<span class="v">a few days</span></div>
+      </div>
+
+      <div class="alt">
+        <div class="num">06 &middot; observability</div>
+        <h4>Persist every Claude call into the run's <em><code>events.jsonl</code></em></h4>
+        <p>
+          Today the cost tracker accumulates a number; the prompt + completion themselves aren't
+          stored. Logging each call as an event (input tokens, output tokens, prompt hash, model,
+          latency, success/failure) into the run's persistence layer makes the diagnosis pipeline
+          debuggable after the fact &mdash; "why did the model say X here" stops being a re-run-it
+          exercise.
+        </p>
+        <div class="effort">Effort:<span class="v">a couple of days &middot; mostly plumbing</span></div>
+      </div>
+
+      <div class="alt">
+        <div class="num">07 &middot; further out</div>
+        <h4>A/B prompt evaluation against the eval set as a script</h4>
+        <p>
+          Today prompt iteration is "edit the markdown, run the eval, eyeball the diff". A small
+          harness that takes two prompt variants and runs both against all 16 eval cases,
+          reporting per-class accuracy + confidence calibration, would make prompt evolution
+          systematic. Lives next to <code>tests/diagnostic-eval/</code>; consumes the same data
+          the release gate already does.
+        </p>
+        <div class="effort">Effort:<span class="v">half a day &middot; pure scripting</span></div>
+      </div>
+
+      <div class="alt">
+        <div class="num">08 &middot; nice to have</div>
+        <h4>Structured cost reporting from <em><code>claude -p</code></em></h4>
+        <p>
+          Currently the CLIRunner approximates tokens from output length. <code>claude -p</code>
+          supports a JSON output mode that includes per-message usage. Switching the CLI parser to
+          consume that mode makes <code>--max-cost</code> exact under <code>--use-claude-code</code>
+          instead of directional.
+        </p>
+        <div class="effort">Effort:<span class="v">half a day</span></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="closing">
+  <div class="shell">
+    <div class="label">06 &mdash; The shortlist if budget is one engineer-week</div>
+    <h2>Cache the prompt, route the model, log the calls. <em>In that order.</em></h2>
+    <p>
+      Prompt caching is the highest-leverage and lowest-risk change &mdash; pure cost reduction, no
+      accuracy tradeoff. Model routing comes next, conditional on re-baselining the eval gate
+      after the change (Haiku might drop accuracy on the triage step; the eval will catch it).
+      Persisting every Claude call into the run JSONL is third &mdash; it's the foundation for
+      every future diagnostic step we'll want to take on this pipeline. The other five entries
+      in §05 are real but can wait.
+    </p>
+    <p>
+      Everything in §05 is a delta from a working baseline. The current implementation already
+      ships diagnoses at 100% accuracy on the 16-case eval and generates passing specs from AST
+      input. The upgrades aren't about fixing what's broken &mdash; they're about how much
+      headroom is left in the same architecture.
+    </p>
+  </div>
+</section>
+
+</main>
+
+<footer>
+  <div class="shell">
+    <span>Claude × reactlens &middot; engineering doc &middot; iterate before shipping major refactors</span>
+    <span class="links">
+      <a href="./explainer.html">reactlens explainer</a>
+      <a href="./portal/index.html">Project portal</a>
+    </span>
+  </div>
+</footer>
+
+</body>
+</html>
