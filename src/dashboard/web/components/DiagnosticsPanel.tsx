@@ -1,9 +1,65 @@
+import { useState } from 'react';
 import type { Diagnosis, TestRow } from '../types';
 
 type Props = {
   test?: TestRow;
   diagnosis?: { streamingText: string; final?: Diagnosis };
 };
+
+// Renders a single patch hunk as a copy-pasteable block. Keeping the format
+// human-readable (filename header + - / + lines) rather than synthesizing a
+// pseudo-unified-diff with fake hunk markers; without real line numbers a
+// fake `@@` header would mislead `git apply`. The user reviews and edits
+// before applying — per CLAUDE.md §13 we never auto-apply.
+function formatPatch(p: NonNullable<Diagnosis['patch']>[number]): string {
+  return `# file: ${p.file}\n- ${p.oldStr}\n+ ${p.newStr}`;
+}
+
+function CopyButton(props: { text: string; label: string }): JSX.Element {
+  const [copied, setCopied] = useState(false);
+  async function onClick(): Promise<void> {
+    try {
+      await navigator.clipboard.writeText(props.text);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1200);
+    } catch {
+      // Clipboard API blocked (insecure context, permission denied). Fall back
+      // to a textarea-select trick so the user can still ⌘C the content.
+      const ta = document.createElement('textarea');
+      ta.value = props.text;
+      ta.style.position = 'fixed';
+      ta.style.left = '-9999px';
+      document.body.appendChild(ta);
+      ta.select();
+      try {
+        document.execCommand('copy');
+        setCopied(true);
+        setTimeout(() => setCopied(false), 1200);
+      } finally {
+        document.body.removeChild(ta);
+      }
+    }
+  }
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      style={{
+        marginLeft: 8,
+        padding: '2px 8px',
+        fontSize: 11,
+        background: copied ? 'var(--pass, #1f883d)' : 'transparent',
+        color: copied ? 'white' : 'var(--muted, #888)',
+        border: '1px solid var(--border, #444)',
+        borderRadius: 3,
+        cursor: 'pointer',
+      }}
+      title="Copy this patch to the clipboard. reactlens never applies patches automatically — you review and apply by hand."
+    >
+      {copied ? '✓ copied' : props.label}
+    </button>
+  );
+}
 
 export function DiagnosticsPanel({ test, diagnosis }: Props): JSX.Element {
   if (test === undefined || (test.status !== 'failed' && test.status !== 'timedOut')) {
@@ -62,13 +118,27 @@ export function DiagnosticsPanel({ test, diagnosis }: Props): JSX.Element {
         )}
         {d.patch !== undefined && d.patch.length > 0 && (
           <div>
-            <div style={{ fontWeight: 600, margin: '12px 0 4px' }}>Patch</div>
+            <div style={{ fontWeight: 600, margin: '12px 0 4px', display: 'flex', alignItems: 'center' }}>
+              <span>Patch</span>
+              {d.patch.length > 1 && (
+                <CopyButton
+                  label="copy all"
+                  text={d.patch.map(formatPatch).join('\n\n')}
+                />
+              )}
+            </div>
             {d.patch.map((p, i) => (
               <div key={i} style={{ marginBottom: 8 }}>
-                <div style={{ fontSize: 11, color: 'var(--muted)' }}>{p.file}</div>
+                <div style={{ fontSize: 11, color: 'var(--muted)', display: 'flex', alignItems: 'center' }}>
+                  <span>{p.file}</span>
+                  <CopyButton label="copy" text={formatPatch(p)} />
+                </div>
                 <pre className="patch">- {p.oldStr}{'\n'}+ {p.newStr}</pre>
               </div>
             ))}
+            <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 4 }}>
+              Review the diff before applying — reactlens never patches files automatically.
+            </div>
           </div>
         )}
         {d.gitContext?.componentLastChanged !== undefined && (
