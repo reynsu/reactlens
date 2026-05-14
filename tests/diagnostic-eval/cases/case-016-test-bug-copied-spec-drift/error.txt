@@ -1,0 +1,4 @@
+Error: expect(page).toHaveURL(/\/welcome/) — page still at /signup after submit click.
+DOM contains getByTestId('terms-error') with text "You must accept the terms of service to sign up".
+A nearby spec (e2e/specs/auth/login.spec.ts) ticks the same checkbox; this spec was copy-pasted from the pre-#482 baseline and never updated.
+Git blame on component.tsx line "if (!terms)" shows PR #482 added the required checkbox 6 weeks ago. Git blame on spec.ts shows no edits since 14 months ago.

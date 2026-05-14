@@ -1,0 +1,6 @@
+{
+  "expectedClassification": "test-bug",
+  "minimumConfidence": "high",
+  "category": "copied-spec-drift",
+  "notes": "Spec fills email + password and clicks submit, expecting navigation to /welcome. Component requires a third field (terms-of-service checkbox) that was added in PR #482 along with a sibling spec (login.spec.ts) that DOES tick the checkbox. This spec is a near-verbatim copy of the original signup spec from before #482; it was missed during the refactor. The component validates correctly; the spec is stale. Smoking gun: another spec in the same suite shows the correct pattern, and the component renders a terms-error testid that this spec never asserts against or interacts with."
+}

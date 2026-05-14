@@ -1,0 +1,19 @@
+{
+  "name": "SignupForm",
+  "key": null,
+  "props": {
+    "onSubmit": "[Function: onSubmit]"
+  },
+  "children": [],
+  "hooks": [
+    { "kind": "state", "value": "ada@example.com" },
+    { "kind": "state", "value": "correct-horse-battery-staple" },
+    { "kind": "state", "value": false },
+    { "kind": "state", "value": { "terms": "You must accept the terms of service to sign up" } },
+    { "kind": "state", "value": false }
+  ],
+  "source": {
+    "file": "tests/diagnostic-eval/cases/case-016-test-bug-copied-spec-drift/component.tsx",
+    "line": 5
+  }
+}
