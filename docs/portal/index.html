@@ -40,10 +40,10 @@
       inspect the live React tree at any moment of any run.
     </p>
     <div class="hero-meta">
-      <div><strong>13 / 13</strong>cases in eval set</div>
-      <div><strong>100%</strong>diagnosis accuracy (n=13)</div>
-      <div><strong>66 + 14</strong>unit + eval tests passing</div>
-      <div><strong>Local-first</strong>no cloud, no telemetry</div>
+      <div><strong>16 / 16</strong>cases in eval set</div>
+      <div><strong>100%</strong>diagnosis accuracy (n=16)</div>
+      <div><strong>4 / 4</strong>fixture stacks live</div>
+      <div><strong>v0.1 → v0.2</strong>scope locked, P8 next</div>
     </div>
   </div>
 </section>
@@ -295,6 +295,7 @@ sequenceDiagram
         <button type="button" class="tab-btn is-active" data-tab="flow" role="tab" aria-selected="true">Flowchart</button>
         <button type="button" class="tab-btn" data-tab="kanban" role="tab" aria-selected="false">Kanban</button>
         <button type="button" class="tab-btn" data-tab="gantt" role="tab" aria-selected="false">Timeline</button>
+        <button type="button" class="tab-btn" data-tab="v02" role="tab" aria-selected="false">v0.2 roadmap</button>
       </div>
 
       <div class="tab-panel is-active" data-panel="flow">
@@ -315,7 +316,7 @@ flowchart LR
   P5["P5 Generate (AST → suites)"]:::partial
   P6["P6 Diagnose + eval"]:::partial
   P7["P7 CI, docs, publish"]:::partial
-  V2["v0.2 time-travel, auto-PR"]:::pending
+  V2["v0.2 (P8 → P16) · see roadmap tab"]:::pending
 
   P0 --> P1 --> P2 --> P3 --> P4 --> P5 --> P6 --> P7 --> V2
           </div>
@@ -358,14 +359,20 @@ flowchart LR
           </div>
           <div class="kan-col progress">
             <h4>In progress <span class="count" id="count-progress">—</span></h4>
-            <div class="kan-card"><span class="meta">—</span><strong>Nothing active.</strong> Session paused at v0.1.0-ready. The next move is a manual decision (publish, v0.2 work, or stop).</div>
+            <div class="kan-card"><span class="meta">v0.2 · kickoff</span><strong>Scope locked, P8 queued.</strong> v0.1.0 closed at 10/11 DoD (Front H npm publish deferred by operator). Active work: drafting the P8 time-travel design — leveraging the per-step <code>stepId</code> rewrite + per-step frame stream already shipped in Gap 3 + P4. See the <em>v0.2 roadmap</em> tab for the full scope.</div>
           </div>
           <div class="kan-col pending">
             <h4>To do <span class="count" id="count-pending">—</span></h4>
             <div class="kan-card"><span class="meta">Front H · ship</span><strong>npm publish (DoD #11).</strong> Version bump, <code>npm pack</code>, smoke install into a throwaway React app, then <code>npm publish</code>. Manual decision — operator chose to defer.</div>
-            <div class="kan-card"><span class="meta">P7.2</span><strong>Watch mode (<code>--watch</code>).</strong> chokidar-driven regen + re-run loop. Deferred to v0.2.</div>
-            <div class="kan-card"><span class="meta">v0.2 roadmap</span><strong>Time-travel debugging.</strong> Scrub through DOM + tree + props per step. Foundation now in place (stepId granularity shipped).</div>
-            <div class="kan-card"><span class="meta">v0.2 roadmap</span><strong>True DOM→fiber locator backtracking.</strong> Replace the heuristic name match in the inspector with a real "click target → exact fiber" mapping. Requires the probe to emit a DOM-element→fiber map alongside the tree.</div>
+            <div class="kan-card"><span class="meta">v0.2 · headline</span><strong>P8 — Time-travel debugging.</strong> Scrub through DOM + tree + props at every step. Foundation in place (stepId granularity ✓, frame stream ✓). Needs persistence layer + <code>TimelineSlider.tsx</code> wired to the bus replay.</div>
+            <div class="kan-card"><span class="meta">v0.2 · accuracy</span><strong>P9 — True DOM→fiber locator backtracking.</strong> Replace Gap 4's heuristic kebab→Pascal name match with a real "click target → exact fiber" mapping. Probe must emit a <code>WeakMap&lt;Element, FiberId&gt;</code> alongside the tree.</div>
+            <div class="kan-card"><span class="meta">v0.2 · DX</span><strong>P10 — Watch mode (<code>--watch</code>).</strong> chokidar-driven regen + re-run loop. Deferred from P7.2.</div>
+            <div class="kan-card"><span class="meta">v0.2 · spec gen</span><strong>P11 — Behavior contracts.</strong> Emit <code>&lt;Component&gt;.contract.md</code> alongside specs — living documentation of the visual-state set the analyzer enumerated.</div>
+            <div class="kan-card"><span class="meta">v0.2 · regression</span><strong>P12 — Semantic visual regression.</strong> Diff a11y tree + component tree instead of pixels. Lower flake rate than pixel diffing on real apps.</div>
+            <div class="kan-card"><span class="meta">v0.2 · a11y</span><strong>P13 — axe-core per step.</strong> Promote accessibility to first-class evidence in every snapshot.</div>
+            <div class="kan-card"><span class="meta">v0.2 · CI</span><strong>P14 — Auto-PR mode.</strong> When CI run produces a <code>real-bug · high</code> diagnosis with a patch, open a PR. Strict opt-in.</div>
+            <div class="kan-card"><span class="meta">v0.2 · stretch</span><strong>P15 — Multi-user concurrent flows.</strong> Two browsers, two users, collaborative flows in one spec.</div>
+            <div class="kan-card"><span class="meta">v0.2 · stretch</span><strong>P16 — Telemetry (opt-in).</strong> Local-first remains the default; opt-in stream for project-health metrics only.</div>
           </div>
           <div class="kan-col blocked">
             <h4>To improve — known gaps <span class="count" id="count-blocked">—</span></h4>
@@ -391,22 +398,129 @@ flowchart LR
             <span class="marker">P7</span>
             <span class="marker">v0.2</span>
           </div>
-          <div class="gantt-row"><div class="gantt-label">P0 · Bootstrap</div><div class="gantt-track"><span class="gantt-bar done" style="left: 0%; width: 10%;">done</span></div></div>
-          <div class="gantt-row"><div class="gantt-label">P1 · Init &amp; detect</div><div class="gantt-track"><span class="gantt-bar done" style="left: 10%; width: 12%;">done</span></div></div>
-          <div class="gantt-row"><div class="gantt-label">P2 · Runner</div><div class="gantt-track"><span class="gantt-bar done" style="left: 22%; width: 11%;">done</span></div></div>
-          <div class="gantt-row"><div class="gantt-label">P3 · Bridge (moat)</div><div class="gantt-track"><span class="gantt-bar done" style="left: 33%; width: 14%;">done · DoD #9 ✓</span></div></div>
-          <div class="gantt-row"><div class="gantt-label">P4 · Dashboard</div><div class="gantt-track"><span class="gantt-bar progress" style="left: 47%; width: 11%;">85%</span></div></div>
-          <div class="gantt-row"><div class="gantt-label">P5 · Generate</div><div class="gantt-track"><span class="gantt-bar progress" style="left: 58%; width: 10%;">95%</span></div></div>
-          <div class="gantt-row"><div class="gantt-label">P6 · Diagnose &amp; eval</div><div class="gantt-track"><span class="gantt-bar done" style="left: 68%; width: 13%;">done · DoD #5 ✓ (16/16)</span></div></div>
-          <div class="gantt-row"><div class="gantt-label">P7 · 4 stacks · CI · docs</div><div class="gantt-track"><span class="gantt-bar done" style="left: 81%; width: 11%;">done · DoD #8 ✓</span></div></div>
-          <div class="gantt-row"><div class="gantt-label">Fronts F · I · J · G</div><div class="gantt-track"><span class="gantt-bar done" style="left: 92%; width: 4%;">done</span></div></div>
-          <div class="gantt-row"><div class="gantt-label">Gaps 1–6</div><div class="gantt-track"><span class="gantt-bar done" style="left: 96%; width: 2%;">done</span></div></div>
-          <div class="gantt-row"><div class="gantt-label">Front H · npm publish</div><div class="gantt-track"><span class="gantt-bar pending" style="left: 98%; width: 2%;">deferred</span></div></div>
-          <div class="gantt-row"><div class="gantt-label">v0.2.0 roadmap</div><div class="gantt-track"><span class="gantt-bar pending" style="left: 100%; width: 0%;">—</span></div></div>
+          <div class="gantt-row"><div class="gantt-label">P0 · Bootstrap</div><div class="gantt-track"><span class="gantt-bar done" style="left: 0%; width: 6%;">done</span></div></div>
+          <div class="gantt-row"><div class="gantt-label">P1 · Init &amp; detect</div><div class="gantt-track"><span class="gantt-bar done" style="left: 6%; width: 7%;">done</span></div></div>
+          <div class="gantt-row"><div class="gantt-label">P2 · Runner</div><div class="gantt-track"><span class="gantt-bar done" style="left: 13%; width: 7%;">done</span></div></div>
+          <div class="gantt-row"><div class="gantt-label">P3 · Bridge (moat)</div><div class="gantt-track"><span class="gantt-bar done" style="left: 20%; width: 9%;">done · DoD #9 ✓</span></div></div>
+          <div class="gantt-row"><div class="gantt-label">P4 · Dashboard</div><div class="gantt-track"><span class="gantt-bar progress" style="left: 29%; width: 7%;">85%</span></div></div>
+          <div class="gantt-row"><div class="gantt-label">P5 · Generate</div><div class="gantt-track"><span class="gantt-bar progress" style="left: 36%; width: 6%;">95%</span></div></div>
+          <div class="gantt-row"><div class="gantt-label">P6 · Diagnose &amp; eval</div><div class="gantt-track"><span class="gantt-bar done" style="left: 42%; width: 8%;">done · DoD #5 ✓ (16/16)</span></div></div>
+          <div class="gantt-row"><div class="gantt-label">P7 · 4 stacks · CI · docs</div><div class="gantt-track"><span class="gantt-bar done" style="left: 50%; width: 7%;">done · DoD #8 ✓</span></div></div>
+          <div class="gantt-row"><div class="gantt-label">Fronts F · I · J · G</div><div class="gantt-track"><span class="gantt-bar done" style="left: 57%; width: 3%;">done</span></div></div>
+          <div class="gantt-row"><div class="gantt-label">Gaps 1–6</div><div class="gantt-track"><span class="gantt-bar done" style="left: 60%; width: 3%;">done</span></div></div>
+          <div class="gantt-row"><div class="gantt-label">Front H · npm publish</div><div class="gantt-track"><span class="gantt-bar pending" style="left: 63%; width: 2%;">deferred</span></div></div>
+          <div class="gantt-row"><div class="gantt-label">P8 · Time-travel (v0.2)</div><div class="gantt-track"><span class="gantt-bar progress" style="left: 65%; width: 4%;">design</span></div></div>
+          <div class="gantt-row"><div class="gantt-label">P9 · Locator backtracking (v0.2)</div><div class="gantt-track"><span class="gantt-bar pending" style="left: 69%; width: 4%;">queued</span></div></div>
+          <div class="gantt-row"><div class="gantt-label">P10 · Watch mode (v0.2)</div><div class="gantt-track"><span class="gantt-bar pending" style="left: 73%; width: 4%;">queued</span></div></div>
+          <div class="gantt-row"><div class="gantt-label">P11 · Behavior contracts (v0.2)</div><div class="gantt-track"><span class="gantt-bar pending" style="left: 77%; width: 4%;">queued</span></div></div>
+          <div class="gantt-row"><div class="gantt-label">P12 · Semantic visual regression (v0.2)</div><div class="gantt-track"><span class="gantt-bar pending" style="left: 81%; width: 4%;">queued</span></div></div>
+          <div class="gantt-row"><div class="gantt-label">P13 · axe-core per step (v0.2)</div><div class="gantt-track"><span class="gantt-bar pending" style="left: 85%; width: 4%;">queued</span></div></div>
+          <div class="gantt-row"><div class="gantt-label">P14 · Auto-PR mode (v0.2)</div><div class="gantt-track"><span class="gantt-bar pending" style="left: 89%; width: 4%;">queued</span></div></div>
+          <div class="gantt-row"><div class="gantt-label">P15 · Multi-user flows (v0.2 stretch)</div><div class="gantt-track"><span class="gantt-bar pending" style="left: 93%; width: 3%;">stretch</span></div></div>
+          <div class="gantt-row"><div class="gantt-label">P16 · Telemetry opt-in (v0.2 stretch)</div><div class="gantt-track"><span class="gantt-bar pending" style="left: 96%; width: 4%;">stretch</span></div></div>
         </div>
         <p class="note center">
           Horizontal axis is project order (left = earliest). Width approximates
-          relative scope, not calendar time. Dashed bars are not started.
+          relative scope, not calendar time. Dashed bars are not started. The
+          right third of the track is v0.2 work.
+        </p>
+      </div>
+
+      <div class="tab-panel" data-panel="v02">
+        <h3 style="margin-top:0">v0.2 — what we're building next</h3>
+        <p>
+          v0.1.0 closed at <strong>10 / 11 DoD</strong> (only Front H — npm publish — deferred by
+          operator). The non-negotiables held: the moat (component snapshots per step on
+          all 4 stacks) and calibrated diagnosis (16 / 16 = 100% on the eval set) both
+          shipped. v0.2 builds on that foundation.
+        </p>
+
+        <h4>Scope</h4>
+        <p>
+          Nine phases, three priority tiers. P8–P10 are the &ldquo;closes the loop&rdquo;
+          tier: each one removes a known compromise from v0.1.0. P11–P14 expand the
+          moat&rsquo;s observable surface (spec-side contracts, semantic diffs,
+          accessibility, automated PRs). P15–P16 are stretch.
+        </p>
+
+        <div class="diagram" data-diagram="v02">
+          <span class="zoom-hint">click to zoom</span>
+          <div class="mermaid">
+flowchart LR
+  classDef tier1 fill:#fef3c7,stroke:#d97706,color:#7c2d12,font-weight:600
+  classDef tier2 fill:#e0e7ff,stroke:#6366f1,color:#1e1b4b,font-weight:600
+  classDef tier3 fill:#f1f5f9,stroke:#64748b,color:#0f172a
+  classDef foundation fill:#dcfce7,stroke:#16a34a,color:#064e3b,font-weight:600
+
+  subgraph V1["v0.1.0 foundation (shipped)"]
+    direction LR
+    F1["stepId per snapshot · Gap 3"]:::foundation
+    F2["frame stream per step · P4"]:::foundation
+    F3["AST visual-state set · P5"]:::foundation
+    F4["calibrated diagnosis · P6"]:::foundation
+  end
+
+  subgraph T1["Tier 1 · closes v0.1 compromises"]
+    P8["P8 Time-travel debugging"]:::tier1
+    P9["P9 DOM→fiber locator backtracking"]:::tier1
+    P10["P10 Watch mode --watch"]:::tier1
+  end
+
+  subgraph T2["Tier 2 · expand observable surface"]
+    P11["P11 Behavior contracts (.contract.md)"]:::tier2
+    P12["P12 Semantic visual regression"]:::tier2
+    P13["P13 axe-core per step"]:::tier2
+    P14["P14 Auto-PR mode (CI only)"]:::tier2
+  end
+
+  subgraph T3["Tier 3 · stretch"]
+    P15["P15 Multi-user concurrent flows"]:::tier3
+    P16["P16 Opt-in telemetry"]:::tier3
+  end
+
+  F1 --> P8
+  F2 --> P8
+  F1 --> P9
+  F3 --> P11
+  F4 --> P14
+  T1 --> T2 --> T3
+          </div>
+        </div>
+
+        <div class="kanban">
+          <div class="kan-col progress">
+            <h4>Tier 1 · closes v0.1 compromises <span class="count">3</span></h4>
+            <div class="kan-card"><span class="meta">P8 · headline</span><strong>Time-travel debugging.</strong> <em>Why now:</em> we already capture <code>component:snapshot</code> + <code>frame</code> per step; v0.1.0 just doesn't expose a scrubber. <em>Shape:</em> persistence layer for the bus replay, plus <code>TimelineSlider.tsx</code> (stub already in repo layout) wired to render the snapshot at the selected step. <em>Acceptance:</em> select any past step, see DOM frame + tree + props at that moment — no re-run needed.</div>
+            <div class="kan-card"><span class="meta">P9 · accuracy</span><strong>True DOM→fiber locator backtracking.</strong> <em>Why now:</em> Gap 4 shipped a heuristic kebab→Pascal name match because the bridge doesn't carry DOM↔fiber mapping. <em>Shape:</em> probe emits <code>WeakMap&lt;Element, FiberId&gt;</code> alongside the tree, transported per snapshot. Inspector resolves Playwright's resolved locator to an exact fiber. <em>Acceptance:</em> highlight is correct on a target with a dynamic <code>data-testid</code>.</div>
+            <div class="kan-card"><span class="meta">P10 · DX</span><strong>Watch mode (<code>--watch</code>).</strong> <em>Why now:</em> deferred from P7.2; the inner dev loop is the main reason a developer would run reactlens locally instead of in CI. <em>Shape:</em> chokidar watches <code>src/**</code> + <code>e2e/**</code>; on change, regen affected specs (AST diff) and re-run only the impacted suites; dashboard stays open across runs. <em>Acceptance:</em> editing a component triggers a sub-2s re-run cycle.</div>
+          </div>
+          <div class="kan-col pending">
+            <h4>Tier 2 · expand observable surface <span class="count">4</span></h4>
+            <div class="kan-card"><span class="meta">P11 · spec gen</span><strong>Behavior contracts.</strong> Emit <code>&lt;Component&gt;.contract.md</code> alongside generated specs — the enumerated visual-state set as living documentation. Keeps the AST→test mapping legible to humans, not just to the agent.</div>
+            <div class="kan-card"><span class="meta">P12 · regression</span><strong>Semantic visual regression.</strong> Diff a11y tree + component tree instead of pixels. Lower flake rate on real apps with animations / scrollbars / OS-level rendering drift. Builds on the snapshot stream we already capture.</div>
+            <div class="kan-card"><span class="meta">P13 · a11y</span><strong>axe-core per step.</strong> Run axe at every step; emit <code>a11y:violation</code> events on the bus; surface them in the inspector alongside props/state. Promotes accessibility to first-class evidence — and a new diagnosis class.</div>
+            <div class="kan-card"><span class="meta">P14 · CI</span><strong>Auto-PR mode.</strong> When CI runs reactlens and a diagnosis returns <code>real-bug · high</code> with a patch, open a PR with the suggested fix on a new branch. <strong>Strict opt-in</strong> per CLAUDE.md §13 — never auto-applied locally.</div>
+          </div>
+          <div class="kan-col blocked">
+            <h4>Tier 3 · stretch <span class="count">2</span></h4>
+            <div class="kan-card"><span class="meta">P15 · stretch</span><strong>Multi-user concurrent flows.</strong> Two browser contexts in one spec; reactlens correlates snapshots from both. Useful for chat / collaboration / auth-handoff flows.</div>
+            <div class="kan-card"><span class="meta">P16 · stretch</span><strong>Telemetry (opt-in).</strong> Local-first remains the default; opt-in stream of project-health metrics only (eval pass rate, diagnosis confidence calibration drift over time). Never spec content, never source.</div>
+          </div>
+        </div>
+
+        <h4>Current state · 2026-05-14</h4>
+        <ul>
+          <li><strong>Scope locked</strong> — nine phases, three tiers, prioritized above. v0.2 work starts from P8.</li>
+          <li><strong>Active</strong> — P8 design. Decisions pending: snapshot persistence backend (in-memory ring vs. SQLite vs. flat JSONL on disk) and slider granularity (per step vs. per snapshot).</li>
+          <li><strong>Not started</strong> — P9 through P16.</li>
+          <li><strong>Foundations already in place</strong> — stepId per snapshot (Gap 3), per-step frame stream (P4), AST visual-state enumeration (P5), 16-case calibrated eval (P6), 4 fixture stacks live (Gap 6).</li>
+          <li><strong>Out of scope for v0.2</strong> — Vue/Svelte/Angular support, cloud sync, hosted dashboard, auto-applying patches without confirmation. These remain non-goals per CLAUDE.md §3.</li>
+        </ul>
+
+        <p class="note">
+          Source of truth for phase definitions: <code>EXECUTION_PLAN.md §v0.2.0
+          roadmap</code> and <code>CLAUDE.md §4.5</code>. This panel is the project-portal
+          projection.
         </p>
       </div>
     </div>
