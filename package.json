@@ -51,6 +51,7 @@
   },
   "dependencies": {
     "@anthropic-ai/claude-agent-sdk": "^0.2.132",
+    "axe-core": "^4.11.4",
     "bippy": "^0.5.39",
     "chokidar": "^5.0.0",
     "commander": "^14.0.3",

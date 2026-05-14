@@ -94,6 +94,22 @@ function locatePackagedProbe(): string | undefined {
   return undefined;
 }
 
+function locatePackagedAxe(): string | undefined {
+  // Walk up looking for axe-core in our own node_modules. The fixture
+  // running in the user's project can normally require.resolve axe-core
+  // (it's a transitive dep), but pnpm's strict isolation breaks that path
+  // in our integration suite — pin it explicitly here so dev + prod agree.
+  const candidates = [
+    join(__dirname, '..', 'node_modules', 'axe-core', 'axe.min.js'),
+    join(__dirname, '..', '..', 'node_modules', 'axe-core', 'axe.min.js'),
+    join(__dirname, '..', '..', '..', 'node_modules', 'axe-core', 'axe.min.js'),
+  ];
+  for (const c of candidates) {
+    if (existsSync(c)) return c;
+  }
+  return undefined;
+}
+
 function tryOpenInBrowser(url: string): void {
   // `start` is a cmd.exe builtin (not a binary), so on Windows we have to
   // shell through cmd /c with an empty title argument so the URL isn't
@@ -156,6 +172,7 @@ export async function runRun(opts: RunCommandOptions): Promise<number> {
       skipWebServer: opts.skipWebServer,
       probeWsUrl: dashboard?.probeWsUrl,
       probePath: locatePackagedProbe(),
+      axePath: locatePackagedAxe(),
     });
     if (dashboard !== null) await dashboard.close();
     await persistor.flush();
@@ -261,6 +278,7 @@ export async function runRun(opts: RunCommandOptions): Promise<number> {
         skipWebServer: opts.skipWebServer,
         probeWsUrl: dashboard?.probeWsUrl,
         probePath: locatePackagedProbe(),
+        axePath: locatePackagedAxe(),
       });
     } finally {
       if (diagnosisPromises.length > 0) {

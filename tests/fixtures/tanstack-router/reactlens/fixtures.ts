@@ -199,6 +199,73 @@ function convert(node: CdpAxNode, byId: Map<string, CdpAxNode>): AxNodeOut {
   return out;
 }
 
+// P13: run axe-core against the page at end-of-test, emit one event per
+// violation. Resolves axe-core from reactlens' own install rather than the
+// user's, so users don't have to add it as a dep themselves.
+let cachedAxeSource: string | null | undefined;
+
+function locateAxeSource(): string | null {
+  if (cachedAxeSource !== undefined) return cachedAxeSource;
+  // Highest priority: explicit path from the runner (set by reactlens-dev
+  // when pnpm's strict isolation hides axe-core from require.resolve in
+  // the integration suite). Published users get the require.resolve path
+  // for free since axe-core is a regular dep of reactlens.
+  const override = process.env.REACTLENS_AXE_PATH;
+  if (override !== undefined && override.length > 0) {
+    try {
+      cachedAxeSource = readFileSync(override, 'utf8');
+      return cachedAxeSource;
+    } catch {
+      /* fall through to require.resolve */
+    }
+  }
+  try {
+    cachedAxeSource = readFileSync(require.resolve('axe-core/axe.min.js'), 'utf8');
+  } catch {
+    cachedAxeSource = null;
+  }
+  return cachedAxeSource;
+}
+
+type AxeViolationNode = { target: string[] };
+type AxeViolation = {
+  id: string;
+  impact: 'minor' | 'moderate' | 'serious' | 'critical' | null;
+  description: string;
+  help: string;
+  helpUrl: string;
+  nodes: AxeViolationNode[];
+};
+
+async function captureA11yViolations(page: Page, testId: string, frameSocket: FrameSocket): Promise<void> {
+  const axeSource = locateAxeSource();
+  if (axeSource === null) return;
+  try {
+    // Inject axe into the page if not already present, then run it. Using
+    // page.evaluate(axeSource) is safe even if axe is already loaded — the
+    // IIFE re-binds window.axe idempotently.
+    await page.evaluate(axeSource);
+    const result = await page.evaluate(async () =>
+      (window as unknown as { axe: { run: () => Promise<{ violations: AxeViolation[] }> } }).axe.run(),
+    );
+    for (const v of result.violations) {
+      frameSocket.send({
+        t: 'a11y:violation',
+        testId,
+        stepId: testId,
+        ruleId: v.id,
+        impact: v.impact,
+        description: v.description,
+        help: v.help,
+        helpUrl: v.helpUrl,
+        targets: v.nodes.flatMap((n) => n.target),
+      });
+    }
+  } catch {
+    /* axe failed or page closed; treat as no violations */
+  }
+}
+
 async function captureA11ySnapshot(page: Page, testId: string, frameSocket: FrameSocket): Promise<void> {
   let cdp: Awaited<ReturnType<Page['context']>['newCDPSession']> | null = null;
   try {
@@ -316,6 +383,7 @@ export const test = base.extend<{ reactlens: void }>({
         // is mid-handshake; the small 100 ms grace below gives the buffer
         // a chance to drain before close().
         await captureA11ySnapshot(page, testInfo.testId, frameSocket);
+        await captureA11yViolations(page, testInfo.testId, frameSocket);
         await detach();
         await new Promise((r) => setTimeout(r, 100));
         frameSocket.close();

@@ -114,6 +114,23 @@ export type RunEvent =
   // the Playwright fixture via page.accessibility.snapshot(). Drives
   // semantic visual regression — diff a11y trees instead of pixels.
   | { t: 'a11y:snapshot'; testId: string; stepId: string; tree: AxNode }
+  // P13: one event per accessibility violation found by axe-core at
+  // end-of-test. Promotes a11y to first-class evidence in every test run —
+  // the dashboard surfaces these alongside props/state in the inspector,
+  // and a per-run summary lets the inner dev loop catch regressions.
+  | {
+      t: 'a11y:violation';
+      testId: string;
+      stepId: string;
+      ruleId: string;
+      impact: 'minor' | 'moderate' | 'serious' | 'critical' | null;
+      description: string;
+      help: string;
+      helpUrl: string;
+      // CSS selector paths for each offending element axe-core flagged.
+      // Flattened so consumers don't need to parse axe's nested 'nodes' shape.
+      targets: string[];
+    }
   | { t: 'diagnosis:start'; testId: string }
   | { t: 'diagnosis:chunk'; testId: string; text: string }
   | { t: 'diagnosis:end'; testId: string; result: Diagnosis };
@@ -135,6 +152,7 @@ export const ALL_EVENT_TYPES = [
   'component:snapshot',
   'component:event',
   'a11y:snapshot',
+  'a11y:violation',
   'diagnosis:start',
   'diagnosis:chunk',
   'diagnosis:end',
