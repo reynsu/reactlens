@@ -4,6 +4,7 @@
 import { existsSync } from 'node:fs';
 import { readFile, writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
+import { CostTracker, withCostTracking } from '../agent/cost';
 import { pickAgentRunner } from '../agent/select';
 import { ReactLensError } from '../utils/errors';
 import { logger } from '../utils/logger';
@@ -15,6 +16,7 @@ export type AnalyzeCommandOptions = {
   reportPath: string;
   outFile?: string;
   useClaudeCode?: boolean;
+  maxCost?: number;
 };
 
 type PlaywrightReport = {
@@ -102,7 +104,9 @@ export async function runAnalyze(opts: AnalyzeCommandOptions): Promise<number> {
   if (!existsSync(reportPath)) {
     throw new ReactLensError(`report file not found: ${reportPath}`, { code: 'ANALYZE_NO_REPORT' });
   }
-  const agent = await pickAgentRunner({ commandName: 'analyze', useClaudeCode: opts.useClaudeCode });
+  const baseAgent = await pickAgentRunner({ commandName: 'analyze', useClaudeCode: opts.useClaudeCode });
+  const tracker = new CostTracker(opts.maxCost !== undefined ? { maxUsd: opts.maxCost } : {});
+  const agent = withCostTracking(baseAgent, tracker);
 
   const raw = await readFile(reportPath, 'utf8');
   const report = JSON.parse(raw) as PlaywrightReport;
@@ -132,5 +136,7 @@ export async function runAnalyze(opts: AnalyzeCommandOptions): Promise<number> {
   } else {
     process.stdout.write(md + '\n');
   }
+  const total = tracker.total();
+  if (total.calls > 0) logger.info({ cost: total }, 'agent cost summary');
   return 0;
 }

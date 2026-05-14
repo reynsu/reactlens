@@ -46,12 +46,14 @@ function buildProgram(): Command {
     .option('--pages <glob>', 'limit generation to a subset of components')
     .option('--skip-typecheck', 'skip running tsc on generated tests', false)
     .option('--use-claude-code', 'route through local claude CLI (Max-billed; local-dev only)', false)
-    .action(async (opts: { cwd: string; pages?: string; skipTypecheck: boolean; useClaudeCode: boolean }) => {
+    .option('--max-cost <usd>', 'abort the command once aggregate cost crosses this USD value', parseFloat)
+    .action(async (opts: { cwd: string; pages?: string; skipTypecheck: boolean; useClaudeCode: boolean; maxCost?: number }) => {
       const code = await runGenerate({
         cwd: opts.cwd,
         pages: opts.pages,
         skipTypecheck: opts.skipTypecheck,
         useClaudeCode: opts.useClaudeCode,
+        ...(opts.maxCost !== undefined ? { maxCost: opts.maxCost } : {}),
       });
       process.exitCode = code;
     });
@@ -67,7 +69,8 @@ function buildProgram(): Command {
     .option('--ci', 'CI mode: no dashboard, no auto-open, JUnit-friendly output', false)
     .option('--use-claude-code', 'route diagnosis through local claude CLI (Max-billed; local-dev only)', false)
     .option('--save-snapshots-to <dir>', 'write per-test component snapshots (one <testId>.json + manifest.json) into <dir> after the run')
-    .action(async (opts: { cwd: string; reporter: string; skipWebServer: boolean; dashboard: boolean; open: boolean; analyze: boolean; ci: boolean; useClaudeCode: boolean; saveSnapshotsTo?: string }) => {
+    .option('--max-cost <usd>', 'abort the command once aggregate cost crosses this USD value', parseFloat)
+    .action(async (opts: { cwd: string; reporter: string; skipWebServer: boolean; dashboard: boolean; open: boolean; analyze: boolean; ci: boolean; useClaudeCode: boolean; saveSnapshotsTo?: string; maxCost?: number }) => {
       const reporter = opts.reporter === 'json' ? 'json' : 'text';
       const code = await runRun({
         cwd: opts.cwd,
@@ -79,6 +82,7 @@ function buildProgram(): Command {
         ci: opts.ci,
         useClaudeCode: opts.useClaudeCode,
         ...(opts.saveSnapshotsTo !== undefined ? { saveSnapshotsTo: opts.saveSnapshotsTo } : {}),
+        ...(opts.maxCost !== undefined ? { maxCost: opts.maxCost } : {}),
       });
       process.exitCode = code;
     });
@@ -89,12 +93,14 @@ function buildProgram(): Command {
     .option('--cwd <path>', 'project directory', process.cwd())
     .option('--out <file>', 'write Markdown to this file instead of stdout')
     .option('--use-claude-code', 'route through local claude CLI (Max-billed; local-dev only)', false)
-    .action(async (report: string, opts: { cwd: string; out?: string; useClaudeCode: boolean }) => {
+    .option('--max-cost <usd>', 'abort the command once aggregate cost crosses this USD value', parseFloat)
+    .action(async (report: string, opts: { cwd: string; out?: string; useClaudeCode: boolean; maxCost?: number }) => {
       const code = await runAnalyze({
         cwd: opts.cwd,
         reportPath: report,
         outFile: opts.out,
         useClaudeCode: opts.useClaudeCode,
+        ...(opts.maxCost !== undefined ? { maxCost: opts.maxCost } : {}),
       });
       process.exitCode = code;
     });
@@ -103,8 +109,13 @@ function buildProgram(): Command {
     .description('regenerate tests for changed components')
     .option('--cwd <path>', 'project directory', process.cwd())
     .option('--use-claude-code', 'route through local claude CLI (Max-billed; local-dev only)', false)
-    .action(async (opts: { cwd: string; useClaudeCode: boolean }) => {
-      const code = await runRegen({ cwd: opts.cwd, useClaudeCode: opts.useClaudeCode });
+    .option('--max-cost <usd>', 'abort the command once aggregate cost crosses this USD value', parseFloat)
+    .action(async (opts: { cwd: string; useClaudeCode: boolean; maxCost?: number }) => {
+      const code = await runRegen({
+        cwd: opts.cwd,
+        useClaudeCode: opts.useClaudeCode,
+        ...(opts.maxCost !== undefined ? { maxCost: opts.maxCost } : {}),
+      });
       process.exitCode = code;
     });
 

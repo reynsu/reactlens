@@ -1,6 +1,7 @@
 import { existsSync } from 'node:fs';
 import { resolve, join } from 'node:path';
 import { execa } from 'execa';
+import { CostTracker, withCostTracking } from '../agent/cost';
 import { pickAgentRunner } from '../agent/select';
 import { loadConfig } from '../config/load';
 import { analyzeComponent } from '../ast/component-analyzer';
@@ -14,12 +15,17 @@ export type GenerateCommandOptions = {
   pages?: string;
   skipTypecheck?: boolean;
   useClaudeCode?: boolean;
+  // Hard cap on aggregate USD across all query() calls. The decorator throws
+  // AGENT_COST_EXCEEDED at the next message boundary once the cap is hit.
+  maxCost?: number;
 };
 
 export async function runGenerate(opts: GenerateCommandOptions): Promise<number> {
   const cwd = resolve(opts.cwd);
   const config = await loadConfig(cwd);
-  const agent = await pickAgentRunner({ commandName: 'generate', useClaudeCode: opts.useClaudeCode });
+  const baseAgent = await pickAgentRunner({ commandName: 'generate', useClaudeCode: opts.useClaudeCode });
+  const tracker = new CostTracker(opts.maxCost !== undefined ? { maxUsd: opts.maxCost } : {});
+  const agent = withCostTracking(baseAgent, tracker);
 
   const patterns = opts.pages !== undefined ? [opts.pages] : config.componentGlobs;
   const components = await expandComponentGlobs(cwd, patterns);
@@ -56,6 +62,8 @@ export async function runGenerate(opts: GenerateCommandOptions): Promise<number>
   if (opts.skipTypecheck !== true) {
     await runTscOnGenerated(cwd, config.output);
   }
+  const total = tracker.total();
+  if (total.calls > 0) logger.info({ cost: total }, 'agent cost summary');
   logger.info({ filesWritten: written }, 'generate complete');
   return 0;
 }

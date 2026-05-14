@@ -5,6 +5,7 @@ import { createHash } from 'node:crypto';
 import { existsSync } from 'node:fs';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
+import { CostTracker, withCostTracking } from '../agent/cost';
 import { pickAgentRunner } from '../agent/select';
 import { loadConfig } from '../config/load';
 import { analyzeComponent } from '../ast/component-analyzer';
@@ -36,10 +37,12 @@ async function saveCache(cwd: string, cache: CacheShape): Promise<void> {
   await writeFile(path, JSON.stringify(cache, null, 2));
 }
 
-export async function runRegen(opts: { cwd: string; useClaudeCode?: boolean }): Promise<number> {
+export async function runRegen(opts: { cwd: string; useClaudeCode?: boolean; maxCost?: number }): Promise<number> {
   const cwd = resolve(opts.cwd);
   const config = await loadConfig(cwd);
-  const agent = await pickAgentRunner({ commandName: 'regen', useClaudeCode: opts.useClaudeCode });
+  const baseAgent = await pickAgentRunner({ commandName: 'regen', useClaudeCode: opts.useClaudeCode });
+  const tracker = new CostTracker(opts.maxCost !== undefined ? { maxUsd: opts.maxCost } : {});
+  const agent = withCostTracking(baseAgent, tracker);
 
   const components = await expandComponentGlobs(cwd, config.componentGlobs);
   const cache = await loadCache(cwd);
@@ -67,6 +70,8 @@ export async function runRegen(opts: { cwd: string; useClaudeCode?: boolean }): 
   }
 
   await saveCache(cwd, next);
+  const total = tracker.total();
+  if (total.calls > 0) logger.info({ cost: total }, 'agent cost summary');
   logger.info({ regenerated, total: components.length }, 'regen complete');
   return 0;
 }

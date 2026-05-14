@@ -1,6 +1,7 @@
 import { existsSync } from 'node:fs';
 import { resolve, join } from 'node:path';
 import { spawn } from 'node:child_process';
+import { CostTracker, withCostTracking } from '../agent/cost';
 import { pickAgentRunner } from '../agent/select';
 import { diagnose } from '../analyzer/failure-agent';
 import { loadConfig } from '../config/load';
@@ -30,6 +31,9 @@ export type RunCommandOptions = {
   // per failing test, plus a manifest.json mapping ids to titles/spec files.
   // Used by the diagnostic-eval pipeline to harvest real bridge captures.
   saveSnapshotsTo?: string;
+  // Hard cap on aggregate USD across all diagnosis query() calls. The
+  // decorator throws AGENT_COST_EXCEEDED at the next message boundary.
+  maxCost?: number;
 };
 
 type Status = 'running' | 'passed' | 'failed' | 'skipped' | 'timedOut';
@@ -154,15 +158,18 @@ export async function runRun(opts: RunCommandOptions): Promise<number> {
     (opts.useClaudeCode === true ||
       process.env.REACTLENS_USE_CLAUDE_CODE === '1' ||
       process.env.ANTHROPIC_API_KEY !== undefined);
+  const costTracker = new CostTracker(opts.maxCost !== undefined ? { maxUsd: opts.maxCost } : {});
   if (canDiagnose) {
-    let agentPromise: ReturnType<typeof pickAgentRunner> | null = null;
+    let agentPromise: Promise<ReturnType<typeof withCostTracking>> | null = null;
     bus.on('test:end', (e) => {
       if (e.status !== 'failed' && e.status !== 'timedOut') return;
       const t = testState.get(e.id);
       if (t === undefined) return;
       bus.emit({ t: 'diagnosis:start', testId: e.id });
       if (agentPromise === null) {
-        agentPromise = pickAgentRunner({ commandName: 'run', useClaudeCode: opts.useClaudeCode });
+        agentPromise = pickAgentRunner({ commandName: 'run', useClaudeCode: opts.useClaudeCode }).then(
+          (base) => withCostTracking(base, costTracker),
+        );
       }
       const promise = agentPromise
         .then((agent) =>
@@ -251,5 +258,7 @@ export async function runRun(opts: RunCommandOptions): Promise<number> {
   process.stdout.write(
     `\n${summary.passed} passed, ${summary.failed} failed, ${summary.skipped} skipped (${summary.duration}ms)\n`,
   );
+  const costTotal = costTracker.total();
+  if (costTotal.calls > 0) logger.info({ cost: costTotal }, 'agent cost summary');
   return summary.exitCode;
 }

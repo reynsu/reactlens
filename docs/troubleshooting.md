@@ -123,3 +123,10 @@ Playwright exited with a code outside the expected `{0, 1}` range — meaning th
 A bundled prompt file (`src/generator/prompts/*.md` or `src/analyzer/prompts/*.md`) couldn't be found at runtime. This is almost always a packaging bug — the published tarball is missing the prompts directory. Reinstall the package from npm to recover, and file an issue if it persists.
 
 If you're developing reactlens itself, run `pnpm build` to regenerate `dist/`.
+
+<a id="agent-cost-exceeded"></a>
+## `AGENT_COST_EXCEEDED`
+
+You passed `--max-cost <usd>` and the running aggregate hit the cap. The command aborted at the next message boundary (it can overshoot by at most one in-flight result event because individual SDK turns are not preemptable).
+
+To recover: rerun with a higher `--max-cost`, or accept the partial output that was already streamed. The local-CLI path (`--use-claude-code`) is billed against your Max account rather than the API, so `--max-cost` is purely advisory there — token usage is still tracked and reported but the cap is a soft alert.

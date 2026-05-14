@@ -29,6 +29,7 @@ const HELP_URLS: Record<string, string> = {
   RUNNER_INFRA_ERROR: `${DOCS_BASE}#runner-infra-error`,
   GENERATOR_PROMPT_MISSING: `${DOCS_BASE}#prompt-missing`,
   DIAGNOSIS_PROMPT_MISSING: `${DOCS_BASE}#prompt-missing`,
+  AGENT_COST_EXCEEDED: `${DOCS_BASE}#agent-cost-exceeded`,
 };
 
 export class ReactLensError extends Error {
