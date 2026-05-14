@@ -95,7 +95,9 @@ export async function startDashboardServer(opts: DashboardServerOptions): Promis
           res.status(404).type('text').send('frame not found');
           return;
         }
-        res.type('image/jpeg').sendFile(abs);
+        // dotfiles: 'allow' because our path includes ".reactlens/" — `send`
+        // defaults to rejecting any path segment that starts with a dot.
+        res.type('image/jpeg').sendFile(abs, { dotfiles: 'allow' });
       } catch (err) {
         if (/invalid /i.test((err as Error).message)) {
           res.status(400).type('text').send((err as Error).message);

@@ -6,6 +6,7 @@ import { ComponentInspector } from './components/ComponentInspector';
 import { DiagnosticsPanel } from './components/DiagnosticsPanel';
 import { RunPicker } from './components/RunPicker';
 import { TimelineSlider } from './components/TimelineSlider';
+import { buildTimelineFromEvents } from './replay-timeline';
 
 type ActiveStep = { stepId: string; title: string };
 
@@ -226,26 +227,19 @@ function useDashboardSocket(
   return { connected };
 }
 
-// Hydrates state from a past run's events.jsonl. Builds the next state in a
-// local variable using the existing reducer, then dispatches one `replace`
-// so React only renders once for the whole replay.
-//
-// Side-builds timelineByTest as it walks lines: step:start pushes a new entry,
-// frame/component:snapshot attach to the matching step (by stepId when
-// available, otherwise the currently-open step). The slider scrubs this.
+// Hydrates state from a past run's events.jsonl. Reduces over the events to
+// build head-of-test maps, runs buildTimelineFromEvents to populate the
+// slider data, then dispatches one `replace` so React renders once.
 async function loadPastRun(runId: string, dispatch: React.Dispatch<Action>): Promise<void> {
   const res = await fetch(`/api/runs/${encodeURIComponent(runId)}/events`);
   if (!res.ok) throw new Error(`failed to load run ${runId}: ${res.status}`);
   const text = await res.text();
 
-  const timelineByTest = new Map<string, TimelineStep[]>();
-  // The index of the currently-open step per test. Frame events have no
-  // stepId of their own in the standard RunEvent shape, so we lean on this
-  // to know which step a freshly-arrived frame belongs to.
-  const openStepIdx = new Map<string, number>();
+  const frameUrl = (frameRef: string): string =>
+    `/api/runs/${encodeURIComponent(runId)}/${frameRef}`;
+  const timelineByTest = buildTimelineFromEvents(text, frameUrl);
 
   let next: State = { ...initialState, mode: 'replay', runId };
-
   for (const line of text.split('\n')) {
     if (line.length === 0) continue;
     let parsed: Record<string, unknown>;
@@ -254,50 +248,11 @@ async function loadPastRun(runId: string, dispatch: React.Dispatch<Action>): Pro
     } catch {
       continue;
     }
-
-    const t = parsed['t'];
-    const testId = parsed['testId'] as string | undefined;
-
-    // Build the timeline side-structure first so frame/snapshot can attach to
-    // the right entry below.
-    if (t === 'step:start' && testId !== undefined) {
-      const arr = timelineByTest.get(testId) ?? [];
-      arr.push({
-        stepId: (parsed['stepId'] as string | undefined) ?? '',
-        title: (parsed['title'] as string | undefined) ?? '',
-      });
-      timelineByTest.set(testId, arr);
-      openStepIdx.set(testId, arr.length - 1);
-    } else if (t === 'frame' && testId !== undefined) {
-      const frameRef = parsed['frameRef'] as string | undefined;
-      const arr = timelineByTest.get(testId);
-      const idx = openStepIdx.get(testId);
-      if (arr !== undefined && idx !== undefined && frameRef !== undefined) {
-        const step = arr[idx];
-        if (step !== undefined) {
-          step.frame = { kind: 'url', url: `/api/runs/${encodeURIComponent(runId)}/${frameRef}` };
-        }
-      }
-    } else if (t === 'component:snapshot' && testId !== undefined) {
-      const stepId = parsed['stepId'] as string | undefined;
-      const arr = timelineByTest.get(testId);
-      if (arr !== undefined && arr.length > 0) {
-        const matched = stepId !== undefined ? arr.findIndex((s) => s.stepId === stepId) : -1;
-        const idx = matched >= 0 ? matched : (openStepIdx.get(testId) ?? arr.length - 1);
-        const step = arr[idx];
-        if (step !== undefined) step.tree = parsed['tree'] as TimelineStep['tree'];
-      }
-    }
-
-    // Existing reducer pass — keeps head-of-test maps populated as before.
-    if (t === 'frame') {
+    if (parsed['t'] === 'frame') {
+      const testId = parsed['testId'] as string | undefined;
       const frameRef = parsed['frameRef'] as string | undefined;
       if (testId === undefined || frameRef === undefined) continue;
-      next = reducer(next, {
-        t: 'replay:frame',
-        testId,
-        url: `/api/runs/${encodeURIComponent(runId)}/${frameRef}`,
-      });
+      next = reducer(next, { t: 'replay:frame', testId, url: frameUrl(frameRef) });
     } else {
       next = reducer(next, parsed as unknown as RunEvent);
     }
