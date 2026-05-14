@@ -41,6 +41,22 @@ body {
 .run-picker select:disabled { opacity: 0.6; cursor: wait; }
 .run-picker-status { font-size: 11px; color: var(--muted); }
 .run-picker-status.err { color: var(--fail); }
+.preview-column { display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
+.preview-column .preview { flex: 1; min-height: 0; }
+.timeline-slider {
+  padding: 8px 12px; border-top: 1px solid var(--border); background: var(--panel);
+  display: flex; flex-direction: column; gap: 4px;
+}
+.timeline-slider-row { display: flex; align-items: center; gap: 8px; }
+.timeline-slider input[type="range"] { flex: 1; cursor: pointer; }
+.timeline-step-counter {
+  font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums;
+  min-width: 48px;
+}
+.timeline-step-title {
+  font-size: 11px; color: var(--text);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
 .layout { display: grid; grid-template-columns: 320px 1fr 360px; height: 100%; overflow: hidden; }
 .panel { background: var(--panel); border-right: 1px solid var(--border); overflow: auto; }
 .panel:last-child { border-right: none; border-left: 1px solid var(--border); }

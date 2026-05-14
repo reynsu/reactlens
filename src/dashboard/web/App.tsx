@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
-import type { ComponentNode, Diagnosis, FrameSource, RunEvent, TestRow } from './types';
+import type { ComponentNode, Diagnosis, FrameSource, RunEvent, TestRow, TimelineStep } from './types';
 import { TestList } from './components/TestList';
 import { BrowserPreview } from './components/BrowserPreview';
 import { ComponentInspector } from './components/ComponentInspector';
 import { DiagnosticsPanel } from './components/DiagnosticsPanel';
 import { RunPicker } from './components/RunPicker';
+import { TimelineSlider } from './components/TimelineSlider';
 
 type ActiveStep = { stepId: string; title: string };
 
@@ -28,6 +29,12 @@ type State = {
   // Drives the "currently executing" indicator in the inspector header.
   // Cleared on step:end + test:end.
   activeStepByTest: Map<string, ActiveStep>;
+  // Replay-only: per-test step-by-step record of (frame, tree) snapshots.
+  // Built by the JSONL loader; empty in live mode. The slider scrubs this.
+  timelineByTest: Map<string, TimelineStep[]>;
+  // Replay-only: which step index the slider is parked on, per test.
+  // Defaults to last step (= end-of-test view) on initial hydration.
+  selectedStepIdxByTest: Map<string, number>;
 };
 
 const initialState: State = {
@@ -44,6 +51,8 @@ const initialState: State = {
   componentsByTest: new Map(),
   diagnosesByTest: new Map(),
   activeStepByTest: new Map(),
+  timelineByTest: new Map(),
+  selectedStepIdxByTest: new Map(),
 };
 
 type Action =
@@ -57,7 +66,10 @@ type Action =
   | { t: 'replay:start'; runId: string }
   | { t: 'replay:frame'; testId: string; url: string }
   | { t: 'live:resume' }
-  | { t: 'replace'; state: State };
+  | { t: 'replace'; state: State }
+  // Slider movement during replay. Rewires the head-of-test
+  // frame/tree to the chosen step so existing rendering stays unchanged.
+  | { t: 'select:step'; testId: string; stepIdx: number };
 
 function reducer(state: State, e: Action): State {
   switch (e.t) {
@@ -73,6 +85,25 @@ function reducer(state: State, e: Action): State {
       const framesByTest = new Map(state.framesByTest);
       framesByTest.set(e.testId, { kind: 'url', url: e.url });
       return { ...state, framesByTest };
+    }
+    case 'select:step': {
+      const steps = state.timelineByTest.get(e.testId);
+      if (steps === undefined || steps.length === 0) return state;
+      const idx = Math.max(0, Math.min(e.stepIdx, steps.length - 1));
+      const step = steps[idx];
+      if (step === undefined) return state;
+      const selectedStepIdxByTest = new Map(state.selectedStepIdxByTest);
+      selectedStepIdxByTest.set(e.testId, idx);
+      // Rewire head-of-test maps so BrowserPreview + ComponentInspector
+      // re-read the chosen step. If a step never produced a frame/tree
+      // we leave the previous value in place to avoid flicker.
+      const framesByTest = step.frame !== undefined
+        ? new Map(state.framesByTest).set(e.testId, step.frame)
+        : state.framesByTest;
+      const componentsByTest = step.tree !== undefined
+        ? new Map(state.componentsByTest).set(e.testId, step.tree)
+        : state.componentsByTest;
+      return { ...state, selectedStepIdxByTest, framesByTest, componentsByTest };
     }
     case 'run:start':
       return { ...state, runId: e.runId, totalTests: e.totalTests, tests: new Map(), passed: 0, failed: 0, skipped: 0 };
@@ -198,11 +229,23 @@ function useDashboardSocket(
 // Hydrates state from a past run's events.jsonl. Builds the next state in a
 // local variable using the existing reducer, then dispatches one `replace`
 // so React only renders once for the whole replay.
+//
+// Side-builds timelineByTest as it walks lines: step:start pushes a new entry,
+// frame/component:snapshot attach to the matching step (by stepId when
+// available, otherwise the currently-open step). The slider scrubs this.
 async function loadPastRun(runId: string, dispatch: React.Dispatch<Action>): Promise<void> {
   const res = await fetch(`/api/runs/${encodeURIComponent(runId)}/events`);
   if (!res.ok) throw new Error(`failed to load run ${runId}: ${res.status}`);
   const text = await res.text();
+
+  const timelineByTest = new Map<string, TimelineStep[]>();
+  // The index of the currently-open step per test. Frame events have no
+  // stepId of their own in the standard RunEvent shape, so we lean on this
+  // to know which step a freshly-arrived frame belongs to.
+  const openStepIdx = new Map<string, number>();
+
   let next: State = { ...initialState, mode: 'replay', runId };
+
   for (const line of text.split('\n')) {
     if (line.length === 0) continue;
     let parsed: Record<string, unknown>;
@@ -211,8 +254,43 @@ async function loadPastRun(runId: string, dispatch: React.Dispatch<Action>): Pro
     } catch {
       continue;
     }
-    if (parsed['t'] === 'frame') {
-      const testId = parsed['testId'] as string | undefined;
+
+    const t = parsed['t'];
+    const testId = parsed['testId'] as string | undefined;
+
+    // Build the timeline side-structure first so frame/snapshot can attach to
+    // the right entry below.
+    if (t === 'step:start' && testId !== undefined) {
+      const arr = timelineByTest.get(testId) ?? [];
+      arr.push({
+        stepId: (parsed['stepId'] as string | undefined) ?? '',
+        title: (parsed['title'] as string | undefined) ?? '',
+      });
+      timelineByTest.set(testId, arr);
+      openStepIdx.set(testId, arr.length - 1);
+    } else if (t === 'frame' && testId !== undefined) {
+      const frameRef = parsed['frameRef'] as string | undefined;
+      const arr = timelineByTest.get(testId);
+      const idx = openStepIdx.get(testId);
+      if (arr !== undefined && idx !== undefined && frameRef !== undefined) {
+        const step = arr[idx];
+        if (step !== undefined) {
+          step.frame = { kind: 'url', url: `/api/runs/${encodeURIComponent(runId)}/${frameRef}` };
+        }
+      }
+    } else if (t === 'component:snapshot' && testId !== undefined) {
+      const stepId = parsed['stepId'] as string | undefined;
+      const arr = timelineByTest.get(testId);
+      if (arr !== undefined && arr.length > 0) {
+        const matched = stepId !== undefined ? arr.findIndex((s) => s.stepId === stepId) : -1;
+        const idx = matched >= 0 ? matched : (openStepIdx.get(testId) ?? arr.length - 1);
+        const step = arr[idx];
+        if (step !== undefined) step.tree = parsed['tree'] as TimelineStep['tree'];
+      }
+    }
+
+    // Existing reducer pass — keeps head-of-test maps populated as before.
+    if (t === 'frame') {
       const frameRef = parsed['frameRef'] as string | undefined;
       if (testId === undefined || frameRef === undefined) continue;
       next = reducer(next, {
@@ -224,6 +302,15 @@ async function loadPastRun(runId: string, dispatch: React.Dispatch<Action>): Pro
       next = reducer(next, parsed as unknown as RunEvent);
     }
   }
+
+  // Park each test's slider on its last step — most useful default for the
+  // user opening a finished run is "where did it end up".
+  const selectedStepIdxByTest = new Map<string, number>();
+  for (const [testId, steps] of timelineByTest) {
+    selectedStepIdxByTest.set(testId, steps.length - 1);
+  }
+
+  next = { ...next, timelineByTest, selectedStepIdxByTest };
   dispatch({ t: 'replace', state: next });
 }
 
@@ -254,6 +341,11 @@ export function App(): JSX.Element {
   const onSelectLive = useCallback(() => {
     dispatch({ t: 'live:resume' });
   }, []);
+
+  const onStepChange = useCallback(
+    (testId: string, stepIdx: number) => dispatch({ t: 'select:step', testId, stepIdx }),
+    [],
+  );
 
   const sortedTests = useMemo(() => Array.from(state.tests.values()), [state.tests]);
   const selected = state.selectedTestId !== null ? state.tests.get(state.selectedTestId) : undefined;
@@ -292,7 +384,22 @@ export function App(): JSX.Element {
       </header>
       <div className="layout">
         <TestList tests={sortedTests} selectedId={state.selectedTestId} onSelect={(id) => dispatch({ t: 'select', id })} />
-        <BrowserPreview frame={selectedFrame} test={selected} />
+        <div className="preview-column">
+          <BrowserPreview frame={selectedFrame} test={selected} />
+          {state.mode === 'replay' && state.selectedTestId !== null && (() => {
+            const steps = state.timelineByTest.get(state.selectedTestId);
+            if (steps === undefined) return null;
+            const currentIdx = state.selectedStepIdxByTest.get(state.selectedTestId) ?? steps.length - 1;
+            const testId = state.selectedTestId;
+            return (
+              <TimelineSlider
+                steps={steps}
+                currentIdx={currentIdx}
+                onChange={(idx) => onStepChange(testId, idx)}
+              />
+            );
+          })()}
+        </div>
         <div className="panel">
           <ComponentInspector tree={selectedTree} activeStep={selectedActiveStep} />
           <DiagnosticsPanel test={selected} diagnosis={selectedDiagnosis} />

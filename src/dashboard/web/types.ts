@@ -38,3 +38,14 @@ export type PastRun = {
   skipped?: number;
   duration?: number;
 };
+
+// One entry per Playwright step in a replayed test. Built by the JSONL
+// loader so the TimelineSlider can scrub through DOM frame + component
+// tree state at every recorded step. Empty in live mode — the live
+// stream updates the head-of-test values directly.
+export type TimelineStep = {
+  stepId: string;
+  title: string;
+  frame?: FrameSource;
+  tree?: ComponentNode;
+};
