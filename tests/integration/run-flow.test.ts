@@ -49,6 +49,9 @@ describe('reactlens run flow', () => {
       });
 
       const events: Record<string, number> = {};
+      // Track per-event details we want to assert on. Keeping these light to
+      // avoid bloating the test's memory profile on long Next runs.
+      let sawSnapshotWithStepRewrite = false;
       let resolveDone: (() => void) | undefined;
       const done = new Promise<void>((resolve) => {
         resolveDone = resolve;
@@ -82,9 +85,17 @@ describe('reactlens run flow', () => {
 
       ws.on('message', (data) => {
         try {
-          const ev = JSON.parse(data.toString()) as { t?: string };
+          const ev = JSON.parse(data.toString()) as { t?: string; testId?: string; stepId?: string };
           if (typeof ev.t === 'string') {
             events[ev.t] = (events[ev.t] ?? 0) + 1;
+            if (
+              ev.t === 'component:snapshot' &&
+              typeof ev.testId === 'string' &&
+              typeof ev.stepId === 'string' &&
+              ev.stepId !== ev.testId
+            ) {
+              sawSnapshotWithStepRewrite = true;
+            }
             if (ev.t === 'run:end') {
               ws.close();
               resolveDone?.();
@@ -110,6 +121,11 @@ describe('reactlens run flow', () => {
       // Moat: component snapshots must be flowing on every supported stack.
       expect(events['component:snapshot'], `component:snapshot in ${fixture.name}`).toBeGreaterThan(0);
       expect(events['frame'], `frame in ${fixture.name}`).toBeGreaterThan(0);
+      // Server-side stepId rewrite: at least one snapshot during the run must
+      // carry a stepId derived from a step:start event (i.e. not equal to the
+      // testId default the fixture bakes in). This proves end-to-end that
+      // step:start → activeStep → snapshot rewrite is wired correctly.
+      expect(sawSnapshotWithStepRewrite, `stepId rewrite never fired in ${fixture.name}`).toBe(true);
 
       await proc.catch(() => undefined);
     },

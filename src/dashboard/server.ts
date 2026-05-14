@@ -76,10 +76,23 @@ export async function startDashboardServer(opts: DashboardServerOptions): Promis
     }
   }
 
+  // Track the active Playwright step per test so we can tag probe-side
+  // component:snapshot/event payloads with the real stepId. The probe doesn't
+  // know about steps (it sees the React fiber commits, not the test runner),
+  // so the fixture sets stepId = testId once at mount time and we overwrite
+  // here as step:start events flow through the bus.
+  //
+  // v0.2 time-travel needs this granularity — without it every snapshot in
+  // a test would scrub to the same row. Cleaning up on test:end keeps the
+  // map bounded across long runs.
+  const activeStep = new Map<string, string>();
+
   const disposers: Array<() => void> = [];
   for (const t of ALL_EVENT_TYPES) {
     disposers.push(opts.bus.on(t, (e) => bufferAndBroadcast(e as RunEvent)));
   }
+  disposers.push(opts.bus.on('step:start', (e) => activeStep.set(e.testId, e.stepId)));
+  disposers.push(opts.bus.on('test:end', (e) => activeStep.delete(e.id)));
 
   dashboardWss.on('connection', (client: WebSocket) => {
     // Replay buffered history so a late-joining dashboard isn't blank.
@@ -97,6 +110,14 @@ export async function startDashboardServer(opts: DashboardServerOptions): Promis
     client.on('message', (data) => {
       try {
         const event = JSON.parse(data.toString()) as RunEvent;
+        // Rewrite stepId on component-* events so it reflects the active
+        // Playwright step rather than the testId-shaped default the probe
+        // baked in at addInitScript time. See the activeStep comment above
+        // for the why.
+        if (event.t === 'component:snapshot' || event.t === 'component:event') {
+          const active = activeStep.get(event.testId);
+          if (active !== undefined) (event as { stepId: string }).stepId = active;
+        }
         // Echo onto the bus so other subscribers (frontend, diagnostics) see it.
         opts.bus.emit(event);
       } catch (err) {

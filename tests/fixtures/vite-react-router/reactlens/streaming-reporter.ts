@@ -55,6 +55,20 @@ function stepKey(test: TestCase, step: TestStep): string {
   return `${test.id}:${step.startTime.getTime()}:${step.title}`;
 }
 
+// Playwright assigns each step one of: 'test.step' (user-written `test.step()`
+// blocks), 'pw:api' (locator/page method calls — clicks, fills, waits),
+// 'expect' (assertions), 'hook' (beforeEach/afterEach lifecycle), 'fixture'
+// (worker/test fixture setup), 'attach' (artifact attachments).
+//
+// The first three are what shows up in the trace viewer as "user steps" —
+// the ones a developer reading the trace cares about. Emitting events for
+// hook/fixture/attach steps would flood the dashboard with internal plumbing
+// activity. We allow `test.step` even though our fixtures don't use it today,
+// because users will.
+function isUserFacingStep(category: string): boolean {
+  return category === 'test.step' || category === 'pw:api' || category === 'expect';
+}
+
 class ReactLensStreamingReporter implements Reporter {
   private startedAt = 0;
   private passed = 0;
@@ -82,12 +96,16 @@ class ReactLensStreamingReporter implements Reporter {
   }
 
   onStepBegin(test: TestCase, _result: TestResult, step: TestStep): void {
-    if (step.category !== 'test.step') return;
+    // Emit for user-facing step categories — the same set that shows up in
+    // Playwright's HTML trace viewer. Skip `hook`/`fixture`/`attach` which are
+    // internal noise. The dashboard server uses these step:start events to
+    // tag probe-side component:snapshot events with the active stepId.
+    if (!isUserFacingStep(step.category)) return;
     emit({ t: 'step:start', testId: test.id, stepId: stepKey(test, step), title: step.title });
   }
 
   onStepEnd(test: TestCase, _result: TestResult, step: TestStep): void {
-    if (step.category !== 'test.step') return;
+    if (!isUserFacingStep(step.category)) return;
     emit({
       t: 'step:end',
       testId: test.id,
