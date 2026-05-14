@@ -123,7 +123,11 @@ export async function runRun(opts: RunCommandOptions): Promise<number> {
   let dashboard: Awaited<ReturnType<typeof startDashboardServer>> | null = null;
   if (wantDashboard) {
     try {
-      dashboard = await startDashboardServer({ port: config.dashboard.port, bus });
+      dashboard = await startDashboardServer({
+        port: config.dashboard.port,
+        bus,
+        runsDir: join(cwd, '.reactlens', 'runs'),
+      });
       const url = `http://localhost:${dashboard.port}`;
       logger.info({ url }, 'dashboard listening');
       if (opts.open !== false && config.dashboard.open) tryOpenInBrowser(url);

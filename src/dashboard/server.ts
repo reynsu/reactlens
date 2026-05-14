@@ -6,10 +6,14 @@ import { WebSocketServer, type WebSocket } from 'ws';
 import { logger } from '../utils/logger';
 import { EventBus } from '../runner/event-bus';
 import { ALL_EVENT_TYPES, type RunEvent } from '../runner/events';
+import { frameExists, listRuns, loadRunEvents, resolveFramePath } from './runs-index';
 
 export type DashboardServerOptions = {
   port: number;
   bus: EventBus;
+  // Absolute path to <cwd>/.reactlens/runs/, used by the past-runs API routes.
+  // When omitted, those routes return 404 (server still serves the live run).
+  runsDir?: string;
 };
 
 export type DashboardServer = {
@@ -54,6 +58,53 @@ export async function startDashboardServer(opts: DashboardServerOptions): Promis
     app.get('/', (_req, res) => res.type('html').send(FALLBACK_HTML));
   }
   app.get('/healthz', (_req, res) => res.json({ ok: true }));
+
+  // Past-runs API. Mounted before the static handler so /api/* never falls
+  // through to the SPA. When runsDir is unset the routes 404 — keeps the
+  // server usable without persistence wired (e.g. legacy callers).
+  if (opts.runsDir !== undefined) {
+    const runsDir = opts.runsDir;
+    app.get('/api/runs', async (_req, res, next) => {
+      try {
+        res.json(await listRuns(runsDir));
+      } catch (err) {
+        next(err);
+      }
+    });
+    app.get('/api/runs/:id/events', async (req, res, next) => {
+      try {
+        const body = await loadRunEvents(runsDir, req.params.id);
+        res.type('application/x-ndjson').send(body);
+      } catch (err) {
+        const message = (err as Error).message;
+        if (/invalid run id/i.test(message)) {
+          res.status(400).type('text').send(message);
+          return;
+        }
+        if (/run not found/i.test(message)) {
+          res.status(404).type('text').send(message);
+          return;
+        }
+        next(err);
+      }
+    });
+    app.get('/api/runs/:id/frames/:testId/:filename', async (req, res, next) => {
+      try {
+        const abs = resolveFramePath(runsDir, req.params.id, req.params.testId, req.params.filename);
+        if (!(await frameExists(abs))) {
+          res.status(404).type('text').send('frame not found');
+          return;
+        }
+        res.type('image/jpeg').sendFile(abs);
+      } catch (err) {
+        if (/invalid /i.test((err as Error).message)) {
+          res.status(400).type('text').send((err as Error).message);
+          return;
+        }
+        next(err);
+      }
+    });
+  }
 
   const server = createServer(app);
   const dashboardWss = new WebSocketServer({ noServer: true });
@@ -167,7 +218,12 @@ export async function startDashboardServer(opts: DashboardServerOptions): Promis
     });
   });
 
-  const port = opts.port;
+  // When opts.port is 0, the OS assigns an ephemeral port. Read it back from
+  // server.address() rather than echoing opts.port — otherwise tests using
+  // port 0 (e.g. the dashboard-routes suite) get a reported port of 0 and
+  // their fetch() calls fail with EADDRNOTAVAIL.
+  const address = server.address();
+  const port = typeof address === 'object' && address !== null ? address.port : opts.port;
   const close = async (): Promise<void> => {
     for (const d of disposers) d();
     for (const c of dashboardWss.clients) c.close();
