@@ -2,6 +2,7 @@ import { Command } from 'commander';
 import { readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { runAnalyze } from './commands/analyze';
+import { runDiff } from './commands/diff';
 import { runGenerate } from './commands/generate';
 import { runInit } from './commands/init';
 import { runRegen } from './commands/regen';
@@ -104,6 +105,17 @@ function buildProgram(): Command {
         useClaudeCode: opts.useClaudeCode,
         ...(opts.maxCost !== undefined ? { maxCost: opts.maxCost } : {}),
       });
+      process.exitCode = code;
+    });
+  program
+    .command('diff')
+    .description('semantic diff between two persisted runs (P12)')
+    .argument('<runIdA>', 'baseline run id (under .reactlens/runs)')
+    .argument('<runIdB>', 'comparison run id (under .reactlens/runs)')
+    .option('--cwd <path>', 'project directory', process.cwd())
+    .option('--json', 'emit SemanticDiff[] as JSON instead of text', false)
+    .action(async (runIdA: string, runIdB: string, opts: { cwd: string; json: boolean }) => {
+      const code = await runDiff({ cwd: opts.cwd, runIdA, runIdB, json: opts.json });
       process.exitCode = code;
     });
   program

@@ -30,6 +30,7 @@ const HELP_URLS: Record<string, string> = {
   GENERATOR_PROMPT_MISSING: `${DOCS_BASE}#prompt-missing`,
   DIAGNOSIS_PROMPT_MISSING: `${DOCS_BASE}#prompt-missing`,
   AGENT_COST_EXCEEDED: `${DOCS_BASE}#agent-cost-exceeded`,
+  DIFF_RUN_NOT_FOUND: `${DOCS_BASE}#diff-run-not-found`,
 };
 
 export class ReactLensError extends Error {
