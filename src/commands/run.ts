@@ -37,6 +37,10 @@ export type RunCommandOptions = {
   // Hard cap on aggregate USD across all diagnosis query() calls. The
   // decorator throws AGENT_COST_EXCEEDED at the next message boundary.
   maxCost?: number;
+  // P10: after the initial run, watch <cwd>/src and <cwd>/e2e and re-run on
+  // any change. Each iteration writes its own .reactlens/runs/<id>/ dir.
+  // Dashboard + bus + costTracker persist across iterations. Exits on SIGINT.
+  watch?: boolean;
 };
 
 type Status = 'running' | 'passed' | 'failed' | 'skipped' | 'timedOut';
@@ -110,16 +114,17 @@ export async function runRun(opts: RunCommandOptions): Promise<number> {
   const cwd = resolve(opts.cwd);
   const config = await loadConfig(cwd);
   const bus = new EventBus();
-  const runId = generateRunId();
-  logger.info({ runId }, 'run starting');
 
-  // Persist every event for v0.2 time-travel. Attached before any other
-  // subscriber so the on-disk log is the most complete record of the run.
+  // Persist every event for v0.2 time-travel. In watch mode this is recreated
+  // each iteration with a fresh runId; the first iteration is set up here so
+  // the JSON-reporter early-return path still has a single persistor.
   const reactlensDir = join(cwd, '.reactlens');
   await ensureGitignore(reactlensDir);
-  const runDir = join(reactlensDir, 'runs', runId);
-  const persistor = new EventPersistor({ runDir });
+  let runId = generateRunId();
+  let runDir = join(reactlensDir, 'runs', runId);
+  let persistor = new EventPersistor({ runDir });
   persistor.attach(bus);
+  logger.info({ runId }, 'run starting');
 
   const wantDashboard = opts.noDashboard !== true && opts.reporter !== 'json';
 
@@ -222,8 +227,15 @@ export async function runRun(opts: RunCommandOptions): Promise<number> {
   const state = { totalTests: 0, rows: [] as Row[] };
   const isTty = process.stdout.isTTY === true;
 
+  // P10: bus subscribers stay registered across watch iterations; only the
+  // per-iteration mutables need resetting. The reset listener fires on every
+  // run:start (including watch re-runs) so the CLI table doesn't accumulate
+  // rows from prior iterations and testState/diagnosisPromises start clean.
   bus.on('run:start', (e) => {
     state.totalTests = e.totalTests;
+    state.rows = [];
+    testState.clear();
+    diagnosisPromises.length = 0;
     reprint(state, isTty);
   });
   bus.on('test:start', (e) => {
@@ -239,50 +251,157 @@ export async function runRun(opts: RunCommandOptions): Promise<number> {
     reprint(state, isTty);
   });
 
-  let summary: RunSummary;
-  try {
-    summary = await runTests({
-      cwd,
-      bus,
-      runId,
-      skipWebServer: opts.skipWebServer,
-      probeWsUrl: dashboard?.probeWsUrl,
-      probePath: locatePackagedProbe(),
-    });
-  } finally {
-    if (diagnosisPromises.length > 0) {
-      await Promise.allSettled(diagnosisPromises);
+  async function executeOneRun(): Promise<RunSummary> {
+    let summary: RunSummary;
+    try {
+      summary = await runTests({
+        cwd,
+        bus,
+        runId,
+        skipWebServer: opts.skipWebServer,
+        probeWsUrl: dashboard?.probeWsUrl,
+        probePath: locatePackagedProbe(),
+      });
+    } finally {
+      if (diagnosisPromises.length > 0) {
+        await Promise.allSettled(diagnosisPromises);
+      }
+      if (opts.ci === true && ciDiagnoses.length > 0) {
+        const path = join(cwd, 'reactlens-diagnoses.json');
+        const { writeFile } = await import('node:fs/promises');
+        await writeFile(path, JSON.stringify(ciDiagnoses, null, 2));
+        logger.info({ path, count: ciDiagnoses.length }, 'wrote CI diagnoses artifact');
+        ciDiagnoses.length = 0;
+      }
+      if (opts.saveSnapshotsTo !== undefined) {
+        const outDir = resolve(cwd, opts.saveSnapshotsTo);
+        const tests = Array.from(testState.entries()).map(([id, t]) => ({
+          id,
+          title: t.title,
+          file: t.file,
+          ...(t.snapshot !== undefined ? { snapshot: t.snapshot } : {}),
+        }));
+        const result = await persistSnapshots({ outDir, tests, writeManifest: true });
+        logger.info(
+          { outDir, written: result.written.length, skipped: result.skipped.length },
+          'wrote per-test snapshots',
+        );
+      }
+      await persistor.flush();
+      persistor.detach();
+      logger.info({ runDir }, 'persisted run');
     }
-    if (opts.ci === true && ciDiagnoses.length > 0) {
-      const path = join(cwd, 'reactlens-diagnoses.json');
-      const { writeFile } = await import('node:fs/promises');
-      await writeFile(path, JSON.stringify(ciDiagnoses, null, 2));
-      logger.info({ path, count: ciDiagnoses.length }, 'wrote CI diagnoses artifact');
-    }
-    if (opts.saveSnapshotsTo !== undefined) {
-      const outDir = resolve(cwd, opts.saveSnapshotsTo);
-      const tests = Array.from(testState.entries()).map(([id, t]) => ({
-        id,
-        title: t.title,
-        file: t.file,
-        ...(t.snapshot !== undefined ? { snapshot: t.snapshot } : {}),
-      }));
-      const result = await persistSnapshots({ outDir, tests, writeManifest: true });
-      logger.info(
-        { outDir, written: result.written.length, skipped: result.skipped.length },
-        'wrote per-test snapshots',
-      );
-    }
-    if (dashboard !== null) await dashboard.close();
-    await persistor.flush();
-    persistor.detach();
-    logger.info({ runDir }, 'persisted run');
+    return summary;
   }
 
+  let summary = await executeOneRun();
   process.stdout.write(
     `\n${summary.passed} passed, ${summary.failed} failed, ${summary.skipped} skipped (${summary.duration}ms)\n`,
   );
+
+  if (opts.watch === true) {
+    summary = await runWatchLoop(cwd, async () => {
+      // Rotate the persistor for the next iteration before runTests fires.
+      runId = generateRunId();
+      runDir = join(reactlensDir, 'runs', runId);
+      persistor = new EventPersistor({ runDir });
+      persistor.attach(bus);
+      logger.info({ runId }, 'watch re-run starting');
+      const next = await executeOneRun();
+      process.stdout.write(
+        `\n${next.passed} passed, ${next.failed} failed, ${next.skipped} skipped (${next.duration}ms)\n`,
+      );
+      return next;
+    });
+  }
+
+  if (dashboard !== null) await dashboard.close();
   const costTotal = costTracker.total();
   if (costTotal.calls > 0) logger.info({ cost: costTotal }, 'agent cost summary');
   return summary.exitCode;
+}
+
+// Watches <cwd>/src and <cwd>/e2e via chokidar, debouncing rapid changes
+// (one save can fire 3-5 events in 100ms on macOS) and serializing reruns
+// so two saves in quick succession produce one re-run, not two. Returns
+// the summary of the last run before SIGINT.
+async function runWatchLoop(
+  cwd: string,
+  runOnce: () => Promise<RunSummary>,
+): Promise<RunSummary> {
+  const { default: chokidar } = await import('chokidar');
+  // Watch only the directories that influence test outcomes. We could be
+  // smarter later (read the user's playwright config for testDir, walk
+  // imports), but two top-level dirs cover the canonical layout and the
+  // false-positive cost of an extra re-run is trivial.
+  const watchPaths = [join(cwd, 'src'), join(cwd, 'e2e')];
+  const watcher = chokidar.watch(watchPaths, {
+    ignoreInitial: true,
+    ignored: (path) =>
+      path.includes('node_modules') ||
+      path.includes('.reactlens') ||
+      path.includes('playwright-report') ||
+      path.includes('test-results') ||
+      path.includes('/.git/'),
+  });
+
+  // chokidar's initial walk takes a tick on large trees. With ignoreInitial:
+  // true any file that appears before 'ready' is treated as pre-existing and
+  // suppressed — so callers (and tests) that wait for the watcher to be
+  // armed must hold off writes until this log line clears.
+  await new Promise<void>((resolve) => watcher.once('ready', () => resolve()));
+  logger.info({ watchPaths }, 'watch mode: ready · edits under these paths re-run the suite');
+
+  let lastSummary: RunSummary | null = null;
+  let isRunning = false;
+  let pendingRerun = false;
+  let debounce: NodeJS.Timeout | null = null;
+
+  async function trigger(): Promise<void> {
+    if (isRunning) {
+      pendingRerun = true;
+      return;
+    }
+    isRunning = true;
+    try {
+      lastSummary = await runOnce();
+    } catch (err) {
+      logger.warn({ err }, 'watch re-run failed; will trigger again on next change');
+    } finally {
+      isRunning = false;
+      if (pendingRerun) {
+        pendingRerun = false;
+        scheduleRerun();
+      }
+    }
+  }
+
+  function scheduleRerun(): void {
+    if (debounce !== null) clearTimeout(debounce);
+    debounce = setTimeout(() => {
+      debounce = null;
+      void trigger();
+    }, 250);
+  }
+
+  watcher.on('all', (_event, path) => {
+    logger.debug({ path }, 'watch: change detected');
+    scheduleRerun();
+  });
+
+  await new Promise<void>((resolve) => {
+    const onSigint = (): void => {
+      logger.info('watch mode: SIGINT received, shutting down');
+      resolve();
+    };
+    process.once('SIGINT', onSigint);
+  });
+
+  if (debounce !== null) clearTimeout(debounce);
+  await watcher.close();
+  // If a rerun was in flight, let it settle so its persistor flushes.
+  while (isRunning) {
+    await new Promise((r) => setTimeout(r, 50));
+  }
+  return lastSummary ?? { passed: 0, failed: 0, skipped: 0, duration: 0, exitCode: 0 };
 }
