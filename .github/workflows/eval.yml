@@ -1,0 +1,67 @@
+name: Diagnostic eval gate
+
+# Runs the diagnostic eval against the full case set in `tests/diagnostic-eval/cases/`
+# and fails the build if accuracy or false-confidence rate regresses past the
+# DoD #5 thresholds. The test file itself enforces the thresholds when the env
+# var below is set; without it, eval is informational only (matches local dev).
+#
+# Required secret: ANTHROPIC_API_KEY. Without it the eval suite skips its live
+# block and the workflow turns into a no-op — which is what we want for forked
+# PRs that can't see secrets, since we don't want them to fail-close.
+#
+# Manual trigger (`workflow_dispatch`) is included so a maintainer can replay
+# the gate after fixing the agent prompts without pushing a new commit.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  eval:
+    name: Run diagnostic eval set
+    runs-on: ubuntu-latest
+    # Cap so a runaway agent loop can't drain the runner minutes budget. The
+    # eval set today (n=15) takes ~5-10 min wall-clock against the SDK; 30 min
+    # leaves headroom for case growth without becoming an attack vector.
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11
+
+      - name: Cache pnpm store
+        uses: actions/cache@v4
+        with:
+          path: ~/.local/share/pnpm/store
+          key: pnpm-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-keys: pnpm-${{ runner.os }}-
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Build
+        run: pnpm build
+
+      - name: Run eval with thresholds
+        # `REACTLENS_EVAL_THRESHOLDS=1` flips the afterAll block from
+        # informational summary to hard assertions:
+        #   accuracy >= 80%
+        #   falseConfidenceRate <= 5%
+        # ANTHROPIC_API_KEY unlocks the live `describe.skipIf(!HAS_AGENT)`
+        # block; without it the suite skips and the job passes trivially —
+        # intentional for forked-PR fail-open semantics.
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          REACTLENS_EVAL_THRESHOLDS: '1'
+        run: pnpm test:eval

@@ -108,7 +108,19 @@ describe.skipIf(!HAS_AGENT)('diagnostic eval (with API)', () => {
     if (liveResults.length === 0) return;
     const metrics = aggregateMetrics(liveResults);
     logger.info({ metrics, ran: liveResults.length, total: allCases.length }, 'diagnostic eval summary');
-    // No threshold assertions yet — DoD #5 thresholds (>=80% / >=95% on high)
-    // belong in the CI gate (plan §7.7) and require the full set to have run.
+
+    // DoD #5 thresholds: accuracy >= 80%, false-confidence rate <= 5%.
+    // Only asserted when REACTLENS_EVAL_THRESHOLDS=1 is set AND the full
+    // case set ran (a `-t` filter that runs a subset can't be evaluated
+    // against these aggregate targets). The CI gate workflow sets the env var;
+    // local dev runs still produce the summary log without failing.
+    if (process.env.REACTLENS_EVAL_THRESHOLDS !== '1') return;
+    if (liveResults.length < allCases.length) {
+      throw new Error(
+        `REACTLENS_EVAL_THRESHOLDS=1 requires the full case set; only ${liveResults.length}/${allCases.length} ran. Remove the test filter or unset the env var.`,
+      );
+    }
+    expect(metrics.accuracy, 'eval accuracy must meet DoD #5 (>=80%)').toBeGreaterThanOrEqual(0.8);
+    expect(metrics.falseConfidenceRate, 'high-confidence accuracy must meet DoD #5 (<=5% false confidence)').toBeLessThanOrEqual(0.05);
   });
 });
