@@ -59,7 +59,10 @@ export class EventPersistor {
 
   private ensureRunDir(): Promise<void> {
     if (this.mkdirP === null) {
-      this.mkdirP = mkdir(this.runPath.dir, { recursive: true });
+      // mkdir returns Promise<string | undefined> (the path of the first
+      // dir created, or undefined if it already existed). Discard so the
+      // memoized promise matches its declared Promise<void> shape.
+      this.mkdirP = mkdir(this.runPath.dir, { recursive: true }).then(() => {});
     }
     return this.mkdirP;
   }

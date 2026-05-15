@@ -1,7 +1,11 @@
 // Frontend-local re-export of the canonical event protocol. Vite bundles the
 // referenced types at build time, so the runtime bundle stays self-contained;
 // keeping a single source prevents the protocol drift CLAUDE.md §9 warns about.
-export type {
+//
+// Split into `import type` + `export type` because the local `TimelineStep`
+// uses `ComponentNode` directly — a bare `export type {...} from ...`
+// re-exports without bringing the symbol into the file's scope.
+import type {
   Attachment,
   ComponentNode,
   Diagnosis,
@@ -10,6 +14,15 @@ export type {
   RunEventByType,
   RunEventType,
 } from '../../runner/events';
+export type {
+  Attachment,
+  ComponentNode,
+  Diagnosis,
+  HookSnapshot,
+  RunEvent,
+  RunEventByType,
+  RunEventType,
+};
 
 export type TestRow = {
   id: string;

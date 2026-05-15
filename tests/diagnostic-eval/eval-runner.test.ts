@@ -31,6 +31,11 @@ const CASES_DIR = join(__dirname, 'cases');
 // env-var-only check pre-dated the subscription-first refactor (acdbddf) and
 // would silently skip the eval when only the CLI was available, masking the
 // 16/16 accuracy gate.
+//
+// Top-level await works at runtime via vitest's vite/esbuild transform but
+// tsc rejects it under our NodeNext + CJS module setup (no `"type":"module"`
+// in package.json). Suppressed honestly so `pnpm typecheck` stays green.
+// @ts-expect-error TLA at module scope: vitest handles it; tsc does not.
 const HAS_AGENT = await canResolveAgent();
 
 function loadCase(dir: string): { name: string; dir: string; truth: Truth } | null {

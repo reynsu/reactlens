@@ -4,12 +4,19 @@
 // chatty React apps don't flood the dashboard. NEVER blocks the user's app —
 // every send is fire-and-forget.
 
+// Mirrors the canonical RunEvent variants the probe emits. Kept as a
+// browser-bundle-safe local copy because src/runner/events.ts pulls in Node
+// imports (Zod schema setup) that don't belong in the IIFE the probe ships
+// as. testIdIndex was added in P9 — keep this shape in sync when the
+// canonical type changes; the parseRunEvent gate at the server's WS handler
+// is the safety net.
 type ProbeEvent =
   | {
       t: 'component:snapshot';
       testId: string;
       stepId: string;
       tree: unknown;
+      testIdIndex?: Record<string, string>;
     }
   | {
       t: 'component:event';
