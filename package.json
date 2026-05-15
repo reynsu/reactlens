@@ -1,11 +1,11 @@
 {
-  "name": "reactlens",
+  "name": "@reynsu/reactlens",
   "version": "0.1.0",
   "description": "The first E2E testing tool that understands your React code, not just your DOM.",
   "license": "MIT",
   "type": "commonjs",
   "bin": {
-    "reactlens": "./bin/reactlens.js"
+    "reactlens": "bin/reactlens.js"
   },
   "files": [
     "dist",
