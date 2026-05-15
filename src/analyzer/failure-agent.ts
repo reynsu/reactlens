@@ -1,15 +1,13 @@
-// Diagnosis agent: given a failed test, produce a typed Diagnosis. Validates
-// the agent's output against a Zod schema; on failure retries once with a
-// stricter prompt; on second failure returns a degraded `env-issue` diagnosis
-// rather than crashing the run.
-import { readFile } from 'node:fs/promises';
-import { join, dirname } from 'node:path';
+// Diagnosis agent: given a failed test, build a structured Diagnosis. The
+// streaming + JSON extraction + Zod retry plumbing lives in
+// src/agent/run-json.ts; this module owns the diagnosis-specific bits —
+// the user-message shape, the schema, the degraded fallback, and the
+// gitContext attachment.
 import { z } from 'zod';
-import { ReactLensError } from '../utils/errors';
-import { logger } from '../utils/logger';
+import { runAgentJson } from '../agent/run-json';
 import type { AgentRunner } from '../agent/runner';
 import type { ComponentNode, Diagnosis } from '../runner/events';
-import { gatherGitContext } from './git-context';
+import { gatherGitContext, type GitContext } from './git-context';
 
 export type FailedTest = {
   testId: string;
@@ -43,22 +41,6 @@ const diagnosisSchema = z.object({
     .optional(),
 });
 
-async function readPrompt(name: string): Promise<string> {
-  const candidates = [
-    join(__dirname, 'prompts', name),
-    join(__dirname, '..', '..', 'src', 'analyzer', 'prompts', name),
-    join(dirname(__filename), 'prompts', name),
-  ];
-  for (const c of candidates) {
-    try {
-      return await readFile(c, 'utf8');
-    } catch {
-      /* try next */
-    }
-  }
-  throw new ReactLensError(`diagnosis prompt ${name} not found`, { code: 'DIAGNOSIS_PROMPT_MISSING' });
-}
-
 function buildUserMessage(failure: FailedTest): string {
   const lines: string[] = [];
   lines.push(`# Failure to diagnose`);
@@ -87,59 +69,15 @@ function buildUserMessage(failure: FailedTest): string {
   return lines.join('\n');
 }
 
-function extractFinalJson(text: string): unknown {
-  // Strip optional fenced code block, then parse.
-  const fenced = text.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
-  const candidate = fenced !== null && fenced[1] !== undefined ? fenced[1] : text;
-  try {
-    return JSON.parse(candidate.trim());
-  } catch {
-    // Try to find the last JSON-looking blob in the text.
-    const last = candidate.lastIndexOf('{');
-    if (last < 0) return null;
-    try {
-      return JSON.parse(candidate.slice(last).trim());
-    } catch {
-      return null;
-    }
-  }
-}
-
-async function runOnce(opts: {
-  cwd: string;
-  agent: AgentRunner;
-  systemPrompt: string;
-  userMessage: string;
-  onChunk?: (chunk: string) => void;
-}): Promise<Diagnosis | null> {
-  let lastText = '';
-  const stream = opts.agent.query({
-    cwd: opts.cwd,
-    prompt: opts.userMessage,
-    systemPromptAppend: opts.systemPrompt,
-    allowedTools: ['Read', 'Glob', 'Grep', 'Bash'],
-    permissionMode: 'default',
-    maxTurns: 30,
-  });
-  for await (const message of stream) {
-    if (message.type === 'assistant') {
-      for (const block of message.message.content) {
-        if (block.type === 'text') {
-          lastText = block.text;
-          opts.onChunk?.(block.text);
-        }
-      }
-    }
-  }
-
-  const parsed = extractFinalJson(lastText);
-  if (parsed === null) return null;
-  const result = diagnosisSchema.safeParse(parsed);
-  if (!result.success) {
-    logger.warn({ issues: result.error.issues }, 'diagnosis output failed validation');
-    return null;
-  }
-  return result.data;
+function degradedDiagnosis(gitCtx: GitContext): Diagnosis {
+  return {
+    classification: 'env-issue',
+    confidence: 'low',
+    rootCause: 'diagnosis agent failed to produce a valid output',
+    evidence: ['agent returned non-JSON or schema-mismatched output twice'],
+    suggestedFix: 'rerun the diagnosis with --verbose; if it persists, file an issue with the trace',
+    ...(Object.keys(gitCtx).length > 0 ? { gitContext: gitCtx } : {}),
+  };
 }
 
 export async function diagnose(opts: {
@@ -148,49 +86,32 @@ export async function diagnose(opts: {
   failure: FailedTest;
   onChunk?: (text: string) => void;
 }): Promise<Diagnosis> {
-  const systemPrompt = await readPrompt('diagnose.md');
-  const classifyAddendum = await readPrompt('classify-bug.md');
-  const baseMessage = buildUserMessage(opts.failure);
+  const userMessage = buildUserMessage(opts.failure);
   const gitCtx = await gatherGitContext({
     cwd: opts.cwd,
     componentFile: opts.failure.componentFile,
     specFile: opts.failure.specFile,
   });
 
-  // First attempt.
-  let result = await runOnce({
-    cwd: opts.cwd,
+  const result = await runAgentJson({
     agent: opts.agent,
-    systemPrompt: `${systemPrompt}\n\n---\n\n${classifyAddendum}`,
-    userMessage: baseMessage,
+    cwd: opts.cwd,
+    systemPrompt: [
+      { name: 'diagnose.md', area: 'analyzer' },
+      { name: 'classify-bug.md', area: 'analyzer' },
+    ],
+    userMessage,
+    schema: diagnosisSchema,
+    allowedTools: ['Read', 'Glob', 'Grep', 'Bash'],
+    permissionMode: 'default',
+    maxTurns: 30,
+    retryReminder:
+      'your previous response did not contain a parseable Diagnosis JSON object. The FINAL message must be exactly the JSON, nothing else.',
     onChunk: opts.onChunk,
   });
 
-  // Retry once with stricter framing.
-  if (result === null) {
-    const stricter = `${baseMessage}\n\nIMPORTANT: your previous response did not contain a parseable Diagnosis JSON object. The FINAL message must be exactly the JSON, nothing else.`;
-    result = await runOnce({
-      cwd: opts.cwd,
-      agent: opts.agent,
-      systemPrompt: `${systemPrompt}\n\n---\n\n${classifyAddendum}`,
-      userMessage: stricter,
-      onChunk: opts.onChunk,
-    });
-  }
-
-  if (result === null) {
-    return {
-      classification: 'env-issue',
-      confidence: 'low',
-      rootCause: 'diagnosis agent failed to produce a valid output',
-      evidence: ['agent returned non-JSON or schema-mismatched output twice'],
-      suggestedFix: 'rerun the diagnosis with --verbose; if it persists, file an issue with the trace',
-      ...(Object.keys(gitCtx).length > 0 ? { gitContext: gitCtx } : {}),
-    };
-  }
-
-  return {
-    ...result,
-    ...(Object.keys(gitCtx).length > 0 ? { gitContext: gitCtx } : {}),
-  };
+  if (result === null) return degradedDiagnosis(gitCtx);
+  return Object.keys(gitCtx).length > 0
+    ? { ...result, gitContext: gitCtx }
+    : result;
 }
