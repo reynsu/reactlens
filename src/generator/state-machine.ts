@@ -1,7 +1,12 @@
 // Bridges component AST analysis to a list of TestCase IRs that the agent
 // will turn into Page Object + spec code. Each TestCase represents one
 // visual state to provoke + the actions to exit it.
+//
+// Per-state data (msw recipes, assertions, descriptions) lives in the
+// VISUAL_STATES catalog. This module owns the orthogonal axis: per-component
+// action heuristics (login, checkout) that aren't state-specific.
 import type { ComponentAnalysis, VisualState } from '../ast/component-analyzer';
+import { VISUAL_STATES, type VisualStateName } from '../visual-states/visual-states';
 
 export type TestCase = {
   componentName: string;
@@ -17,16 +22,15 @@ export type TestCase = {
   assertions: string[];
 };
 
+function entryFor(state: VisualState): (typeof VISUAL_STATES)[VisualStateName] | undefined {
+  return VISUAL_STATES[state.name as VisualStateName];
+}
+
 function mswForState(state: VisualState): string[] {
-  const out: string[] = [];
-  for (const ep of state.apiCalls) {
-    if (state.name === 'loading') out.push(`${ep} → never resolve (delay) until release`);
-    else if (state.name === 'error' || state.name === 'network-error') out.push(`${ep} → 500`);
-    else if (state.name === 'empty') out.push(`${ep} → 200 with empty array/object`);
-    else if (state.name === 'declined') out.push(`${ep} → 402`);
-    else if (state.name === 'success' || state.name === 'idle') out.push(`${ep} → 200 (default)`);
-  }
-  return out;
+  const entry = entryFor(state);
+  if (entry === undefined || entry.mswRecipe === null) return [];
+  const recipe = entry.mswRecipe;
+  return state.apiCalls.map((ep) => recipe(ep));
 }
 
 function actionsForState(state: VisualState, componentName: string): string[] {
@@ -47,23 +51,11 @@ function actionsForState(state: VisualState, componentName: string): string[] {
 }
 
 function assertionsForState(state: VisualState): string[] {
-  switch (state.name) {
-    case 'loading':
-      return ['loading indicator visible'];
-    case 'error':
-    case 'network-error':
-      return ['error banner visible', 'retry control visible (when present)'];
-    case 'empty':
-      return ['empty-state element visible'];
-    case 'success':
-      return ['success indicator visible'];
-    case 'declined':
-      return ['declined banner visible'];
-    case 'submitting':
-      return ['submit button is disabled while in flight'];
-    default:
-      return ['component renders without crashing'];
-  }
+  const entry = entryFor(state);
+  // Catch-all for any state name not in the catalog. Pre-catalog behaviour
+  // returned the same string from the switch's default branch.
+  if (entry === undefined) return ['component renders without crashing'];
+  return [...entry.assertions];
 }
 
 export function statesToTestCases(analysis: ComponentAnalysis): TestCase[] {

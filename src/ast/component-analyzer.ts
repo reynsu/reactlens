@@ -15,6 +15,7 @@
 // generator polishes details from the source itself; our job is to make sure
 // no states are missed.
 import { Project, SyntaxKind, type Node, type SourceFile } from 'ts-morph';
+import { VISUAL_STATES } from '../visual-states/visual-states';
 
 export type VisualState = {
   // Stable identifier we hand to test generation, eg 'loading', 'empty',
@@ -50,7 +51,7 @@ const QUERY_FLAG_NAMES = new Set([
 function getDefaultState(): VisualState {
   return {
     name: 'idle',
-    description: 'default render path',
+    description: VISUAL_STATES.idle.description,
     conditions: [],
     apiCalls: [],
   };
@@ -71,22 +72,10 @@ function pushState(states: VisualState[], state: VisualState): void {
   }
 }
 
-type StateMatcher = { pattern: RegExp; name: string; description: string };
-
-const STATE_MATCHERS: StateMatcher[] = [
-  { pattern: /\b(isLoading|isPending|isFetching)\b/i, name: 'loading', description: 'data fetch in progress' },
-  { pattern: /\b(isError|error\s*!==?\s*(null|undefined))\b/i, name: 'error', description: 'fetch or submit failed' },
-  { pattern: /\bisSuccess\b/i, name: 'success', description: 'happy-path render' },
-  { pattern: /\.length\s*===?\s*0\b/, name: 'empty', description: 'collection was empty' },
-  { pattern: /\bdeclined\b/i, name: 'declined', description: 'payment declined' },
-  { pattern: /\bnetwork[- _]?error\b/i, name: 'network-error', description: 'network failure' },
-  { pattern: /\bsubmitting\b/i, name: 'submitting', description: 'in-flight submit' },
-];
-
 function analyzeStateFromCondition(condition: string): VisualState | null {
-  for (const m of STATE_MATCHERS) {
-    if (m.pattern.test(condition)) {
-      return { name: m.name, description: m.description, conditions: [condition], apiCalls: [] };
+  for (const [name, entry] of Object.entries(VISUAL_STATES)) {
+    if (entry.matcher !== null && entry.matcher.test(condition)) {
+      return { name, description: entry.description, conditions: [condition], apiCalls: [] };
     }
   }
   return null;

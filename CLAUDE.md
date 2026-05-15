@@ -243,8 +243,9 @@ reactlens/
 │   │   └── transport.ts          ← WS back to dashboard server
 │   ├── ast/                      ← component analysis
 │   │   ├── component-analyzer.ts ← extracts state machine from source
-│   │   ├── route-analyzer.ts     ← finds routes per stack
-│   │   └── visual-states.ts      ← enumerates render branches
+│   │   └── route-analyzer.ts     ← finds routes per stack
+│   ├── visual-states/            ← canonical visual-state catalog (candidato 4)
+│   │   └── visual-states.ts      ← single source: matchers + msw + assertions
 │   ├── dashboard/
 │   │   ├── server.ts             ← + past-runs API routes (P8.3)
 │   │   ├── runs-index.ts          ← P8.3: listRuns/loadRunEvents helpers
