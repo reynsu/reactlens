@@ -47,10 +47,16 @@ export function assertSafeId(kind: string, value: string): void {
 // synthesizes stepIds with the step's start timestamp + title — strings that
 // often contain ":", `"`, "?", "*", and other chars Windows rejects.
 //
-// Strategy: replace forbidden chars with "_" so legible names survive on
-// macOS / Linux. When the result exceeds 80 chars (Windows MAX_PATH headroom),
-// keep a 64-char prefix and append an 8-char content hash for uniqueness.
-const FORBIDDEN_FILENAME_CHARS = /[<>:"/\\|?* -]/g;
+// Two passes (preserved verbatim from the original toSafeSegment):
+//   1. visible Windows-forbidden chars + all C0 controls (0x00-0x1f, which
+//      includes tab/newline/CR — each replaced 1:1 with '_')
+//   2. \s+ collapses runs of remaining whitespace (i.e. spaces, U+0020)
+//      into a single '_'
+// Notes: dashes and spaces survive the first pass intentionally, so legible
+// identifiers like 'test-1' and 'step-a' remain readable. When the result
+// exceeds 80 chars (Windows MAX_PATH headroom), keep a 64-char prefix and
+// append an 8-char content hash for uniqueness.
+const FORBIDDEN_FILENAME_CHARS = /[<>:"/\\|?*\x00-\x1f]/g;
 
 export function sanitizeSegment(raw: string): string {
   const replaced = raw.replace(FORBIDDEN_FILENAME_CHARS, '_').replace(/\s+/g, '_');

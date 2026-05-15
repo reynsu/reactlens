@@ -11,9 +11,8 @@ import { ALL_EVENT_TYPES, type ComponentNode } from '../runner/events';
 import { EventPersistor } from '../runner/event-persistor';
 import { runTests, type RunSummary } from '../runner/playwright-runner';
 import { persistSnapshots } from '../runner/snapshot-sink';
+import { openRunsArea, type RunPath } from '../runs/run-paths';
 import { logger } from '../utils/logger';
-import { ensureGitignore } from '../utils/paths';
-import { generateRunId } from '../utils/run-id';
 
 export type RunCommandOptions = {
   cwd: string;
@@ -138,16 +137,16 @@ export async function runRun(opts: RunCommandOptions): Promise<number> {
   const config = await loadConfig(cwd);
   const bus = new EventBus();
 
-  // Persist every event for v0.2 time-travel. In watch mode this is recreated
-  // each iteration with a fresh runId; the first iteration is set up here so
-  // the JSON-reporter early-return path still has a single persistor.
-  const reactlensDir = join(cwd, '.reactlens');
-  await ensureGitignore(reactlensDir);
-  let runId = generateRunId();
-  let runDir = join(reactlensDir, 'runs', runId);
-  let persistor = new EventPersistor({ runDir });
+  // Persist every event for v0.2 time-travel. The RunsArea owns the
+  // .reactlens/ layout and writes the self-defensive .gitignore once on
+  // open. In watch mode `currentRun` is rotated each iteration; the first
+  // iteration is set up here so the JSON-reporter early-return path still
+  // has a single persistor.
+  const area = await openRunsArea(cwd);
+  let currentRun: RunPath = area.startRun();
+  let persistor = new EventPersistor({ runPath: currentRun });
   persistor.attach(bus);
-  logger.info({ runId }, 'run starting');
+  logger.info({ runId: currentRun.id }, 'run starting');
 
   const wantDashboard = opts.noDashboard !== true && opts.reporter !== 'json';
 
@@ -157,7 +156,7 @@ export async function runRun(opts: RunCommandOptions): Promise<number> {
       dashboard = await startDashboardServer({
         port: config.dashboard.port,
         bus,
-        runsDir: join(cwd, '.reactlens', 'runs'),
+        runsArea: area,
       });
       const url = `http://localhost:${dashboard.port}`;
       logger.info({ url }, 'dashboard listening');
@@ -175,7 +174,7 @@ export async function runRun(opts: RunCommandOptions): Promise<number> {
     const summary = await runTests({
       cwd,
       bus,
-      runId,
+      runId: currentRun.id,
       skipWebServer: opts.skipWebServer,
       probeWsUrl: dashboard?.probeWsUrl,
       probePath: locatePackagedProbe(),
@@ -283,7 +282,7 @@ export async function runRun(opts: RunCommandOptions): Promise<number> {
       summary = await runTests({
         cwd,
         bus,
-        runId,
+        runId: currentRun.id,
         skipWebServer: opts.skipWebServer,
         probeWsUrl: dashboard?.probeWsUrl,
         probePath: locatePackagedProbe(),
@@ -316,7 +315,7 @@ export async function runRun(opts: RunCommandOptions): Promise<number> {
       }
       await persistor.flush();
       persistor.detach();
-      logger.info({ runDir }, 'persisted run');
+      logger.info({ runDir: currentRun.dir }, 'persisted run');
     }
     return summary;
   }
@@ -329,11 +328,10 @@ export async function runRun(opts: RunCommandOptions): Promise<number> {
   if (opts.watch === true) {
     summary = await runWatchLoop(cwd, async () => {
       // Rotate the persistor for the next iteration before runTests fires.
-      runId = generateRunId();
-      runDir = join(reactlensDir, 'runs', runId);
-      persistor = new EventPersistor({ runDir });
+      currentRun = area.startRun();
+      persistor = new EventPersistor({ runPath: currentRun });
       persistor.attach(bus);
-      logger.info({ runId }, 'watch re-run starting');
+      logger.info({ runId: currentRun.id }, 'watch re-run starting');
       const next = await executeOneRun();
       process.stdout.write(
         `\n${next.passed} passed, ${next.failed} failed, ${next.skipped} skipped (${next.duration}ms)\n`,

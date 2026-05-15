@@ -6,14 +6,14 @@ import { WebSocketServer, type WebSocket } from 'ws';
 import { logger } from '../utils/logger';
 import { EventBus } from '../runner/event-bus';
 import { ALL_EVENT_TYPES, type RunEvent } from '../runner/events';
-import { frameExists, listRuns, loadRunEvents, resolveFramePath } from './runs-index';
+import { frameExists, type RunsArea } from '../runs/run-paths';
 
 export type DashboardServerOptions = {
   port: number;
   bus: EventBus;
-  // Absolute path to <cwd>/.reactlens/runs/, used by the past-runs API routes.
+  // RunsArea owning <cwd>/.reactlens/runs/, used by the past-runs API routes.
   // When omitted, those routes return 404 (server still serves the live run).
-  runsDir?: string;
+  runsArea?: RunsArea;
 };
 
 export type DashboardServer = {
@@ -60,20 +60,20 @@ export async function startDashboardServer(opts: DashboardServerOptions): Promis
   app.get('/healthz', (_req, res) => res.json({ ok: true }));
 
   // Past-runs API. Mounted before the static handler so /api/* never falls
-  // through to the SPA. When runsDir is unset the routes 404 — keeps the
+  // through to the SPA. When runsArea is unset the routes 404 — keeps the
   // server usable without persistence wired (e.g. legacy callers).
-  if (opts.runsDir !== undefined) {
-    const runsDir = opts.runsDir;
+  if (opts.runsArea !== undefined) {
+    const area = opts.runsArea;
     app.get('/api/runs', async (_req, res, next) => {
       try {
-        res.json(await listRuns(runsDir));
+        res.json(await area.list());
       } catch (err) {
         next(err);
       }
     });
     app.get('/api/runs/:id/events', async (req, res, next) => {
       try {
-        const body = await loadRunEvents(runsDir, req.params.id);
+        const body = await area.loadEvents(req.params.id);
         res.type('application/x-ndjson').send(body);
       } catch (err) {
         const message = (err as Error).message;
@@ -90,7 +90,7 @@ export async function startDashboardServer(opts: DashboardServerOptions): Promis
     });
     app.get('/api/runs/:id/frames/:testId/:filename', async (req, res, next) => {
       try {
-        const abs = resolveFramePath(runsDir, req.params.id, req.params.testId, req.params.filename);
+        const abs = area.resolveFramePath(req.params.id, req.params.testId, req.params.filename);
         if (!(await frameExists(abs))) {
           res.status(404).type('text').send('frame not found');
           return;

@@ -52,22 +52,27 @@ describe('sanitizeSegment — write-side filename safety', () => {
     );
   });
 
-  it('replaces each space with one underscore (1:1, not deduped)', () => {
-    expect(sanitizeSegment('a   b')).toBe('a___b');
+  it('collapses runs of spaces into a single underscore (second pass, \\s+)', () => {
+    // Spaces survive the first pass (not in FORBIDDEN_FILENAME_CHARS). The
+    // second pass /\\s+/ then matches each contiguous run.
+    expect(sanitizeSegment('a   b   c')).toBe('a_b_c');
   });
 
-  it('collapses runs of non-space whitespace into a single underscore', () => {
-    // Tabs and newlines are not in FORBIDDEN_FILENAME_CHARS, so the second
-    // replace (\s+) is the one that touches them and does collapse runs.
-    expect(sanitizeSegment('a\t\tb\n\nc')).toBe('a_b_c');
+  it('replaces control chars 1:1 in the first pass — does NOT collapse them', () => {
+    // Tabs / newlines are inside the 0x00-0x1f range so the first pass
+    // already turns each one into its own underscore. \\s+ then has nothing
+    // left to collapse since the underscores are not whitespace.
+    expect(sanitizeSegment('a\t\tb')).toBe('a__b');
+    expect(sanitizeSegment('a\n\nc')).toBe('a__c');
+  });
+
+  it('preserves dashes verbatim — runIds (which use dashes) round-trip cleanly', () => {
+    expect(sanitizeSegment('step-001')).toBe('step-001');
+    expect(sanitizeSegment('test-1')).toBe('test-1');
   });
 
   it('preserves legible alphanumerics verbatim', () => {
     expect(sanitizeSegment('step001')).toBe('step001');
-  });
-
-  it('replaces dashes — runIds use assertSafeId, not sanitize, so dashes survive there', () => {
-    expect(sanitizeSegment('step-001')).toBe('step_001');
   });
 
   it('hashes when result exceeds 80 chars (Windows MAX_PATH headroom)', () => {

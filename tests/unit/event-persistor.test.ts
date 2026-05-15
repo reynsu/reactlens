@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { EventBus } from '../../src/runner/event-bus';
 import { EventPersistor } from '../../src/runner/event-persistor';
 import type { RunEvent } from '../../src/runner/events';
+import { RunPath } from '../../src/runs/run-paths';
 
 // 1×1 transparent JPEG, base64-encoded. Small enough to verify byte-perfect
 // roundtrip without bloating the test file. Anything that decodes to N bytes
@@ -19,7 +20,7 @@ let persistor: EventPersistor;
 beforeEach(async () => {
   runDir = await mkdtemp(join(tmpdir(), 'reactlens-persistor-'));
   bus = new EventBus();
-  persistor = new EventPersistor({ runDir });
+  persistor = new EventPersistor({ runPath: new RunPath({ id: 'test-run', dir: runDir }) });
   persistor.attach(bus);
 });
 
@@ -135,7 +136,7 @@ describe('EventPersistor', () => {
   it('mkdir is lazy: runDir is created on first event, not at construction', async () => {
     const lateDir = join(runDir, 'nested', 'fresh');
     const lateBus = new EventBus();
-    const lateP = new EventPersistor({ runDir: lateDir });
+    const lateP = new EventPersistor({ runPath: new RunPath({ id: 'late-run', dir: lateDir }) });
     lateP.attach(lateBus);
     await expect(stat(lateDir)).rejects.toThrow();
     lateBus.emit({ t: 'run:start', runId: 'r1', totalTests: 0, timestamp: 0 });

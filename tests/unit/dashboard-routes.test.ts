@@ -7,8 +7,10 @@ import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { EventBus } from '../../src/runner/event-bus';
 import { startDashboardServer, type DashboardServer } from '../../src/dashboard/server';
+import { RunsArea } from '../../src/runs/run-paths';
 
 let runsDir: string;
+let area: RunsArea;
 let server: DashboardServer;
 let baseUrl: string;
 
@@ -21,8 +23,13 @@ async function seedRun(id: string, events: unknown[]): Promise<void> {
 }
 
 beforeEach(async () => {
-  runsDir = await mkdtemp(join(tmpdir(), 'reactlens-routes-'));
-  server = await startDashboardServer({ port: 0, bus: new EventBus(), runsDir });
+  // Use a tmpdir as cwd; RunsArea computes <cwd>/.reactlens/runs as runsDir.
+  // We write seeds directly under that path so the API serves them.
+  const cwd = await mkdtemp(join(tmpdir(), 'reactlens-routes-'));
+  area = new RunsArea(cwd);
+  runsDir = area.runsDir;
+  await mkdir(runsDir, { recursive: true });
+  server = await startDashboardServer({ port: 0, bus: new EventBus(), runsArea: area });
   baseUrl = `http://localhost:${server.port}`;
 });
 

@@ -17,6 +17,7 @@ import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { startDashboardServer, type DashboardServer } from '../../src/dashboard/server';
 import { EventBus } from '../../src/runner/event-bus';
+import { RunsArea } from '../../src/runs/run-paths';
 import { buildTimelineFromEvents } from '../../src/dashboard/web/replay-timeline';
 
 const REPO_ROOT = join(__dirname, '..', '..');
@@ -57,7 +58,10 @@ beforeAll(async () => {
   await proc.catch(() => undefined);
 
   latestRunId = await newestRunId(RUNS_DIR);
-  server = await startDashboardServer({ port: 0, bus: new EventBus(), runsDir: RUNS_DIR });
+  // RunsArea computes runsDir as <cwd>/.reactlens/runs — pointing it at the
+  // fixture gives back the same RUNS_DIR we just listed from.
+  const area = new RunsArea(FIXTURE);
+  server = await startDashboardServer({ port: 0, bus: new EventBus(), runsArea: area });
   baseUrl = `http://localhost:${server.port}`;
 }, 120_000);
 
