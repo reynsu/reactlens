@@ -3,6 +3,14 @@
 // switch exhaustively on `t`. Adding a variant is a breaking change requiring
 // updates to all of: streaming-reporter (template), runner, event bus,
 // dashboard, and any switches over RunEvent.
+//
+// Two enforcement layers:
+//   * Compile-time: ALL_EVENT_TYPES + _AssertExhaustive guarantees the
+//     exhaustive list stays aligned with the union definition.
+//   * Runtime: runEventSchema + parseRunEvent validate untyped JSON at the
+//     ingestion boundaries (subprocess stdin, WS probe, persisted JSONL).
+//     Bus subscribers downstream of those gates trust the bus.
+import { z } from 'zod';
 
 export type Attachment = {
   name: string;
@@ -90,7 +98,27 @@ export type RunEvent =
     }
   | { t: 'step:start'; testId: string; stepId: string; title: string }
   | { t: 'step:end'; testId: string; stepId: string; status: 'passed' | 'failed' }
-  | { t: 'frame'; testId: string; data: string; sessionId: string }
+  // The `frame` variant has TWO valid shapes that share the same `t`:
+  //   - WIRE  (probe/runner → bus): { testId, sessionId, data: string }
+  //                                  data is a base64 JPEG payload (~50 KB).
+  //   - DISK  (events.jsonl):       { testId, stepId, sessionId, frameRef: string }
+  //                                  data has been split off to <run>/frames/<test>/<step>.jpg
+  //                                  and replaced with frameRef pointing at it.
+  //                                  The persistor (event-persistor.ts) is the
+  //                                  transformer; the activeStep map provides
+  //                                  stepId since wire frames have none.
+  // Exactly one of {data, frameRef} is present at runtime. Optional in the
+  // type so a single discriminated union covers both shapes — the alternative
+  // (a separate `frame:persisted` variant) would force every disk reader to
+  // discriminate twice (`t === 'frame' || t === 'frame:persisted'`).
+  | {
+      t: 'frame';
+      testId: string;
+      sessionId: string;
+      data?: string;
+      frameRef?: string;
+      stepId?: string;
+    }
   | {
       t: 'component:snapshot';
       testId: string;
@@ -165,3 +193,229 @@ type _AssertExhaustive = Exclude<RunEventType, (typeof ALL_EVENT_TYPES)[number]>
   : ['ALL_EVENT_TYPES is missing variants'];
 const _exhaustive: _AssertExhaustive = true;
 void _exhaustive;
+
+// === Runtime validation (Zod) ===
+//
+// Loose by default — extra fields are dropped, not rejected. Forward-compat
+// for persisted runs that may carry fields added in newer reactlens versions
+// (testIdIndex was the first; there will be more). Probe regressions that
+// emit garbage extra fields are best caught by integration tests, not by
+// strict-schema rejection at runtime.
+//
+// Recursive types (ComponentNode, AxNode) use z.lazy + explicit ZodType<T>
+// annotation to break the circular self-reference.
+
+const attachmentSchema = z.object({
+  name: z.string(),
+  path: z.string(),
+  contentType: z.string().optional(),
+});
+
+const hookSnapshotSchema = z.object({
+  kind: z.enum(['state', 'effect', 'memo', 'ref', 'context', 'reducer', 'other']),
+  value: z.unknown().optional(),
+  name: z.string().optional(),
+});
+
+const componentNodeSchema: z.ZodType<ComponentNode> = z.lazy(() =>
+  z.object({
+    id: z.string().optional(),
+    name: z.string(),
+    key: z.string().nullable().optional(),
+    props: z.record(z.string(), z.unknown()),
+    hooks: z.array(hookSnapshotSchema).optional(),
+    source: z.object({ file: z.string(), line: z.number() }).optional(),
+    children: z.array(componentNodeSchema),
+  }),
+);
+
+const axNodeSchema: z.ZodType<AxNode> = z.lazy(() =>
+  z.object({
+    role: z.string(),
+    name: z.string().optional(),
+    value: z.union([z.string(), z.number()]).optional(),
+    description: z.string().optional(),
+    keyshortcuts: z.string().optional(),
+    roledescription: z.string().optional(),
+    valuetext: z.string().optional(),
+    disabled: z.boolean().optional(),
+    expanded: z.boolean().optional(),
+    focused: z.boolean().optional(),
+    modal: z.boolean().optional(),
+    multiline: z.boolean().optional(),
+    multiselectable: z.boolean().optional(),
+    readonly: z.boolean().optional(),
+    required: z.boolean().optional(),
+    selected: z.boolean().optional(),
+    checked: z.union([z.boolean(), z.literal('mixed')]).optional(),
+    pressed: z.union([z.boolean(), z.literal('mixed')]).optional(),
+    level: z.number().optional(),
+    valuemin: z.number().optional(),
+    valuemax: z.number().optional(),
+    autocomplete: z.string().optional(),
+    haspopup: z.string().optional(),
+    invalid: z.string().optional(),
+    orientation: z.string().optional(),
+    children: z.array(axNodeSchema),
+  }),
+);
+
+const diagnosisSchema = z.object({
+  classification: z.enum(['real-bug', 'test-bug', 'flaky', 'env-issue']),
+  confidence: z.enum(['high', 'medium', 'low']),
+  rootCause: z.string(),
+  evidence: z.array(z.string()),
+  suggestedFix: z.string(),
+  patch: z
+    .array(
+      z.object({
+        file: z.string(),
+        oldStr: z.string(),
+        newStr: z.string(),
+        rationale: z.string(),
+      }),
+    )
+    .optional(),
+  gitContext: z
+    .object({
+      componentLastChanged: z
+        .object({
+          sha: z.string(),
+          author: z.string(),
+          date: z.string(),
+          message: z.string(),
+        })
+        .optional(),
+      specLastChanged: z
+        .object({
+          sha: z.string(),
+          author: z.string(),
+          date: z.string(),
+          message: z.string(),
+        })
+        .optional(),
+    })
+    .optional(),
+});
+
+export const runEventSchema = z.discriminatedUnion('t', [
+  z.object({
+    t: z.literal('run:start'),
+    runId: z.string(),
+    totalTests: z.number(),
+    timestamp: z.number(),
+  }),
+  z.object({
+    t: z.literal('run:end'),
+    passed: z.number(),
+    failed: z.number(),
+    skipped: z.number(),
+    duration: z.number(),
+  }),
+  z.object({
+    t: z.literal('test:start'),
+    id: z.string(),
+    title: z.string(),
+    file: z.string(),
+    suite: z.string(),
+  }),
+  z.object({
+    t: z.literal('test:end'),
+    id: z.string(),
+    status: z.enum(['passed', 'failed', 'skipped', 'timedOut']),
+    duration: z.number(),
+    error: z.string().optional(),
+    attachments: z.array(attachmentSchema).optional(),
+  }),
+  z.object({
+    t: z.literal('step:start'),
+    testId: z.string(),
+    stepId: z.string(),
+    title: z.string(),
+  }),
+  z.object({
+    t: z.literal('step:end'),
+    testId: z.string(),
+    stepId: z.string(),
+    status: z.enum(['passed', 'failed']),
+  }),
+  z.object({
+    t: z.literal('frame'),
+    testId: z.string(),
+    sessionId: z.string(),
+    data: z.string().optional(),
+    frameRef: z.string().optional(),
+    stepId: z.string().optional(),
+  }),
+  z.object({
+    t: z.literal('component:snapshot'),
+    testId: z.string(),
+    stepId: z.string(),
+    tree: componentNodeSchema,
+    testIdIndex: z.record(z.string(), z.string()).optional(),
+  }),
+  z.object({
+    t: z.literal('component:event'),
+    testId: z.string(),
+    stepId: z.string(),
+    kind: z.enum(['mount', 'unmount', 'update']),
+    componentName: z.string(),
+    props: z.record(z.string(), z.unknown()).optional(),
+  }),
+  z.object({
+    t: z.literal('a11y:snapshot'),
+    testId: z.string(),
+    stepId: z.string(),
+    tree: axNodeSchema,
+  }),
+  z.object({
+    t: z.literal('a11y:violation'),
+    testId: z.string(),
+    stepId: z.string(),
+    ruleId: z.string(),
+    impact: z.enum(['minor', 'moderate', 'serious', 'critical']).nullable(),
+    description: z.string(),
+    help: z.string(),
+    helpUrl: z.string(),
+    targets: z.array(z.string()),
+  }),
+  z.object({
+    t: z.literal('diagnosis:start'),
+    testId: z.string(),
+  }),
+  z.object({
+    t: z.literal('diagnosis:chunk'),
+    testId: z.string(),
+    text: z.string(),
+  }),
+  z.object({
+    t: z.literal('diagnosis:end'),
+    testId: z.string(),
+    result: diagnosisSchema,
+  }),
+]);
+
+// The single boundary parser. Used by:
+//   * playwright-runner.ts to validate stdin events from the Playwright subprocess
+//   * dashboard/server.ts to validate WS events from the in-page probe
+//   * runs/run-paths.ts, dashboard/web/replay-timeline.ts, commands/diff.ts
+//     to validate persisted JSONL when replaying past runs
+// Bus subscribers downstream of those points trust the bus by construction.
+export function parseRunEvent(value: unknown): RunEvent | null {
+  const result = runEventSchema.safeParse(value);
+  if (!result.success) return null;
+  return result.data;
+}
+
+// Compile-time guard: bidirectional check that runEventSchema's inferred
+// type and the RunEvent union stay aligned. If a variant is added to one
+// but not the other, this assignment fails to compile. Reinforces the
+// existing _AssertExhaustive check on ALL_EVENT_TYPES.
+type _SchemaMatchesType =
+  z.infer<typeof runEventSchema> extends RunEvent
+    ? RunEvent extends z.infer<typeof runEventSchema>
+      ? true
+      : ['runEventSchema is missing variants from RunEvent type']
+    : ['RunEvent type is missing variants from runEventSchema'];
+const _schemaCheck: _SchemaMatchesType = true;
+void _schemaCheck;

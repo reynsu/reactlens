@@ -74,6 +74,11 @@ export class EventPersistor {
     }
 
     if (event.t === 'frame') {
+      // The persistor only handles WIRE-shape frames (those carrying base64
+      // `data`). DISK-shape frames (carrying `frameRef`) are what we WRITE,
+      // not what we re-ingest — if one ever lands on the bus it means the
+      // wire/disk boundary leaked, and there's nothing useful to persist.
+      if (event.data === undefined) return;
       const stepId = this.activeStep.get(event.testId) ?? event.testId;
       const safeTestId = sanitizeSegment(event.testId);
       const safeStepId = sanitizeSegment(stepId);
