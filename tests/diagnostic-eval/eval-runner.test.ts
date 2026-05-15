@@ -14,7 +14,7 @@
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { afterAll, describe, expect, it } from 'vitest';
-import { pickAgentRunner } from '../../src/agent/select';
+import { canResolveAgent, pickAgentRunner } from '../../src/agent/select';
 import {
   aggregateMetrics,
   type CaseResult,
@@ -25,12 +25,13 @@ import { runEvalCase } from '../../src/analyzer/eval-pipeline';
 import { logger } from '../../src/utils/logger';
 
 const CASES_DIR = join(__dirname, 'cases');
-// Live path runs through whichever agent backend the operator opted into:
-// ANTHROPIC_API_KEY (token-billed via SDK) or REACTLENS_USE_CLAUDE_CODE=1
-// (Max-billed via local claude CLI). Either unlocks the live block.
-const HAS_AGENT =
-  process.env.ANTHROPIC_API_KEY !== undefined ||
-  process.env.REACTLENS_USE_CLAUDE_CODE === '1';
+// Mirrors the runtime agent-selection precedence: the live block unlocks
+// whenever ANY supported backend is reachable — local Claude Code CLI
+// (subscription, default) OR ANTHROPIC_API_KEY (per-token API). The previous
+// env-var-only check pre-dated the subscription-first refactor (acdbddf) and
+// would silently skip the eval when only the CLI was available, masking the
+// 16/16 accuracy gate.
+const HAS_AGENT = await canResolveAgent();
 
 function loadCase(dir: string): { name: string; dir: string; truth: Truth } | null {
   const truthPath = join(dir, 'truth.json');
