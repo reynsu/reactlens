@@ -231,12 +231,22 @@ reactlens/
 │   │   ├── diff.ts                ← P12: reactlens diff <runA> <runB>
 │   │   ├── analyze.ts
 │   │   └── regen.ts
+│   ├── agent/                    ← Claude orchestration layer
+│   │   ├── runner.ts             ← AgentRunner interface (vendor-agnostic)
+│   │   ├── sdk-runner.ts         ← SDK backend (per-token API billing)
+│   │   ├── cli-runner.ts         ← CLI backend (subscription billing)
+│   │   ├── select.ts             ← subscription-first selection + resolveAgentForCommand
+│   │   ├── cost.ts               ← CostTracker + withCostTracking decorator
+│   │   └── run-json.ts           ← shared streaming/JSON/Zod/retry pipeline
 │   ├── runner/
-│   │   ├── playwright-runner.ts
+│   │   ├── playwright-runner.ts  ← stdin events validated via parseRunEvent
 │   │   ├── reporter.ts
 │   │   ├── event-bus.ts
-│   │   ├── event-persistor.ts    ← P8.2: writes .reactlens/runs/<id>/
+│   │   ├── events.ts             ← canonical RunEvent + Zod runtime validation
+│   │   ├── event-persistor.ts    ← P8.2: writes .reactlens/runs/<id>/ via RunPath
 │   │   └── snapshot-sink.ts       ← --save-snapshots-to harvest
+│   ├── runs/                     ← on-disk runs layout owner (write + read)
+│   │   └── run-paths.ts          ← RunsArea + RunPath value objects
 │   ├── component-bridge/         ← in-app probe
 │   │   ├── probe.ts              ← injected into user's app
 │   │   ├── snapshot.ts           ← serializes fiber tree + testIdIndex (P9)
@@ -244,11 +254,10 @@ reactlens/
 │   ├── ast/                      ← component analysis
 │   │   ├── component-analyzer.ts ← extracts state machine from source
 │   │   └── route-analyzer.ts     ← finds routes per stack
-│   ├── visual-states/            ← canonical visual-state catalog (candidato 4)
+│   ├── visual-states/            ← canonical visual-state catalog
 │   │   └── visual-states.ts      ← single source: matchers + msw + assertions
 │   ├── dashboard/
-│   │   ├── server.ts             ← + past-runs API routes (P8.3)
-│   │   ├── runs-index.ts          ← P8.3: listRuns/loadRunEvents helpers
+│   │   ├── server.ts             ← past-runs API routes via RunsArea
 │   │   ├── web/
 │   │   │   ├── index.html
 │   │   │   ├── App.tsx           ← + replay mode, RunPicker wiring (P8.5)
@@ -294,6 +303,8 @@ reactlens/
 │   └── reactlens.config.ts
 ├── tests/
 │   ├── unit/
+│   ├── helpers/
+│   │   └── fake-agent.ts          ← scripted AgentRunner for boundary-parser tests
 │   ├── integration/
 │   │   ├── run-flow.test.ts       ← live WS protocol across 4 stacks
 │   │   ├── replay-from-disk.test.ts ← P8.7: cold-open replay
@@ -303,7 +314,7 @@ reactlens/
 │   │   │   ├── case-001-stale-selector/
 │   │   │   ├── case-002-real-bug-validation/
 │   │   │   └── ...
-│   │   └── eval-runner.ts
+│   │   └── eval-runner.test.ts    ← live block gated via canResolveAgent
 │   └── fixtures/
 │       ├── vite-react-router/      ← React 18
 │       ├── vite-react-router-19/   ← React 19 (Gap 6)
@@ -312,7 +323,7 @@ reactlens/
 └── dist/
 ```
 
-The directories beyond a traditional E2E tool layout where the moat lives: `src/component-bridge/`, `src/ast/`, `src/analyzer/{tree,a11y}-diff.ts`, and the persistence layer in `src/runner/event-persistor.ts` + `src/dashboard/runs-index.ts`. Treat them with extra care.
+The directories beyond a traditional E2E tool layout where the moat lives: `src/component-bridge/`, `src/ast/`, `src/analyzer/{tree,a11y}-diff.ts`, the persistence layer in `src/runner/event-persistor.ts` + `src/runs/run-paths.ts`, and the runtime event-protocol enforcement in `src/runner/events.ts` (`runEventSchema` + `parseRunEvent`). Treat them with extra care.
 
 **Runtime data layout**: every run writes to `<cwd>/.reactlens/runs/<runId>/` (per-run directory with `events.jsonl` + `frames/<testId>/<stepId>.jpg`). Auto-gitignored via a self-defensive `.reactlens/.gitignore` that ships `*` on first run.
 
@@ -523,6 +534,8 @@ pnpm build && node bin/reactlens.js diff <runIdA> <runIdB> --cwd <app>  # semant
 - Do NOT broaden scope beyond React. Reject "what about Vue?" with a pointer to Section 3.
 - Do NOT touch `__REACT_DEVTOOLS_GLOBAL_HOOK__` directly. Use `bippy`.
 - Do NOT change the event protocol (Section 9) without updating the runner, the bridge, the server, and the frontend in the same commit.
+- Do NOT bypass `parseRunEvent` at any ingestion point that converts untyped JSON into a `RunEvent`. The boundary parser is the single source of runtime validation; new ingestion points (CI artifact upload, future probes) MUST go through it.
+- Do NOT let ANTHROPIC_API_KEY presence in the environment force API billing. Subscription (Claude Code CLI) is the default. API billing requires explicit opt-in via `--force-api` or `REACTLENS_FORCE_API=1` per Anthropic's documented pitfall.
 - Do NOT call `process.exit()` outside of `cli.ts`.
 - Do NOT introduce barrel `index.ts` files.
 - Do NOT auto-apply patches without explicit user confirmation.
@@ -552,3 +565,7 @@ pnpm build && node bin/reactlens.js diff <runIdA> <runIdB> --cwd <app>  # semant
 - **Behavior contract** — `<ComponentName>.contract.md` written next to each generated spec, documenting the visual-state set the analyzer enumerated (v0.2 / P11).
 - **Semantic diff** — structural difference between two persisted runs over the component tree AND the a11y tree, exposed by `reactlens diff`. Not pixel-level (v0.2 / P12).
 - **A11y violation** — one axe-core finding emitted per test as an `a11y:violation` event (v0.2 / P13).
+- **runAgentJson** — `src/agent/run-json.ts`. The shared seam every agent caller that expects a JSON-shaped reply goes through: prompt loading + streaming + JSON extraction + Zod validation + one stricter retry. Used by `diagnose()`; future Auto-PR planning will reuse.
+- **RunsArea / RunPath** — `src/runs/run-paths.ts`. Per-cwd / per-run value objects that own the `.reactlens/runs/<id>/` layout. Single source for ID validation (read-side `assertSafeId` + write-side `sanitizeSegment`), eager `.gitignore` write, and the runs-listing API.
+- **runEventSchema / parseRunEvent** — `src/runner/events.ts`. Runtime Zod validator for the canonical `RunEvent` union. Enforced at every untyped ingestion point (Playwright stdin, WS probe, persisted JSONL replay). Bidirectional compile-time guard keeps the schema and the TS union aligned.
+- **VISUAL_STATES catalog** — `src/visual-states/visual-states.ts`. Single source for per-visual-state data: matcher regex, description, MSW recipe, assertions. Adding a state is one row; component-analyzer and state-machine import from it as peers.
