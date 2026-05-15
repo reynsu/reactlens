@@ -1,6 +1,6 @@
 {
   "name": "reactlens",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "description": "The first E2E testing tool that understands your React code, not just your DOM.",
   "license": "MIT",
   "type": "commonjs",
@@ -11,7 +11,9 @@
     "dist",
     "bin",
     "templates",
-    "README.md"
+    "README.md",
+    "src/analyzer/prompts",
+    "src/generator/prompts"
   ],
   "scripts": {
     "build": "tsup && pnpm build:web",
@@ -21,7 +23,8 @@
     "test": "vitest run --project unit",
     "test:watch": "vitest --project unit",
     "test:integration": "vitest run --project integration",
-    "test:eval": "vitest run --project eval"
+    "test:eval": "vitest run --project eval",
+    "prepublishOnly": "pnpm build && pnpm test && pnpm typecheck"
   },
   "devDependencies": {
     "@playwright/test": "^1.59.1",
