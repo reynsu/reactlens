@@ -118,9 +118,9 @@ Playwright exited with a code outside the expected `{0, 1}` range — meaning th
 - A custom Playwright config has a syntax error. Run `npx playwright test --reporter=list` directly to see the raw output.
 
 <a id="prompt-missing"></a>
-## `GENERATOR_PROMPT_MISSING` / `DIAGNOSIS_PROMPT_MISSING`
+## `PROMPT_MISSING`
 
-A bundled prompt file (`src/generator/prompts/*.md` or `src/analyzer/prompts/*.md`) couldn't be found at runtime. This is almost always a packaging bug — the published tarball is missing the prompts directory. Reinstall the package from npm to recover, and file an issue if it persists.
+A bundled prompt file (`src/generator/prompts/*.md` or `src/analyzer/prompts/*.md`) couldn't be found at runtime. The error message includes the `area` (e.g. `analyzer`, `generator`) and `name` of the missing prompt. This is almost always a packaging bug — the published tarball is missing the prompts directory. Reinstall the package from npm to recover, and file an issue if it persists.
 
 If you're developing reactlens itself, run `pnpm build` to regenerate `dist/`.
 

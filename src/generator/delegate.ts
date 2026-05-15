@@ -3,9 +3,7 @@
 // commitment: the agent does NOT discover visual states from the DOM — we
 // hand it the AST-derived list up front. That's the difference between
 // guessing and knowing (capability 4.2 in CLAUDE.md).
-import { readFile } from 'node:fs/promises';
-import { join, dirname } from 'node:path';
-import { ReactLensError } from '../utils/errors';
+import { loadPromptSource } from '../agent/run-json';
 import { logger } from '../utils/logger';
 import type { AgentRunner } from '../agent/runner';
 import type { ComponentAnalysis } from '../ast/component-analyzer';
@@ -31,26 +29,6 @@ export type GenerateResult = {
   filesWritten: string[];
   testCases: TestCase[];
 };
-
-async function readPrompt(): Promise<string> {
-  // The prompt lives next to this compiled file when bundled, or up-tree in
-  // the source repo during development.
-  const candidates = [
-    join(__dirname, 'prompts', 'generate-suite.md'),
-    join(__dirname, '..', '..', 'src', 'generator', 'prompts', 'generate-suite.md'),
-    join(dirname(__filename), 'prompts', 'generate-suite.md'),
-  ];
-  for (const c of candidates) {
-    try {
-      return await readFile(c, 'utf8');
-    } catch {
-      /* try next */
-    }
-  }
-  throw new ReactLensError('generator prompt not found in dist or src', {
-    code: 'GENERATOR_PROMPT_MISSING',
-  });
-}
 
 function buildUserMessage(opts: GenerateOptions, testCases: TestCase[]): string {
   const lines: string[] = [];
@@ -88,7 +66,7 @@ function buildUserMessage(opts: GenerateOptions, testCases: TestCase[]): string 
 }
 
 export async function generateTests(opts: GenerateOptions): Promise<GenerateResult> {
-  const systemPrompt = await readPrompt();
+  const systemPrompt = await loadPromptSource({ name: 'generate-suite.md', area: 'generator' });
   const testCases = statesToTestCases(opts.analysis);
   const userMessage = buildUserMessage(opts, testCases);
   const filesWritten: string[] = [];

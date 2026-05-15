@@ -13,6 +13,7 @@
 import { readFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import type { z } from 'zod';
+import { ReactLensError } from '../utils/errors';
 import { logger } from '../utils/logger';
 import type { AgentRunner } from './runner';
 
@@ -67,7 +68,9 @@ export async function loadPromptSource(src: PromptSource): Promise<string> {
       /* try next */
     }
   }
-  throw new Error(`prompt not found: area=${src.area} name=${src.name}`);
+  throw new ReactLensError(`prompt not found: area=${src.area} name=${src.name}`, {
+    code: 'PROMPT_MISSING',
+  });
 }
 
 async function buildSystemPrompt(src: PromptSource | PromptSource[]): Promise<string> {

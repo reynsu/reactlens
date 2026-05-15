@@ -27,8 +27,7 @@ const HELP_URLS: Record<string, string> = {
   CLI_RUNNER_NO_STDOUT: `${DOCS_BASE}#cli-runner-failures`,
   CLI_RUNNER_NONZERO_EXIT: `${DOCS_BASE}#cli-runner-failures`,
   RUNNER_INFRA_ERROR: `${DOCS_BASE}#runner-infra-error`,
-  GENERATOR_PROMPT_MISSING: `${DOCS_BASE}#prompt-missing`,
-  DIAGNOSIS_PROMPT_MISSING: `${DOCS_BASE}#prompt-missing`,
+  PROMPT_MISSING: `${DOCS_BASE}#prompt-missing`,
   AGENT_COST_EXCEEDED: `${DOCS_BASE}#agent-cost-exceeded`,
   DIFF_RUN_NOT_FOUND: `${DOCS_BASE}#diff-run-not-found`,
 };
