@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { WebSocketServer, type WebSocket } from 'ws';
 import { logger } from '../utils/logger';
 import { EventBus } from '../runner/event-bus';
-import { ALL_EVENT_TYPES, type RunEvent } from '../runner/events';
+import { ALL_EVENT_TYPES, parseRunEvent, type RunEvent } from '../runner/events';
 import { frameExists, type RunsArea } from '../runs/run-paths';
 
 export type DashboardServerOptions = {
@@ -162,7 +162,11 @@ export async function startDashboardServer(opts: DashboardServerOptions): Promis
   probeWss.on('connection', (client: WebSocket) => {
     client.on('message', (data) => {
       try {
-        const event = JSON.parse(data.toString()) as RunEvent;
+        const event = parseRunEvent(JSON.parse(data.toString()));
+        if (event === null) {
+          logger.warn({ preview: data.toString().slice(0, 200) }, 'probe message failed schema validation; dropped');
+          return;
+        }
         // Rewrite stepId on component-* events so it reflects the active
         // Playwright step rather than the testId-shaped default the probe
         // baked in at addInitScript time. See the activeStep comment above

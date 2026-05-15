@@ -10,7 +10,7 @@ import { readFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { ReactLensError } from '../utils/errors';
 import { logger } from '../utils/logger';
-import type { AxNode, ComponentNode } from '../runner/events';
+import { parseRunEvent, type AxNode, type ComponentNode } from '../runner/events';
 import { diffComponentTree, type SemanticDiff } from '../analyzer/tree-diff';
 import { diffA11yTree, type A11ySemanticDiff } from '../analyzer/a11y-diff';
 
@@ -80,49 +80,42 @@ async function loadFinalSnapshots(eventsPath: string): Promise<Map<string, Final
   const titles = new Map<string, string>();
   for (const line of text.split('\n')) {
     if (line.length === 0) continue;
-    let parsed: Record<string, unknown>;
+    let event;
     try {
-      parsed = JSON.parse(line) as Record<string, unknown>;
+      event = parseRunEvent(JSON.parse(line));
     } catch {
       continue;
     }
-    const t = parsed['t'];
-    if (t === 'test:start') {
-      const id = parsed['id'] as string | undefined;
-      const title = parsed['title'] as string | undefined;
-      if (id !== undefined && title !== undefined) titles.set(id, title);
-    } else if (t === 'component:snapshot') {
-      const testId = parsed['testId'] as string | undefined;
-      const tree = parsed['tree'] as ComponentNode | undefined;
-      if (testId === undefined || tree === undefined) continue;
+    if (event === null) continue;
+
+    if (event.t === 'test:start') {
+      titles.set(event.id, event.title);
+    } else if (event.t === 'component:snapshot') {
       // Last snapshot per test wins — that's the "end-of-test" state, the
       // most useful comparison point for regression detection.
-      const existing = final.get(testId);
-      final.set(testId, {
-        testId,
-        testTitle: titles.get(testId) ?? testId,
-        tree,
+      const existing = final.get(event.testId);
+      final.set(event.testId, {
+        testId: event.testId,
+        testTitle: titles.get(event.testId) ?? event.testId,
+        tree: event.tree,
         ...(existing?.a11y !== undefined ? { a11y: existing.a11y } : {}),
       });
-    } else if (t === 'a11y:snapshot') {
-      const testId = parsed['testId'] as string | undefined;
-      const tree = parsed['tree'] as AxNode | undefined;
-      if (testId === undefined || tree === undefined) continue;
+    } else if (event.t === 'a11y:snapshot') {
       // a11y captured once at end-of-test by the fixture — last write wins
       // if a future change captures per-step. Carry forward the component
       // snapshot if one already arrived earlier in the log.
-      const existing = final.get(testId);
+      const existing = final.get(event.testId);
       if (existing !== undefined) {
-        final.set(testId, { ...existing, a11y: tree });
+        final.set(event.testId, { ...existing, a11y: event.tree });
       } else {
         // Synthesize a placeholder so the test shows up even when only
         // the a11y snapshot survived. The component diff side just won't
         // produce diffs for this test.
-        final.set(testId, {
-          testId,
-          testTitle: titles.get(testId) ?? testId,
+        final.set(event.testId, {
+          testId: event.testId,
+          testTitle: titles.get(event.testId) ?? event.testId,
           tree: { id: '0', name: 'Root', props: {}, children: [] },
-          a11y: tree,
+          a11y: event.tree,
         });
       }
     }

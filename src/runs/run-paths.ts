@@ -18,6 +18,7 @@
 import { createHash } from 'node:crypto';
 import { access, readdir, readFile, stat } from 'node:fs/promises';
 import { isAbsolute, join, resolve, sep } from 'node:path';
+import { parseRunEvent } from '../runner/events';
 import { ensureGitignore } from '../utils/paths';
 import { generateRunId } from '../utils/run-id';
 
@@ -219,21 +220,21 @@ async function summarizeRun(runId: string, eventsPath: string): Promise<RunSumma
 
   const summary: RunSummary = { runId };
   try {
-    const first = JSON.parse(lines[0]!) as Record<string, unknown>;
-    if (first['t'] === 'run:start') {
-      if (typeof first['totalTests'] === 'number') summary.totalTests = first['totalTests'];
-      if (typeof first['timestamp'] === 'number') summary.startedAt = first['timestamp'];
+    const first = parseRunEvent(JSON.parse(lines[0]!));
+    if (first?.t === 'run:start') {
+      summary.totalTests = first.totalTests;
+      summary.startedAt = first.timestamp;
     }
   } catch {
     /* malformed first line — skip metadata */
   }
   try {
-    const last = JSON.parse(lines[lines.length - 1]!) as Record<string, unknown>;
-    if (last['t'] === 'run:end') {
-      if (typeof last['passed'] === 'number') summary.passed = last['passed'];
-      if (typeof last['failed'] === 'number') summary.failed = last['failed'];
-      if (typeof last['skipped'] === 'number') summary.skipped = last['skipped'];
-      if (typeof last['duration'] === 'number') summary.duration = last['duration'];
+    const last = parseRunEvent(JSON.parse(lines[lines.length - 1]!));
+    if (last?.t === 'run:end') {
+      summary.passed = last.passed;
+      summary.failed = last.failed;
+      summary.skipped = last.skipped;
+      summary.duration = last.duration;
     }
   } catch {
     /* malformed last line — leave end stats unset */

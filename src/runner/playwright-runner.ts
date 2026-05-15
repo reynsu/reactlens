@@ -2,7 +2,7 @@ import { execa, type ResultPromise, type Subprocess } from 'execa';
 import { ReactLensError } from '../utils/errors';
 import { logger } from '../utils/logger';
 import { EventBus } from './event-bus';
-import type { RunEvent, RunEventType } from './events';
+import { parseRunEvent, type RunEvent } from './events';
 
 export type RunnerOptions = {
   cwd: string;
@@ -40,30 +40,10 @@ export type RunSummary = {
   exitCode: number;
 };
 
-const KNOWN_EVENT_TYPES = new Set<RunEventType>([
-  'run:start',
-  'run:end',
-  'test:start',
-  'test:end',
-  'step:start',
-  'step:end',
-  'frame',
-  'component:snapshot',
-  'component:event',
-  'a11y:snapshot',
-  'a11y:violation',
-  'diagnosis:start',
-  'diagnosis:chunk',
-  'diagnosis:end',
-]);
-
 function tryParseEvent(line: string): RunEvent | null {
   if (line.length === 0 || line[0] !== '{') return null;
   try {
-    const parsed = JSON.parse(line) as { t?: unknown };
-    if (typeof parsed.t !== 'string') return null;
-    if (!KNOWN_EVENT_TYPES.has(parsed.t as RunEventType)) return null;
-    return parsed as RunEvent;
+    return parseRunEvent(JSON.parse(line));
   } catch {
     return null;
   }
