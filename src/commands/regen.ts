@@ -5,8 +5,7 @@ import { createHash } from 'node:crypto';
 import { existsSync } from 'node:fs';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
-import { CostTracker, withCostTracking } from '../agent/cost';
-import { pickAgentRunner } from '../agent/select';
+import { resolveAgentForCommand } from '../agent/select';
 import { loadConfig } from '../config/load';
 import { analyzeComponent } from '../ast/component-analyzer';
 import { generateTests } from '../generator/delegate';
@@ -40,13 +39,12 @@ async function saveCache(cwd: string, cache: CacheShape): Promise<void> {
 export async function runRegen(opts: { cwd: string; useClaudeCode?: boolean; forceApi?: boolean; maxCost?: number }): Promise<number> {
   const cwd = resolve(opts.cwd);
   const config = await loadConfig(cwd);
-  const baseAgent = await pickAgentRunner({
+  const { agent, tracker } = await resolveAgentForCommand({
     commandName: 'regen',
     useClaudeCode: opts.useClaudeCode,
     forceApi: opts.forceApi,
+    maxCost: opts.maxCost,
   });
-  const tracker = new CostTracker(opts.maxCost !== undefined ? { maxUsd: opts.maxCost } : {});
-  const agent = withCostTracking(baseAgent, tracker);
 
   const components = await expandComponentGlobs(cwd, config.componentGlobs);
   const cache = await loadCache(cwd);

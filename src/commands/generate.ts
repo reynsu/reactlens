@@ -2,8 +2,7 @@ import { existsSync } from 'node:fs';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { resolve, join } from 'node:path';
 import { execa } from 'execa';
-import { CostTracker, withCostTracking } from '../agent/cost';
-import { pickAgentRunner } from '../agent/select';
+import { resolveAgentForCommand } from '../agent/select';
 import { loadConfig } from '../config/load';
 import { analyzeComponent, type ComponentAnalysis } from '../ast/component-analyzer';
 import { renderContract } from '../generator/contract';
@@ -26,13 +25,12 @@ export type GenerateCommandOptions = {
 export async function runGenerate(opts: GenerateCommandOptions): Promise<number> {
   const cwd = resolve(opts.cwd);
   const config = await loadConfig(cwd);
-  const baseAgent = await pickAgentRunner({
+  const { agent, tracker } = await resolveAgentForCommand({
     commandName: 'generate',
     useClaudeCode: opts.useClaudeCode,
     forceApi: opts.forceApi,
+    maxCost: opts.maxCost,
   });
-  const tracker = new CostTracker(opts.maxCost !== undefined ? { maxUsd: opts.maxCost } : {});
-  const agent = withCostTracking(baseAgent, tracker);
 
   const patterns = opts.pages !== undefined ? [opts.pages] : config.componentGlobs;
   const components = await expandComponentGlobs(cwd, patterns);

@@ -4,8 +4,7 @@
 import { existsSync } from 'node:fs';
 import { readFile, writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
-import { CostTracker, withCostTracking } from '../agent/cost';
-import { pickAgentRunner } from '../agent/select';
+import { resolveAgentForCommand } from '../agent/select';
 import { ReactLensError } from '../utils/errors';
 import { logger } from '../utils/logger';
 import { diagnose } from '../analyzer/failure-agent';
@@ -105,13 +104,12 @@ export async function runAnalyze(opts: AnalyzeCommandOptions): Promise<number> {
   if (!existsSync(reportPath)) {
     throw new ReactLensError(`report file not found: ${reportPath}`, { code: 'ANALYZE_NO_REPORT' });
   }
-  const baseAgent = await pickAgentRunner({
+  const { agent, tracker } = await resolveAgentForCommand({
     commandName: 'analyze',
     useClaudeCode: opts.useClaudeCode,
     forceApi: opts.forceApi,
+    maxCost: opts.maxCost,
   });
-  const tracker = new CostTracker(opts.maxCost !== undefined ? { maxUsd: opts.maxCost } : {});
-  const agent = withCostTracking(baseAgent, tracker);
 
   const raw = await readFile(reportPath, 'utf8');
   const report = JSON.parse(raw) as PlaywrightReport;

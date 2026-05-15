@@ -17,6 +17,7 @@
 import { logger } from '../utils/logger';
 import { ReactLensError } from '../utils/errors';
 import { cliRunner, isClaudeCliAvailable } from './cli-runner';
+import { CostTracker, withCostTracking } from './cost';
 import type { AgentRunner } from './runner';
 import { sdkRunner } from './sdk-runner';
 
@@ -148,4 +149,24 @@ export async function canResolveAgent(
   if (wantCli) return await detectors.hasClaudeCli();
   if (await detectors.hasClaudeCli()) return true;
   return hasApiKey;
+}
+
+// Eager helper for commands that need the agent up front (generate, analyze,
+// regen): picks the runner, builds a CostTracker, wraps. Returns both so the
+// caller can log totals at end-of-command. `reactlens run` does NOT use this
+// because diagnosis is opt-in and lazy — it gates via canResolveAgent first
+// and only constructs the runner if a test actually fails.
+export type AgentResolution = {
+  agent: AgentRunner;
+  tracker: CostTracker;
+};
+
+export async function resolveAgentForCommand(
+  opts: AgentSelection & { maxCost?: number },
+  detectors: AgentDetectors = defaultDetectors,
+): Promise<AgentResolution> {
+  const baseAgent = await pickAgentRunner(opts, detectors);
+  const tracker = new CostTracker(opts.maxCost !== undefined ? { maxUsd: opts.maxCost } : {});
+  const agent = withCostTracking(baseAgent, tracker);
+  return { agent, tracker };
 }
