@@ -15,7 +15,7 @@
     <a class="brand" href="#top">
       <span class="brand-mark">RL</span>
       <span>reactlens</span>
-      <span class="brand-tag">v0.0.1 · portal</span>
+      <span class="brand-tag">v0.0.1 · portal · v0.2 shipped</span>
     </a>
     <nav class="site-nav" aria-label="Main">
       <ul>
@@ -311,11 +311,11 @@ flowchart LR
   P0["P0 Bootstrap"]:::done
   P1["P1 Stack detect + init"]:::done
   P2["P2 Runner + reporter"]:::done
-  P3["P3 Component bridge (moat)"]:::partial
+  P3["P3 Component bridge (moat)"]:::done
   P4["P4 Dashboard"]:::partial
-  P5["P5 Generate (AST → suites)"]:::partial
-  P6["P6 Diagnose + eval"]:::partial
-  P7["P7 CI, docs, publish"]:::partial
+  P5["P5 Generate (AST → suites)"]:::done
+  P6["P6 Diagnose + eval"]:::done
+  P7["P7 CI, docs, publish"]:::done
   V2["v0.2 · P8–P13 done · P14 → P16 queued"]:::partial
 
   P0 --> P1 --> P2 --> P3 --> P4 --> P5 --> P6 --> P7 --> V2
@@ -372,7 +372,7 @@ flowchart LR
           </div>
           <div class="kan-col progress">
             <h4>In progress <span class="count" id="count-progress">—</span></h4>
-            <div class="kan-card"><span class="meta">v0.2 · next</span><strong>P14 queued — Auto-PR mode.</strong> Tier 1 + Tier 2 closed (P8–P13 across 11 commits, 137/137 unit + 8/8 integration green). Next: when CI emits a <code>real-bug · high</code> diagnosis with a patch, open a PR with the suggested fix on a new branch. Strict opt-in per CLAUDE.md §13 — never auto-applied locally.</div>
+            <div class="kan-card"><span class="meta">v0.2 · next</span><strong>P14 queued — Auto-PR mode.</strong> Tier 1 + Tier 2 closed (P8–P13 across 11 commits, 240/240 unit + 8/8 integration green). Next: when CI emits a <code>real-bug · high</code> diagnosis with a patch, open a PR with the suggested fix on a new branch. Strict opt-in per CLAUDE.md §13 — never auto-applied locally.</div>
           </div>
           <div class="kan-col pending">
             <h4>To do <span class="count" id="count-pending">—</span></h4>
@@ -384,7 +384,7 @@ flowchart LR
           </div>
           <div class="kan-col blocked">
             <h4>To improve — known gaps <span class="count" id="count-blocked">—</span></h4>
-            <div class="kan-card"><span class="meta">P6 · drift risk</span><strong>This portal &amp; EXECUTION_PLAN.md drift.</strong> Hand-maintained; long-term: generate from git log + plan parser. Only structural gap remaining.</div>
+            <div class="kan-card"><span class="meta">P6 · drift risk</span><strong>Plan-status sync (closed by <code>bb1cb49</code>).</strong> 16 PLAN items moved from <code>[~]</code>/<code>[ ]</code> → <code>[x]</code> with inline evidence (cost control, error UX, eval gate, watch mode, R19 fixture). The portal/PLAN drift remains hand-maintained; long-term: generate from git log + plan parser.</div>
           </div>
         </div>
         <p class="note center">
@@ -411,7 +411,7 @@ flowchart LR
           <div class="gantt-row"><div class="gantt-label">P2 · Runner</div><div class="gantt-track"><span class="gantt-bar done" style="left: 13%; width: 7%;">done</span></div></div>
           <div class="gantt-row"><div class="gantt-label">P3 · Bridge (moat)</div><div class="gantt-track"><span class="gantt-bar done" style="left: 20%; width: 9%;">done · DoD #9 ✓</span></div></div>
           <div class="gantt-row"><div class="gantt-label">P4 · Dashboard</div><div class="gantt-track"><span class="gantt-bar progress" style="left: 29%; width: 7%;">85%</span></div></div>
-          <div class="gantt-row"><div class="gantt-label">P5 · Generate</div><div class="gantt-track"><span class="gantt-bar progress" style="left: 36%; width: 6%;">95%</span></div></div>
+          <div class="gantt-row"><div class="gantt-label">P5 · Generate</div><div class="gantt-track"><span class="gantt-bar done" style="left: 36%; width: 6%;">done</span></div></div>
           <div class="gantt-row"><div class="gantt-label">P6 · Diagnose &amp; eval</div><div class="gantt-track"><span class="gantt-bar done" style="left: 42%; width: 8%;">done · DoD #5 ✓ (16/16)</span></div></div>
           <div class="gantt-row"><div class="gantt-label">P7 · 4 stacks · CI · docs</div><div class="gantt-track"><span class="gantt-bar done" style="left: 50%; width: 7%;">done · DoD #8 ✓</span></div></div>
           <div class="gantt-row"><div class="gantt-label">Fronts F · I · J · G</div><div class="gantt-track"><span class="gantt-bar done" style="left: 57%; width: 3%;">done</span></div></div>
@@ -519,9 +519,9 @@ flowchart LR
           </div>
         </div>
 
-        <h4>Current state · 2026-05-14</h4>
+        <h4>Current state · 2026-05-15</h4>
         <ul>
-          <li><strong>Tier 1 + Tier 2 shipped</strong> — P8 → P13 across 11 commits (<code>545a70c</code> → <code>eada73e</code>), <strong>137/137 unit + 8/8 integration green</strong>. Every event channel from §9 plus four new variants (<code>a11y:snapshot</code>, <code>a11y:violation</code>, <code>component:snapshot</code> gains <code>testIdIndex</code>, <code>run:start</code> gains <code>runId</code>) shipped without breaking older persisted runs.</li>
+          <li><strong>Tier 1 + Tier 2 shipped</strong> — P8 → P13 across 11 commits (<code>545a70c</code> → <code>eada73e</code>), <strong>240/240 unit + 8/8 integration green</strong>. Every event channel from §9 plus four new variants (<code>a11y:snapshot</code>, <code>a11y:violation</code>, <code>component:snapshot</code> gains <code>testIdIndex</code>, <code>run:start</code> gains <code>runId</code>) shipped without breaking older persisted runs.</li>
           <li><strong>Active</strong> — P14 queued (Auto-PR mode). Open question for the design: what's the patch-acceptance contract — a freshly-cut branch with a single commit, or attach the patch to a draft PR for review? Either way, strict opt-in (no auto-merge ever).</li>
           <li><strong>Not started</strong> — P15 + P16 (Tier 3 stretch).</li>
           <li><strong>P13 follow-up</strong> — dashboard surfacing of violations in the inspector; cross-run diff of violation counts in the diff CLI. Persistence channel is live; UI is the next small slice.</li>
@@ -536,6 +536,43 @@ flowchart LR
         </p>
       </div>
     </div>
+
+    <h3>Architecture refresh — cross-cutting (post-P13)</h3>
+    <p>
+      Six deepening passes ran on top of the v0.2 phases, plus two
+      cleanup commits. Each followed the same rule: <strong>one rule, one
+      place</strong>. Every refactor passed a "deletion test" — if the new
+      module disappeared, complexity had to concentrate elsewhere (good)
+      not just shuffle (bad). Net: <strong>+87 unit tests</strong>
+      (153 → 240), the 16-case eval preserved at 16/16, and
+      <code>pnpm typecheck</code> went from 5 pre-existing errors to clean.
+    </p>
+
+    <div class="kanban">
+      <div class="kan-col done">
+        <h4>Architecture · 6 candidatos shipped <span class="count">6</span></h4>
+        <div class="kan-card"><span class="meta">Cand. 1 · <code>9c42c9b</code></span><strong><code>runAgentJson</code> — JSON-output pipeline.</strong> Two callers were repeating ~80 LOC of streaming + JSON extraction + Zod validation + retry-on-bad-shape. Now one module, one place. <code>diagnose()</code> shrank from 196 → 117 LOC; future Auto-PR adds 10 LOC instead of 80. <strong>Eval gate: 16/16 preserved.</strong></div>
+        <div class="kan-card"><span class="meta">Cand. 2 · <code>6feb409</code></span><strong><code>RunsArea + RunPath</code> — on-disk runs layout.</strong> The <code>.reactlens/runs/&lt;id&gt;/</code> structure was hardcoded across 4 files with two different ID-sanitization regimes. Now one owner. The watch-loop's <code>let runId; let runDir; let persistor</code> triple collapsed to <code>currentRun = area.startRun()</code>. Bonus: caught a bug where the original sanitization regex actually used C0 control bytes that <em>looked</em> like space + dash in editors.</div>
+        <div class="kan-card"><span class="meta">Cand. 3 · <code>32b6e47</code></span><strong><code>parseRunEvent</code> — protocol enforcement.</strong> Closed a real silent-corruption hole: the WS probe handler was casting <code>JSON.parse(data) as RunEvent</code> with no validation — a buggy probe could persist garbage into <code>events.jsonl</code>. Now five ingestion points (stdin, WS probe, persisted JSONL × 3) all go through one Zod-validated parser. Bidirectional compile-time guard means a new event variant breaks the build in 3 places at once if anything drifts.</div>
+        <div class="kan-card"><span class="meta">Cand. 4 · <code>db3d495</code></span><strong><code>VISUAL_STATES</code> — per-state catalog.</strong> Adding a new visual state ("cancelled" etc) used to mean 3 edits in 2 files (regex matcher, MSW recipe, assertions). Now: one row in one table. New top-level dir <code>src/visual-states/</code> serves both <code>component-analyzer</code> (matchers) and <code>state-machine</code> (recipes + assertions) without inverting layering.</div>
+        <div class="kan-card"><span class="meta">Cand. 5 · <code>b2b5c38</code></span><strong>Prompt loading dedup.</strong> <code>generator/delegate.ts</code> still had its own <code>readPrompt()</code> after candidato 1 introduced <code>loadPromptSource</code>. Collapsed; both throw sites now use the same helper. <code>GENERATOR_PROMPT_MISSING</code> + <code>DIAGNOSIS_PROMPT_MISSING</code> error codes unified to <code>PROMPT_MISSING</code>.</div>
+        <div class="kan-card"><span class="meta">Cand. 6 · <code>47237a4</code></span><strong><code>resolveAgentForCommand</code> — eager pick + cost.</strong> Three commands (generate, analyze, regen) repeated the same 4-line "<code>pickAgentRunner</code> + <code>CostTracker</code> + <code>withCostTracking</code>" bundle. One helper. <code>run.ts</code> intentionally NOT migrated — its lazy diagnosis pattern (canResolveAgent gate + late construction inside test:end) is load-bearing.</div>
+      </div>
+      <div class="kan-col done">
+        <h4>Cleanups <span class="count">3</span></h4>
+        <div class="kan-card"><span class="meta">Typecheck · <code>cca0798</code></span><strong>5 pre-existing TS errors → clean.</strong> <code>testIdIndex</code> on <code>ProbeEvent</code> (browser-bundle ProbeEvent had drifted from canonical RunEvent), <code>ComponentNode</code> not-in-scope in <code>web/types.ts</code> (split <code>export type</code> into <code>import type</code> + <code>export type</code>), <code>mkdir</code> return-type mismatch in persistor, top-level await in eval-runner under CJS module setting (suppressed honestly with <code>@ts-expect-error</code>).</div>
+        <div class="kan-card"><span class="meta">CLAUDE.md · <code>29e7478</code></span><strong>§7 layout · §13 invariants · §14 glossary refresh.</strong> Added missing <code>src/agent/</code> + <code>src/runs/</code> dirs to layout; removed deleted <code>src/dashboard/runs-index.ts</code>; added 2 invariants ("Do NOT bypass parseRunEvent", "Do NOT let ANTHROPIC_API_KEY force API billing"); added 4 glossary terms (runAgentJson, RunsArea/RunPath, runEventSchema/parseRunEvent, VISUAL_STATES catalog).</div>
+        <div class="kan-card"><span class="meta">PLAN sync · <code>bb1cb49</code></span><strong>16 PLAN items <code>[~]</code>/<code>[ ]</code> → <code>[x]</code> with inline evidence.</strong> Items shipped under different commits without being marked: cost control suite, error UX (HELP_URLS + CLI pretty-print), R19 fixture, watch mode, eval CI gate. The PLAN scoreboard now reads honestly.</div>
+      </div>
+    </div>
+
+    <p class="note">
+      The principle that guided every pass: when grilling a candidate
+      module, ask "if I delete this, does complexity concentrate (good
+      depth) or scatter (just moving sillas)?" Only refactor when the
+      answer is concentrate. Source for each commit message is on
+      <code>main</code>.
+    </p>
 
     <h3>What it looks like — dashboard mockup</h3>
     <p>
