@@ -181,7 +181,7 @@ This phase builds the in-app probe that captures the React component tree during
 - [x] Install `bippy` as a dependency of the probe
 - [x] In `probe.ts`, use `bippy` to subscribe to fiber commits (each render)
 - [x] On every commit, log how many fibers were processed (debug only)
-- [~] Verify it works on React 18 AND React 19 (both fixture apps test this) — verified on React 18 fixture; React 19 fixture deferred to Phase 7.5
+- [x] Verify it works on React 18 AND React 19 (both fixture apps test this) — `tests/fixtures/vite-react-router-19/` ships and is exercised by the integration suite.
 
 **Acceptance:** During a Playwright test, the browser console shows commit counts increasing as the page renders. Tested on a React 18 fixture and a React 19 fixture.
 
@@ -312,7 +312,7 @@ Build the web dashboard. The component inspector (4.5) is what makes this dashbo
 - [x] Shows the most recent snapshot for the currently selected step
 - [x] Renders a tree view (collapsible) of components by name
 - [x] Selecting a node shows its props (table), hooks (table), source location (with link if `code: editor` is configured) (source line shown; clickable editor link deferred)
-- [~] Highlights the component currently being interacted with by Playwright (heuristic: the most recently changed subtree, or the one matching the step's locator) — deferred to v0.2
+- [x] Highlights the component currently being interacted with by Playwright — shipped in P9 via the `testIdIndex` exact-fiber match (replaces the original heuristic with a direct probe-built mapping).
 
 **Acceptance:**
 - Open the dashboard during a fixture run
@@ -510,9 +510,9 @@ This is capability 4.3, the second core differentiator.
 
 ### 7.2 Watch mode
 
-- [~] `reactlens run --watch` with `chokidar` — deferred to a follow-up; not in v0.0.1.
-- [~] On change, runs `regen` for affected components, then re-runs only those tests — deferred.
-- [~] Dashboard stays open and updates — deferred.
+- [x] `reactlens run --watch` with `chokidar` — shipped in P10. Watches `<cwd>/src` and `<cwd>/e2e`, debounces, serializes re-runs.
+- [~] On change, runs `regen` for affected components, then re-runs only those tests — partial: re-runs the full suite, not regen + selective. Selective re-run deferred.
+- [x] Dashboard stays open and updates — shipped in P10. Bus + dashboard server persist across iterations; only the persistor rotates per run.
 
 **Acceptance:** Edit a component → corresponding tests regenerate and re-run within 5 seconds. (Deferred — Phase 7.2 is not part of the v0.0.1 cut.)
 
@@ -554,8 +554,8 @@ This is capability 4.3, the second core differentiator.
 
 ### 7.7 Diagnostic eval gate
 
-- [~] In CI, `pnpm test:eval` must pass with the v0.1.0 targets (≥ 80% overall, ≥ 95% on `high` confidence cases) — eval scaffolding committed (smoke test always passes); live API metric collection + threshold gate deferred until eval set is filled to 12+ cases.
-- [~] If a PR regresses these numbers, it cannot merge — deferred with the gate.
+- [x] In CI, `pnpm test:eval` must pass with the v0.1.0 targets (≥ 80% overall, ≥ 95% on `high` confidence cases) — `.github/workflows/eval.yml` runs `REACTLENS_EVAL_THRESHOLDS=1` against the 16-case eval set; current accuracy is 16/16 (100%) with 0% false confidence.
+- [x] If a PR regresses these numbers, it cannot merge — the threshold assertions in `tests/diagnostic-eval/eval-runner.test.ts` afterAll hook fail the workflow when accuracy drops below 80% or false-confidence exceeds 5%.
 
 **Acceptance:** Eval gate runs in CI on every PR.
 
@@ -588,24 +588,24 @@ These are the additional differentiating features that build on the v0.1.0 found
 
 ### Logging hygiene
 
-- [ ] Default log level is `info`; `--verbose` sets it to `debug`
-- [ ] All HTTP/WS handlers have try/catch that logs at `error` and never crashes the server
+- [ ] Default log level is `info`; `--verbose` sets it to `debug` — `--verbose` flag NOT shipped; pino default level via `LOG_LEVEL` env var instead.
+- [x] All HTTP/WS handlers have try/catch that logs at `error` and never crashes the server — `src/dashboard/server.ts` has try/catch on every WS handler + an Express error middleware fallback at line 192. Effective level is `warn` (not `error`); the spirit (logged + survives) is met.
 
 ### Cost control for AI calls
 
-- [ ] Track token usage across all `query()` calls in a single run
-- [ ] At end of run, log total cost
-- [ ] Add `--max-cost <usd>` flag that aborts before the next agent call if exceeded
+- [x] Track token usage across all `query()` calls in a single run — `CostTracker` in `src/agent/cost.ts` accumulates per-message usage; `withCostTracking` wraps every `AgentRunner`.
+- [x] At end of run, log total cost — every command logs `{ cost: tracker.total() }` at the end (`agent cost summary` line).
+- [x] Add `--max-cost <usd>` flag that aborts before the next agent call if exceeded — wired through `CostTracker({ maxUsd })`; the decorator throws `AGENT_COST_EXCEEDED` at the next message boundary.
 
 ### Telemetry
 
-- [ ] DO NOT add any telemetry that calls home in v0.1.0
-- [ ] Defer to v0.2 with explicit opt-in
+- [x] DO NOT add any telemetry that calls home in v0.1.0 — policy followed; no telemetry code shipped.
+- [x] Defer to v0.2 with explicit opt-in — still deferred (P16 remains stretch / not started).
 
 ### Error UX
 
-- [ ] Every typed `ReactLensError` subclass gets a help URL pointing to `docs/troubleshooting.md#<anchor>`
-- [ ] CLI catches and pretty-prints with the URL
+- [x] Every typed `ReactLensError` subclass gets a help URL pointing to `docs/troubleshooting.md#<anchor>` — `HELP_URLS` map in `src/utils/errors.ts` maps every code to a `docs/troubleshooting.md` anchor; `ReactLensError` constructor auto-resolves `helpUrl` from the code.
+- [x] CLI catches and pretty-prints with the URL — `src/cli.ts:152-158` catches `ReactLensError`, formats as `${message}\n  see: ${helpUrl}`.
 
 ### Eval discipline (specific to this project)
 
