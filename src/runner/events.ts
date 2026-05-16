@@ -71,18 +71,13 @@ export type AxNode = {
   children: AxNode[];
 };
 
-export type Diagnosis = {
-  classification: 'real-bug' | 'test-bug' | 'flaky' | 'env-issue';
-  confidence: 'high' | 'medium' | 'low';
-  rootCause: string;
-  evidence: string[];
-  suggestedFix: string;
-  patch?: Array<{ file: string; oldStr: string; newStr: string; rationale: string }>;
-  gitContext?: {
-    componentLastChanged?: { sha: string; author: string; date: string; message: string };
-    specLastChanged?: { sha: string; author: string; date: string; message: string };
-  };
-};
+// Canonical Diagnosis shape now lives in @reynsu/reactlens-diagnosis-prompts.
+// Re-exported here so downstream imports (commands/analyze, dashboard/web/types)
+// don't need to update their import paths — they keep importing from
+// runner/events as the single internal protocol entry point. Imported as a
+// local symbol so the RunEvent discriminated union below can reference it.
+import type { Diagnosis } from '@reynsu/reactlens-diagnosis-prompts';
+export type { Diagnosis };
 
 export type RunEvent =
   | { t: 'run:start'; runId: string; totalTests: number; timestamp: number }

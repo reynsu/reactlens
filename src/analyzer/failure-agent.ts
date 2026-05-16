@@ -1,84 +1,32 @@
 // Diagnosis agent: given a failed test, build a structured Diagnosis. The
 // streaming + JSON extraction + Zod retry plumbing lives in
-// src/agent/run-json.ts; this module owns the diagnosis-specific bits —
-// the user-message shape, the schema, the degraded fallback, and the
-// gitContext attachment.
-import { z } from 'zod';
+// src/agent/run-json.ts; this module owns the orchestration (prompts, schema,
+// agent invocation, git-context attachment).
+//
+// Prompts + Diagnosis schema + pure helpers live in
+// @reynsu/reactlens-diagnosis-prompts. This file imports them and stays
+// focused on the agent-runner glue.
+import {
+  buildUserMessage,
+  degradedDiagnosis,
+  DiagnosisSchema,
+  DIAGNOSE_SYSTEM_PROMPT,
+  CLASSIFY_BUG_RUBRIC,
+  type Diagnosis,
+  type FailedTest as FailedTestBase,
+} from '@reynsu/reactlens-diagnosis-prompts';
 import { runAgentJson } from '../agent/run-json';
 import type { AgentRunner } from '../agent/runner';
-import type { ComponentNode, Diagnosis } from '../runner/events';
+import type { ComponentNode } from '../runner/events';
 import { gatherGitContext, type GitContext } from './git-context';
 
-export type FailedTest = {
-  testId: string;
-  testTitle: string;
-  specFile: string;
-  errorMessage?: string;
-  // Path to the component file the failing test exercises, when known. The
-  // run command derives this from the snapshot's source map when possible.
-  componentFile?: string;
-  // The component tree captured at the moment of failure (last snapshot for
-  // the test before test:end fired). Optional — diagnosis still runs without
-  // it but loses its biggest unique signal.
+// Re-export with the reactlens-specific snapshot shape narrowed back from
+// `unknown` to ComponentNode. Internal callers pass a typed tree, so we
+// preserve type safety on the reactlens side without forcing the published
+// package to know about ComponentNode.
+export type FailedTest = Omit<FailedTestBase, 'componentSnapshot'> & {
   componentSnapshot?: ComponentNode;
 };
-
-const diagnosisSchema = z.object({
-  classification: z.enum(['real-bug', 'test-bug', 'flaky', 'env-issue']),
-  confidence: z.enum(['high', 'medium', 'low']),
-  rootCause: z.string().min(1),
-  evidence: z.array(z.string()),
-  suggestedFix: z.string(),
-  patch: z
-    .array(
-      z.object({
-        file: z.string(),
-        oldStr: z.string(),
-        newStr: z.string(),
-        rationale: z.string(),
-      }),
-    )
-    .optional(),
-});
-
-function buildUserMessage(failure: FailedTest): string {
-  const lines: string[] = [];
-  lines.push(`# Failure to diagnose`);
-  lines.push(``);
-  lines.push(`Test: ${failure.testTitle}`);
-  lines.push(`Spec: ${failure.specFile}`);
-  if (failure.componentFile !== undefined) lines.push(`Component (probable): ${failure.componentFile}`);
-  if (failure.errorMessage !== undefined) {
-    lines.push(``);
-    lines.push(`# Error`);
-    lines.push('```');
-    lines.push(failure.errorMessage);
-    lines.push('```');
-  }
-  if (failure.componentSnapshot !== undefined) {
-    lines.push(``);
-    lines.push(`# Component snapshot at failure`);
-    lines.push('```json');
-    // Truncate enormous trees to keep token usage sane.
-    const snippet = JSON.stringify(failure.componentSnapshot, null, 2);
-    lines.push(snippet.length > 30_000 ? snippet.slice(0, 30_000) + '\n…(truncated)' : snippet);
-    lines.push('```');
-  }
-  lines.push(``);
-  lines.push(`Read the spec, the component, and any other context you need. Output a single JSON object matching the Diagnosis schema as the FINAL message.`);
-  return lines.join('\n');
-}
-
-function degradedDiagnosis(gitCtx: GitContext): Diagnosis {
-  return {
-    classification: 'env-issue',
-    confidence: 'low',
-    rootCause: 'diagnosis agent failed to produce a valid output',
-    evidence: ['agent returned non-JSON or schema-mismatched output twice'],
-    suggestedFix: 'rerun the diagnosis with --verbose; if it persists, file an issue with the trace',
-    ...(Object.keys(gitCtx).length > 0 ? { gitContext: gitCtx } : {}),
-  };
-}
 
 export async function diagnose(opts: {
   cwd: string;
@@ -97,11 +45,11 @@ export async function diagnose(opts: {
     agent: opts.agent,
     cwd: opts.cwd,
     systemPrompt: [
-      { name: 'diagnose.md', area: 'analyzer' },
-      { name: 'classify-bug.md', area: 'analyzer' },
+      { text: DIAGNOSE_SYSTEM_PROMPT },
+      { text: CLASSIFY_BUG_RUBRIC },
     ],
     userMessage,
-    schema: diagnosisSchema,
+    schema: DiagnosisSchema,
     allowedTools: ['Read', 'Glob', 'Grep', 'Bash'],
     permissionMode: 'default',
     maxTurns: 30,
@@ -110,8 +58,16 @@ export async function diagnose(opts: {
     onChunk: opts.onChunk,
   });
 
-  if (result === null) return degradedDiagnosis(gitCtx);
+  if (result === null) return degradedDiagnosis(asPublishedGitContext(gitCtx));
   return Object.keys(gitCtx).length > 0
-    ? { ...result, gitContext: gitCtx }
+    ? { ...result, gitContext: asPublishedGitContext(gitCtx) }
     : result;
+}
+
+// Local GitContext and the published GitContext are shape-identical (same
+// keys, same property shapes). The cast is a no-op at runtime — it's only
+// here so the two nominally-distinct types compose without forcing a wider
+// refactor of git-context.ts.
+function asPublishedGitContext(g: GitContext): NonNullable<Diagnosis['gitContext']> {
+  return g as NonNullable<Diagnosis['gitContext']>;
 }

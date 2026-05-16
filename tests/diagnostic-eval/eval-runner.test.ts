@@ -20,7 +20,7 @@ import {
   type CaseResult,
   type Truth,
   parseTruth,
-} from '../../src/analyzer/eval-metrics';
+} from '@reynsu/reactlens-diagnosis-prompts';
 import { runEvalCase } from '../../src/analyzer/eval-pipeline';
 import { logger } from '../../src/utils/logger';
 
