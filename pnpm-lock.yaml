@@ -14,6 +14,9 @@ importers:
       '@reynsu/reactlens-diagnosis-prompts':
         specifier: ^0.2.0
         version: 0.2.0(zod@4.4.3)
+      '@reynsu/reactlens-diff-core':
+        specifier: ^0.1.0
+        version: 0.1.0
       axe-core:
         specifier: ^4.11.4
         version: 4.11.4
@@ -386,6 +389,9 @@ packages:
     resolution: {integrity: sha512-lq9D86iXqw25aBgOmE3ZaH/slrFJMzhnaYkxng6bCo5Hlt/G/FO1lZghl84Ir7y8kacVkEjfIhyEMBwc5tNfDw==}
     peerDependencies:
       zod: '>=3.23.8 <5'
+
+  '@reynsu/reactlens-diff-core@0.1.0':
+    resolution: {integrity: sha512-FjHvXhEFb/UhT8HsScHjsDYYIupO7a+j5CTzmrbnnZfH+yjgX1WSzYayCcDpLeCH6R5sinc25ztgw2LbPnYr/A==}
 
   '@rolldown/binding-android-arm64@1.0.0-rc.18':
     resolution: {integrity: sha512-lIDyUAfD7U3+BWKzdxMbJcsYHuqXqmGz40aeRqvuAm3y5TkJSYTBW2RDrn65DJFPQqVjUAUqq5uz8urzQ8aBdQ==}
@@ -2006,6 +2012,8 @@ snapshots:
   '@reynsu/reactlens-diagnosis-prompts@0.2.0(zod@4.4.3)':
     dependencies:
       zod: 4.4.3
+
+  '@reynsu/reactlens-diff-core@0.1.0': {}
 
   '@rolldown/binding-android-arm64@1.0.0-rc.18':
     optional: true
