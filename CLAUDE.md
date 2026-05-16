@@ -569,3 +569,19 @@ pnpm build && node bin/reactlens.js diff <runIdA> <runIdB> --cwd <app>  # semant
 - **RunsArea / RunPath** — `src/runs/run-paths.ts`. Per-cwd / per-run value objects that own the `.reactlens/runs/<id>/` layout. Single source for ID validation (read-side `assertSafeId` + write-side `sanitizeSegment`), eager `.gitignore` write, and the runs-listing API.
 - **runEventSchema / parseRunEvent** — `src/runner/events.ts`. Runtime Zod validator for the canonical `RunEvent` union. Enforced at every untyped ingestion point (Playwright stdin, WS probe, persisted JSONL replay). Bidirectional compile-time guard keeps the schema and the TS union aligned.
 - **VISUAL_STATES catalog** — `src/visual-states/visual-states.ts`. Single source for per-visual-state data: matcher regex, description, MSW recipe, assertions. Adding a state is one row; component-analyzer and state-machine import from it as peers.
+
+---
+
+## 15. Ecosystem packages — 2026-05 amendment
+
+Pieces of this repo that two consumers needed (reactlens itself + the nativelens sibling) have been lifted to standalone published packages. The cross-repo decision lives in the nativelens ADR-0002 (`docs/adr/0002-selective-extraction-from-reactlens.md` in that repo). Reactlens-side notes:
+
+- **`@reynsu/reactlens-diagnosis-prompts`** — prompts + `DiagnosisSchema` + classification rubric + eval scoring. Consumed since the swap PR; previously lived at `src/analyzer/prompts/` + `src/analyzer/eval-metrics.ts`. Repo: [github.com/reynsu/reactlens-prompts](https://github.com/reynsu/reactlens-prompts).
+- **`@reynsu/reactlens-diff-core`** — `diffComponentTree` + `diffA11yTree` + their `SemanticDiff` types. Previously lived at `src/analyzer/{tree,a11y}-diff.ts`. Repo: [github.com/reynsu/reactlens-diff-core](https://github.com/reynsu/reactlens-diff-core).
+- **`@reynsu/nativelens-event-protocol`** — sibling repo's protocol package; not yet consumed by reactlens. Reactlens' `src/runner/events.ts` is currently a superset (adds `ComponentNode`, `AxNode`, frame, a11y-violation, etc.) and will migrate once the published surface covers those shapes via a coordinated bump.
+
+**Why `@reynsu/` scope, not `@reactlens/`.** The `@reactlens` npm scope is unclaimed and creating an npm org for tiny packages was more ceremony than warranted; the user already publishes under `@reynsu/`. When the scope is eventually claimed, a coordinated rename bumps the published packages and the workspace deps become one-line changes.
+
+**Why `zod` is a peerDependency on `@reynsu/reactlens-diagnosis-prompts` (0.2.0 vs 0.1.0).** Reactlens uses zod 4; nativelens uses zod 3. The 0.1.0 publish hardcoded zod 3 → two-zod hell with reactlens. 0.2.0 moved zod to `peerDependencies: ">=3.23.8 <5"`. The surface uses only stable zod APIs (`object`, `enum`, `optional`, `infer`, `discriminatedUnion`) verified compatible across majors.
+
+**Dashboard extraction is deferred.** The original three-package plan included `@reactlens/dashboard` (Express + ws + React/Vite/Tailwind frontend, per nativelens ADR-0007). It is not extracted yet: the dashboard frontend has no plugin registry, and host-agnostic generalization would be substantial without a second concrete consumer to shape it. Nativelens P6/P7 is the natural forcing function — extracting first and refactoring later would be double work. Decision: defer until nativelens P6 starts.
