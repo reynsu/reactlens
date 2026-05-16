@@ -22,7 +22,7 @@ import { basename, join } from 'node:path';
 import type { AgentRunner } from '../agent/runner';
 import type { ComponentNode } from '../runner/events';
 import { diagnose, type FailedTest } from './failure-agent';
-import { compareToTruth, parseTruth, type CaseResult } from './eval-metrics';
+import { compareToTruth, parseTruth, type CaseResult } from '@reynsu/reactlens-diagnosis-prompts';
 
 const SANDBOX_INPUTS = ['component.tsx', 'spec.ts', 'error.txt', 'snapshot.json'] as const;
 

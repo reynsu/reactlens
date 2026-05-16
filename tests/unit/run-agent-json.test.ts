@@ -143,11 +143,13 @@ describe('runAgentJson — prompt loading', () => {
   });
 
   it('loads a real prompt file by { name, area } from src/<area>/prompts/<name>', async () => {
-    // Smoke: doubles as a live check that the diagnose prompt is still where
-    // the resolver expects it.
-    const loaded = await loadPromptSource({ name: 'diagnose.md', area: 'analyzer' });
+    // Smoke: live check that the resolver still finds disk-based prompts.
+    // Diagnosis prompts moved to @reynsu/reactlens-diagnosis-prompts and are
+    // passed inline as { text }; generator prompts remain on disk and exercise
+    // the same loader path.
+    const loaded = await loadPromptSource({ name: 'generate-suite.md', area: 'generator' });
     expect(loaded.length).toBeGreaterThan(50);
-    expect(loaded).toMatch(/diagnos/i);
+    expect(loaded).toMatch(/generat/i);
   });
 
   it('throws when the named prompt does not exist in any candidate path', async () => {
