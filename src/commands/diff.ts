@@ -11,8 +11,12 @@ import { existsSync } from 'node:fs';
 import { ReactLensError } from '../utils/errors';
 import { logger } from '../utils/logger';
 import { parseRunEvent, type AxNode, type ComponentNode } from '../runner/events';
-import { diffComponentTree, type SemanticDiff } from '../analyzer/tree-diff';
-import { diffA11yTree, type A11ySemanticDiff } from '../analyzer/a11y-diff';
+import {
+  diffComponentTree,
+  diffA11yTree,
+  type SemanticDiff,
+  type A11ySemanticDiff,
+} from '@reynsu/reactlens-diff-core';
 
 export type DiffCommandOptions = {
   cwd: string;
