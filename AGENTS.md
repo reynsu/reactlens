@@ -262,13 +262,11 @@ reactlens/
 │   │   │   └── main.tsx
 │   │   └── terminal.tsx
 │   ├── analyzer/
-│   │   ├── failure-agent.ts
-│   │   ├── git-context.ts        ← git blame & diff for diagnosis
-│   │   ├── tree-diff.ts          ← P12.1: component-tree differ
-│   │   ├── a11y-diff.ts          ← P12.2: a11y-tree differ
-│   │   └── prompts/
-│   │       ├── diagnose.md
-│   │       └── classify-bug.md
+│   │   ├── failure-agent.ts      ← agent orchestration; prompts + schema imported from @reynsu/reactlens-diagnosis-prompts (see §15)
+│   │   └── git-context.ts        ← git blame & diff for diagnosis
+│   │   # tree-diff.ts, a11y-diff.ts → @reynsu/reactlens-diff-core (extracted, see §15)
+│   │   # eval-metrics.ts → @reynsu/reactlens-diagnosis-prompts (extracted)
+│   │   # prompts/diagnose.md, prompts/classify-bug.md → @reynsu/reactlens-diagnosis-prompts (extracted)
 │   ├── generator/
 │   │   ├── delegate.ts
 │   │   ├── stack-detector.ts
