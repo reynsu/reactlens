@@ -7,6 +7,15 @@ import { DiagnosticsPanel } from './components/DiagnosticsPanel';
 import { RunPicker } from './components/RunPicker';
 import { TimelineSlider } from './components/TimelineSlider';
 import { buildTimelineFromEvents } from './replay-timeline';
+import { builtinWebPlugin } from './builtin-plugin';
+import {
+  resolveFrameRenderer,
+  type DashboardPlugin,
+} from '../plugins';
+
+// `'web'` is the protocol's implicit default when a `frame` event omits its
+// own `source` field — keep this in lockstep with the BC contract in events.ts.
+const DEFAULT_FRAME_SOURCE = 'web';
 
 type ActiveStep = { stepId: string; title: string };
 
@@ -24,6 +33,10 @@ type State = {
   durationMs: number;
   selectedTestId: string | null;
   framesByTest: Map<string, FrameSource>;
+  // P6: source discriminator per test ('web', 'native', ...). Picks which
+  // registered plugin renders the frame. Defaults to 'web' when the underlying
+  // event omits the field.
+  frameSourceByTest: Map<string, string>;
   componentsByTest: Map<string, ComponentNode>;
   // P9: per-test data-testid → fiber-id index, shipped alongside each
   // component:snapshot. Used by ComponentInspector to highlight the exact
@@ -54,6 +67,7 @@ const initialState: State = {
   durationMs: 0,
   selectedTestId: null,
   framesByTest: new Map(),
+  frameSourceByTest: new Map(),
   componentsByTest: new Map(),
   testIdIndexByTest: new Map(),
   diagnosesByTest: new Map(),
@@ -148,13 +162,27 @@ function reducer(state: State, e: Action): State {
       return { ...state, activeStepByTest };
     }
     case 'frame': {
+      // Only the WIRE variant of `frame` has `data` (base64). The DISK
+      // variant (`frameRef`) reaches the dashboard via `replay:frame` after
+      // the loader resolves it to a URL — never via this case. Guard so the
+      // type narrows and the reducer is honest about which shape it handles.
+      if (e.data === undefined) return state;
       // Live frames ship base64 over WS. The same-data short-circuit keeps
       // React from re-rendering at 30 fps when nothing visible has changed.
       const prev = state.framesByTest.get(e.testId);
-      if (prev !== undefined && prev.kind === 'base64' && prev.data === e.data) return state;
-      const framesByTest = new Map(state.framesByTest);
-      framesByTest.set(e.testId, { kind: 'base64', data: e.data });
-      return { ...state, framesByTest };
+      const newSource = e.source ?? DEFAULT_FRAME_SOURCE;
+      const prevSource = state.frameSourceByTest.get(e.testId);
+      const sameFrame = prev !== undefined && prev.kind === 'base64' && prev.data === e.data;
+      const sameSource = prevSource === newSource;
+      if (sameFrame && sameSource) return state;
+      const data = e.data;
+      const framesByTest = sameFrame
+        ? state.framesByTest
+        : new Map(state.framesByTest).set(e.testId, { kind: 'base64', data });
+      const frameSourceByTest = sameSource
+        ? state.frameSourceByTest
+        : new Map(state.frameSourceByTest).set(e.testId, newSource);
+      return { ...state, framesByTest, frameSourceByTest };
     }
     case 'component:snapshot': {
       const componentsByTest = new Map(state.componentsByTest);
@@ -284,7 +312,14 @@ async function loadPastRun(runId: string, dispatch: React.Dispatch<Action>): Pro
   dispatch({ t: 'replace', state: next });
 }
 
-export function App(): JSX.Element {
+type AppProps = {
+  // P6: plugin registry. The host (reactlens itself, nativelens, future tools)
+  // injects renderers keyed by `frame.source`. Defaults to the built-in web
+  // plugin so reactlens stays unchanged when consumed without arguments.
+  plugins?: DashboardPlugin[];
+};
+
+export function App({ plugins = [builtinWebPlugin] }: AppProps = {}): JSX.Element {
   const [state, dispatch] = useReducer(reducer, initialState);
   const modeRef = useRef<'live' | 'replay'>(state.mode);
   modeRef.current = state.mode;
@@ -320,6 +355,16 @@ export function App(): JSX.Element {
   const sortedTests = useMemo(() => Array.from(state.tests.values()), [state.tests]);
   const selected = state.selectedTestId !== null ? state.tests.get(state.selectedTestId) : undefined;
   const selectedFrame = state.selectedTestId !== null ? state.framesByTest.get(state.selectedTestId) : undefined;
+  // P6: pick the host-registered renderer for this test's frame source.
+  // BrowserPreview is the fallback when no plugin claims the source — keeps
+  // the dashboard usable even if a host forgot to register a renderer for a
+  // source it emits.
+  const selectedFrameSource =
+    state.selectedTestId !== null
+      ? state.frameSourceByTest.get(state.selectedTestId) ?? DEFAULT_FRAME_SOURCE
+      : DEFAULT_FRAME_SOURCE;
+  const FrameRendererForSelected =
+    resolveFrameRenderer(selectedFrameSource, plugins) ?? BrowserPreview;
   const selectedTree = state.selectedTestId !== null ? state.componentsByTest.get(state.selectedTestId) : undefined;
   const selectedDiagnosis = state.selectedTestId !== null ? state.diagnosesByTest.get(state.selectedTestId) : undefined;
   const selectedActiveStep =
@@ -357,7 +402,7 @@ export function App(): JSX.Element {
       <div className="layout">
         <TestList tests={sortedTests} selectedId={state.selectedTestId} onSelect={(id) => dispatch({ t: 'select', id })} />
         <div className="preview-column">
-          <BrowserPreview frame={selectedFrame} test={selected} />
+          <FrameRendererForSelected frame={selectedFrame} test={selected} />
           {state.mode === 'replay' && state.selectedTestId !== null && (() => {
             const steps = state.timelineByTest.get(state.selectedTestId);
             if (steps === undefined) return null;

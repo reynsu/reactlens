@@ -59,6 +59,22 @@ describe('parseRunEvent — happy path per variant', () => {
     }
   });
 
+  it('preserves an optional source discriminator on a frame event', () => {
+    // P6: lets the dashboard pick a renderer (BrowserPreview vs DevicePreview)
+    // per frame. Absent on legacy / web-only frames; nativelens sets it.
+    const out = parseRunEvent({
+      t: 'frame',
+      testId: 't1',
+      sessionId: 'sess-1',
+      data: 'BASE64==',
+      source: 'native',
+    });
+    expect(out?.t).toBe('frame');
+    if (out?.t === 'frame') {
+      expect(out.source).toBe('native');
+    }
+  });
+
   it('parses DISK frame (frameRef + stepId, no data)', () => {
     const out = parseRunEvent({
       t: 'frame',

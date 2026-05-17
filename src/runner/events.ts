@@ -113,6 +113,10 @@ export type RunEvent =
       data?: string;
       frameRef?: string;
       stepId?: string;
+      // P6: identifies which dashboard plugin should render this frame.
+      // Absent on legacy / web-only frames (consumer defaults to 'web');
+      // nativelens emits `'native'` so the DevicePreview plugin picks them up.
+      source?: string;
     }
   | {
       t: 'component:snapshot';
@@ -341,6 +345,7 @@ export const runEventSchema = z.discriminatedUnion('t', [
     data: z.string().optional(),
     frameRef: z.string().optional(),
     stepId: z.string().optional(),
+    source: z.string().optional(),
   }),
   z.object({
     t: z.literal('component:snapshot'),
