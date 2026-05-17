@@ -26,26 +26,22 @@ export type DashboardServer = {
 const EVENT_BUFFER_LIMIT = 500;
 
 function findStaticDir(): string | null {
-  // Resolve the bundled dashboard frontend. We publish dist/web from this
-  // package; in dev `pnpm build:web` produces it. If missing, the server
-  // serves a tiny inline HTML so users still see something.
-  const candidates = [
-    join(__dirname, '..', 'web'),
-    join(__dirname, '..', '..', 'dist', 'web'),
-  ];
-  for (const c of candidates) {
-    try {
-      readFileSync(join(c, 'index.html'));
-      return c;
-    } catch {
-      /* try next */
-    }
+  // The dashboard SPA now lives in @reynsu/reactlens-dashboard-ui (per ADR
+  // 0007's shared-package strategy). Resolve the package's manifest at
+  // runtime so we don't have to hardcode a relative path; the bundle lives
+  // alongside it at dist/web/.
+  try {
+    const pkgPath = require.resolve('@reynsu/reactlens-dashboard-ui/package.json');
+    const webDir = join(pkgPath, '..', 'dist', 'web');
+    readFileSync(join(webDir, 'index.html'));
+    return webDir;
+  } catch {
+    return null;
   }
-  return null;
 }
 
 const FALLBACK_HTML = `<!doctype html><html><body><h1>reactlens dashboard</h1>
-<p>Frontend bundle not found. Run <code>pnpm build:web</code> in the reactlens repo.</p>
+<p>Frontend bundle not found. Reinstall to pull <code>@reynsu/reactlens-dashboard-ui</code>.</p>
 <script>const ws=new WebSocket('ws://'+location.host+'/ws/dashboard');ws.onmessage=(m)=>console.log(JSON.parse(m.data));</script>
 </body></html>`;
 
