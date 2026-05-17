@@ -18,7 +18,61 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { startDashboardServer, type DashboardServer } from '../../src/dashboard/server';
 import { EventBus } from '../../src/runner/event-bus';
 import { RunsArea } from '../../src/runs/run-paths';
-import { buildTimelineFromEvents } from '../../src/dashboard/web/replay-timeline';
+import type { TimelineStep } from '@reynsu/reactlens-dashboard-ui';
+
+// Canonical replay-timeline parser lives bundled in
+// @reynsu/reactlens-dashboard-ui's SPA — it isn't separately consumable as
+// a Node module from that package today (only the SPA bundle + types are
+// shipped). For this integration test we replicate the parser's contract
+// inline. If/when the dashboard-ui ships a dual-build (SPA + Node lib),
+// drop this and import the published function directly.
+type Timeline = Map<string, TimelineStep[]>;
+function buildTimelineFromEvents(
+  ndjson: string,
+  frameUrl: (frameRef: string) => string,
+): Timeline {
+  const timelineByTest: Timeline = new Map();
+  const openStepIdx = new Map<string, number>();
+  for (const line of ndjson.split('\n')) {
+    if (line.length === 0) continue;
+    let event: { t?: string } & Record<string, unknown>;
+    try {
+      event = JSON.parse(line);
+    } catch {
+      continue;
+    }
+    if (typeof event.t !== 'string') continue;
+    if (event.t === 'step:start') {
+      const testId = event['testId'] as string;
+      const arr = timelineByTest.get(testId) ?? [];
+      arr.push({ stepId: event['stepId'] as string, title: event['title'] as string });
+      timelineByTest.set(testId, arr);
+      openStepIdx.set(testId, arr.length - 1);
+    } else if (event.t === 'frame') {
+      const testId = event['testId'] as string;
+      const arr = timelineByTest.get(testId);
+      const idx = openStepIdx.get(testId);
+      const frameRef = event['frameRef'] as string | undefined;
+      if (arr !== undefined && idx !== undefined && frameRef !== undefined) {
+        const step = arr[idx];
+        if (step !== undefined) step.frame = { kind: 'url', url: frameUrl(frameRef) };
+      }
+    } else if (event.t === 'component:snapshot') {
+      const testId = event['testId'] as string;
+      const stepId = event['stepId'] as string;
+      const arr = timelineByTest.get(testId);
+      if (arr !== undefined && arr.length > 0) {
+        const matched = arr.findIndex((s) => s.stepId === stepId);
+        const idx = matched >= 0 ? matched : (openStepIdx.get(testId) ?? arr.length - 1);
+        const step = arr[idx];
+        if (step !== undefined) {
+          step.tree = event['tree'] as TimelineStep['tree'];
+        }
+      }
+    }
+  }
+  return timelineByTest;
+}
 
 const REPO_ROOT = join(__dirname, '..', '..');
 const FIXTURE = join(REPO_ROOT, 'tests', 'fixtures', 'vite-react-router');
