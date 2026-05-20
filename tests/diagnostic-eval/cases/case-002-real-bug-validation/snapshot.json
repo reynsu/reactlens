@@ -1,0 +1,14 @@
+{
+  "name": "CheckoutPage",
+  "key": null,
+  "props": {},
+  "hooks": [
+    { "kind": "state", "value": "123", "name": "cvv" },
+    { "kind": "state", "value": false, "name": "submitted" }
+  ],
+  "children": [],
+  "source": {
+    "file": "tests/diagnostic-eval/cases/case-002-real-bug-validation/component.tsx",
+    "line": 3
+  }
+}

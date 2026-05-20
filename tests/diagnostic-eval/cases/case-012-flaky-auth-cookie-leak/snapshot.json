@@ -1,0 +1,14 @@
+{
+  "name": "Landing",
+  "key": null,
+  "props": {},
+  "hooks": [
+    { "kind": "state", "value": { "authenticated": true }, "name": "auth" },
+    { "kind": "effect" }
+  ],
+  "children": [],
+  "source": {
+    "file": "tests/diagnostic-eval/cases/case-012-flaky-auth-cookie-leak/component.tsx",
+    "line": 9
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "name": "PromoBanner",
+  "key": null,
+  "props": {},
+  "hooks": [
+    { "kind": "state", "value": "new", "name": "variant" },
+    { "kind": "effect" }
+  ],
+  "children": [],
+  "source": {
+    "file": "tests/diagnostic-eval/cases/case-013-flaky-sessionstorage-flag/component.tsx",
+    "line": 5
+  }
+}

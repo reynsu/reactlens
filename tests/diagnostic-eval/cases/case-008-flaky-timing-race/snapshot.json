@@ -1,0 +1,15 @@
+{
+  "name": "SubscribeButton",
+  "key": null,
+  "props": {},
+  "hooks": [
+    { "kind": "state", "value": false, "name": "subscribed" },
+    { "kind": "ref", "value": "[Function: noop]", "name": "handlerRef" },
+    { "kind": "other", "value": { "tag": 5, "deps": [], "next": "[Circular]" } }
+  ],
+  "children": [],
+  "source": {
+    "file": "tests/diagnostic-eval/cases/case-008-flaky-timing-race/component.tsx",
+    "line": 3
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "name": "ArticleList",
+  "key": null,
+  "props": {},
+  "hooks": [
+    { "kind": "state", "value": [], "name": "articles" },
+    { "kind": "effect" }
+  ],
+  "children": [],
+  "source": {
+    "file": "tests/diagnostic-eval/cases/case-011-env-issue-missing-env/component.tsx",
+    "line": 5
+  }
+}

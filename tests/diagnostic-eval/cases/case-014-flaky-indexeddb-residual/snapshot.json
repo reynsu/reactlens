@@ -1,0 +1,14 @@
+{
+  "name": "OnboardingGate",
+  "key": null,
+  "props": {},
+  "hooks": [
+    { "kind": "state", "value": "skip", "name": "phase" },
+    { "kind": "effect" }
+  ],
+  "children": [],
+  "source": {
+    "file": "tests/diagnostic-eval/cases/case-014-flaky-indexeddb-residual/component.tsx",
+    "line": 27
+  }
+}
