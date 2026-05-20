@@ -34,6 +34,19 @@ export type ClassificationStat = {
   accuracy: number;
 };
 
+// The three confidence levels the diagnosis agent can emit. Same tuple
+// pattern as CLASSIFICATIONS above — guarantees every key is present
+// in the per-confidence record so the CI gate can read
+// `.byConfidence[c].accuracy` unconditionally.
+type Confidence = Diagnosis['confidence'];
+const CONFIDENCES: readonly Confidence[] = ['high', 'medium', 'low'] as const;
+
+export type ConfidenceStat = {
+  total: number;
+  correct: number;
+  accuracy: number;
+};
+
 export type DiagnoseFn = (args: { case: EvalCase; variant: AblationVariant }) => Promise<Diagnosis>;
 
 export type VariantReport = {
@@ -53,6 +66,13 @@ export type VariantReport = {
   // detect "we got worse at real-bug detection specifically", which a
   // single accuracy number masks.
   byClassification: Record<Classification, ClassificationStat>;
+  // Per-emitted-confidence bucket. Keys are the three confidence levels
+  // the agent emits; values count cases where the AGENT's confidence
+  // was that key. Calibration axis from Principle 2 / ADR-0008:
+  // `.byConfidence.high.accuracy` answers "when the agent said HIGH,
+  // was it actually right?". Deepens falseConfidenceCount (which only
+  // tracks high-but-wrong) into a full ladder breakdown.
+  byConfidence: Record<Confidence, ConfidenceStat>;
 };
 
 export type DeltaReport = {
@@ -114,6 +134,14 @@ export async function runAblation(args: RunAblationArgs): Promise<AblationReport
       const classBucket = report.byClassification[expected];
       classBucket.total += 1;
       if (correct) classBucket.correct += 1;
+
+      // Per-emitted-confidence bucket — keyed by the AGENT's answer
+      // so a `high`-but-wrong stays visible as low accuracy in the
+      // `high` bucket. This is the calibration axis the moat rubric
+      // (ADR-0008) measures against.
+      const confBucket = report.byConfidence[diagnosis.confidence];
+      confBucket.total += 1;
+      if (correct) confBucket.correct += 1;
     }
   }
 
@@ -149,6 +177,10 @@ function finalizeRates(bucket: VariantBucket): void {
       const cb = r.byClassification[c];
       cb.accuracy = cb.total === 0 ? 0 : cb.correct / cb.total;
     }
+    for (const c of CONFIDENCES) {
+      const cb = r.byConfidence[c];
+      cb.accuracy = cb.total === 0 ? 0 : cb.correct / cb.total;
+    }
   }
 }
 
@@ -174,6 +206,10 @@ function blankVariantReport(variant: AblationVariant): VariantReport {
   for (const c of CLASSIFICATIONS) {
     byClassification[c] = { total: 0, correct: 0, accuracy: 0 };
   }
+  const byConfidence = {} as Record<Confidence, ConfidenceStat>;
+  for (const c of CONFIDENCES) {
+    byConfidence[c] = { total: 0, correct: 0, accuracy: 0 };
+  }
   return {
     variant,
     totalCases: 0,
@@ -182,5 +218,6 @@ function blankVariantReport(variant: AblationVariant): VariantReport {
     falseConfidenceCount: 0,
     falseConfidenceRate: 0,
     byClassification,
+    byConfidence,
   };
 }

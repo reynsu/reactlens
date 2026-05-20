@@ -260,4 +260,57 @@ describe('runAblation', () => {
     // Classifications with zero cases: total 0, accuracy 0 (not NaN).
     expect(ws.byClassification['env-issue']).toMatchObject({ total: 0, correct: 0, accuracy: 0 });
   });
+
+  // Behavior #14: per-confidence calibration. Keyed by the agent's
+  // EMITTED confidence (not truth.minimumConfidence) — that's the
+  // calibration axis Principle 2 / ADR-0008 cares about: "when the
+  // agent said HIGH, was it actually right?". Deepens the existing
+  // falseConfidenceCount (which only tracks high-but-wrong) into a
+  // full breakdown so the slice #14 CI gate can fail on calibration
+  // regressions across the whole confidence ladder.
+  it('reports accuracy broken down by emitted confidence', async () => {
+    const casesDir = mkdtempSync(join(tmpdir(), 'reactlens-ablation-'));
+    // All four cases expect real-bug — varying the agent's answer
+    // and confidence isolates the per-confidence axis cleanly.
+    makeCuratedCase(casesDir, 'case-01-high-correct', {
+      expectedClassification: 'real-bug',
+      minimumConfidence: 'high',
+    });
+    makeCuratedCase(casesDir, 'case-02-high-wrong', {
+      expectedClassification: 'real-bug',
+      minimumConfidence: 'high',
+    });
+    makeCuratedCase(casesDir, 'case-03-medium-correct', {
+      expectedClassification: 'real-bug',
+      minimumConfidence: 'medium',
+    });
+    makeCuratedCase(casesDir, 'case-04-low-correct', {
+      expectedClassification: 'real-bug',
+      minimumConfidence: 'low',
+    });
+    const cases = loadEvalCases(casesDir);
+
+    // Scripted to land in distinct buckets keyed by agent's confidence:
+    //   high   bucket: 2 total, 1 correct → 0.5  (the calibration failure)
+    //   medium bucket: 1 total, 1 correct → 1
+    //   low    bucket: 1 total, 1 correct → 1
+    const replies: Record<string, Diagnosis> = {
+      'case-01-high-correct': makeDiagnosis({ classification: 'real-bug', confidence: 'high' }),
+      'case-02-high-wrong': makeDiagnosis({ classification: 'test-bug', confidence: 'high' }),
+      'case-03-medium-correct': makeDiagnosis({ classification: 'real-bug', confidence: 'medium' }),
+      'case-04-low-correct': makeDiagnosis({ classification: 'real-bug', confidence: 'low' }),
+    };
+    const diagnoseFn: DiagnoseFn = async ({ case: c }) => {
+      const reply = replies[c.name];
+      if (!reply) throw new Error(`unscripted: ${c.name}`);
+      return reply;
+    };
+
+    const report = await runAblation({ cases, diagnoseFn });
+    const ws = report.headline.withSnapshot;
+
+    expect(ws.byConfidence.high).toMatchObject({ total: 2, correct: 1, accuracy: 0.5 });
+    expect(ws.byConfidence.medium).toMatchObject({ total: 1, correct: 1, accuracy: 1 });
+    expect(ws.byConfidence.low).toMatchObject({ total: 1, correct: 1, accuracy: 1 });
+  });
 });
