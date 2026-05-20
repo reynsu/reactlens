@@ -19,7 +19,49 @@ import type { Diagnosis } from '@reynsu/reactlens-diagnosis-prompts';
 import type { EvalCase } from './eval-case-loader';
 import type { AblationVariant } from './ablation-variant-generator';
 
+// The four classifications the diagnosis agent emits (per CLAUDE.md §9
+// and the upstream Diagnosis schema). Listed as a literal tuple so the
+// VariantReport can initialise a record with all keys present — even
+// classifications that didn't appear in this case set get a zero-bucket
+// rather than `undefined`, so the CI gate in slice #14 can read
+// `.byClassification[c].accuracy` without a null check.
+type Classification = Diagnosis['classification'];
+const CLASSIFICATIONS: readonly Classification[] = ['real-bug', 'test-bug', 'flaky', 'env-issue'] as const;
+
+export type ClassificationStat = {
+  total: number;
+  correct: number;
+  accuracy: number;
+};
+
+// The three confidence levels the diagnosis agent can emit. Same tuple
+// pattern as CLASSIFICATIONS above — guarantees every key is present
+// in the per-confidence record so the CI gate can read
+// `.byConfidence[c].accuracy` unconditionally.
+type Confidence = Diagnosis['confidence'];
+const CONFIDENCES: readonly Confidence[] = ['high', 'medium', 'low'] as const;
+
+export type ConfidenceStat = {
+  total: number;
+  correct: number;
+  accuracy: number;
+};
+
 export type DiagnoseFn = (args: { case: EvalCase; variant: AblationVariant }) => Promise<Diagnosis>;
+
+// Optional cache for (case, variant) → Diagnosis. When provided, the
+// harness checks `get` before invoking diagnoseFn; on miss, it calls
+// diagnoseFn and then `set` so subsequent runs over unchanged inputs
+// short-circuit the agent (per issue #8 acceptance criterion: re-running
+// with no input changes does not re-invoke the agent).
+//
+// Hashing strategy lives inside the implementation, not on this surface
+// — keeps the harness oblivious to whether the cache is in-memory, file-
+// backed, or sharded.
+export type AblationCache = {
+  get(input: { case: EvalCase; variant: AblationVariant }): Promise<Diagnosis | undefined>;
+  set(input: { case: EvalCase; variant: AblationVariant; diagnosis: Diagnosis }): Promise<void>;
+};
 
 export type VariantReport = {
   variant: AblationVariant;
@@ -32,6 +74,19 @@ export type VariantReport = {
   // `high` on a wrong answer is worse than one that says `low` on it.
   falseConfidenceCount: number;
   falseConfidenceRate: number;
+  // Per-expected-classification bucket. Keys are the four classifications
+  // the agent emits; values count cases where the EXPECTED classification
+  // is that key (regardless of what the agent said). Lets the CI gate
+  // detect "we got worse at real-bug detection specifically", which a
+  // single accuracy number masks.
+  byClassification: Record<Classification, ClassificationStat>;
+  // Per-emitted-confidence bucket. Keys are the three confidence levels
+  // the agent emits; values count cases where the AGENT's confidence
+  // was that key. Calibration axis from Principle 2 / ADR-0008:
+  // `.byConfidence.high.accuracy` answers "when the agent said HIGH,
+  // was it actually right?". Deepens falseConfidenceCount (which only
+  // tracks high-but-wrong) into a full ladder breakdown.
+  byConfidence: Record<Confidence, ConfidenceStat>;
 };
 
 export type DeltaReport = {
@@ -67,24 +122,57 @@ export type AblationReport = {
 export type RunAblationArgs = {
   cases: EvalCase[];
   diagnoseFn: DiagnoseFn;
+  // Optional cache. When omitted, every (case, variant) tuple runs
+  // fresh — useful for the first measurement, tests, or one-shot
+  // recalibration. CI gates pass a file-backed cache so unchanged
+  // inputs across commits don't re-pay the per-token bill.
+  cache?: AblationCache;
 };
 
 const VARIANTS: readonly AblationVariant[] = ['with-snapshot', 'without-snapshot'] as const;
 
 export async function runAblation(args: RunAblationArgs): Promise<AblationReport> {
-  const { cases, diagnoseFn } = args;
+  const { cases, diagnoseFn, cache } = args;
   const curatedBucket = newVariantBucket();
   const uncuratedBucket = newVariantBucket();
 
   for (const c of cases) {
     const bucket = c.curated ? curatedBucket : uncuratedBucket;
+    const expected = c.truth.expectedClassification;
     for (const variant of VARIANTS) {
-      const diagnosis = await diagnoseFn({ case: c, variant });
+      // Check cache first — if the (case, variant) pair was already
+      // diagnosed on an unchanged input, reuse the prior answer rather
+      // than re-paying the agent invocation. On miss, write the fresh
+      // result back so subsequent runs become hits (issue #8: re-running
+      // with no input changes does not re-invoke the agent).
+      const cached = await cache?.get({ case: c, variant });
+      let diagnosis: Diagnosis;
+      if (cached !== undefined) {
+        diagnosis = cached;
+      } else {
+        diagnosis = await diagnoseFn({ case: c, variant });
+        await cache?.set({ case: c, variant, diagnosis });
+      }
       const report = bucket[variant];
       report.totalCases += 1;
-      const correct = diagnosis.classification === c.truth.expectedClassification;
+      const correct = diagnosis.classification === expected;
       if (correct) report.correctCount += 1;
       else if (diagnosis.confidence === 'high') report.falseConfidenceCount += 1;
+
+      // Per-expected-classification bucket — keyed by the EXPECTED
+      // class so an agent that always answers 'real-bug' shows 0%
+      // accuracy on test-bug/flaky/env-issue, exposing the bias.
+      const classBucket = report.byClassification[expected];
+      classBucket.total += 1;
+      if (correct) classBucket.correct += 1;
+
+      // Per-emitted-confidence bucket — keyed by the AGENT's answer
+      // so a `high`-but-wrong stays visible as low accuracy in the
+      // `high` bucket. This is the calibration axis the moat rubric
+      // (ADR-0008) measures against.
+      const confBucket = report.byConfidence[diagnosis.confidence];
+      confBucket.total += 1;
+      if (correct) confBucket.correct += 1;
     }
   }
 
@@ -116,6 +204,14 @@ function finalizeRates(bucket: VariantBucket): void {
     const r = bucket[variant];
     r.accuracy = r.totalCases === 0 ? 0 : r.correctCount / r.totalCases;
     r.falseConfidenceRate = r.totalCases === 0 ? 0 : r.falseConfidenceCount / r.totalCases;
+    for (const c of CLASSIFICATIONS) {
+      const cb = r.byClassification[c];
+      cb.accuracy = cb.total === 0 ? 0 : cb.correct / cb.total;
+    }
+    for (const c of CONFIDENCES) {
+      const cb = r.byConfidence[c];
+      cb.accuracy = cb.total === 0 ? 0 : cb.correct / cb.total;
+    }
   }
 }
 
@@ -137,6 +233,14 @@ function bucketToReport(bucket: VariantBucket): {
 }
 
 function blankVariantReport(variant: AblationVariant): VariantReport {
+  const byClassification = {} as Record<Classification, ClassificationStat>;
+  for (const c of CLASSIFICATIONS) {
+    byClassification[c] = { total: 0, correct: 0, accuracy: 0 };
+  }
+  const byConfidence = {} as Record<Confidence, ConfidenceStat>;
+  for (const c of CONFIDENCES) {
+    byConfidence[c] = { total: 0, correct: 0, accuracy: 0 };
+  }
   return {
     variant,
     totalCases: 0,
@@ -144,5 +248,7 @@ function blankVariantReport(variant: AblationVariant): VariantReport {
     accuracy: 0,
     falseConfidenceCount: 0,
     falseConfidenceRate: 0,
+    byClassification,
+    byConfidence,
   };
 }

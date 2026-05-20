@@ -16,6 +16,7 @@ import { describe, expect, it } from 'vitest';
 import type { Diagnosis } from '@reynsu/reactlens-diagnosis-prompts';
 import { loadEvalCases } from '../../src/eval/eval-case-loader';
 import {
+  type AblationCache,
   type DiagnoseFn,
   runAblation,
 } from '../../src/eval/ablation-harness';
@@ -206,5 +207,195 @@ describe('runAblation', () => {
     expect(report.uncurated?.withSnapshot.totalCases).toBe(1);
     expect(report.uncurated?.withSnapshot.correctCount).toBe(0);
     expect(report.uncurated?.withSnapshot.accuracy).toBe(0);
+  });
+
+  // Behavior #13: per-classification breakdown. Knowing the harness is
+  // 90% accurate isn't enough — operators need to know WHICH failure
+  // class regressed when accuracy drops. `byClassification` answers
+  // that, and the CI gate in slice #14 can scope its threshold per
+  // class if needed (e.g., real-bug detection is more critical).
+  it('reports accuracy broken down by classification', async () => {
+    const casesDir = mkdtempSync(join(tmpdir(), 'reactlens-ablation-'));
+    makeCuratedCase(casesDir, 'case-01-real-bug-a', {
+      expectedClassification: 'real-bug',
+      minimumConfidence: 'high',
+    });
+    makeCuratedCase(casesDir, 'case-02-real-bug-b', {
+      expectedClassification: 'real-bug',
+      minimumConfidence: 'high',
+    });
+    makeCuratedCase(casesDir, 'case-03-test-bug', {
+      expectedClassification: 'test-bug',
+      minimumConfidence: 'medium',
+    });
+    makeCuratedCase(casesDir, 'case-04-flaky', {
+      expectedClassification: 'flaky',
+      minimumConfidence: 'low',
+    });
+    const cases = loadEvalCases(casesDir);
+
+    // Scripted by case:
+    //   case-01-real-bug-a: correct (real-bug)
+    //   case-02-real-bug-b: WRONG (test-bug)        → real-bug bucket 1/2
+    //   case-03-test-bug: correct (test-bug)        → test-bug bucket 1/1
+    //   case-04-flaky: correct (flaky)              → flaky bucket 1/1
+    //                                                  env-issue bucket 0/0
+    const replies: Record<string, Diagnosis> = {
+      'case-01-real-bug-a': makeDiagnosis({ classification: 'real-bug', confidence: 'high' }),
+      'case-02-real-bug-b': makeDiagnosis({ classification: 'test-bug', confidence: 'high' }),
+      'case-03-test-bug': makeDiagnosis({ classification: 'test-bug', confidence: 'high' }),
+      'case-04-flaky': makeDiagnosis({ classification: 'flaky', confidence: 'medium' }),
+    };
+    const diagnoseFn: DiagnoseFn = async ({ case: c }) => {
+      const reply = replies[c.name];
+      if (!reply) throw new Error(`unscripted: ${c.name}`);
+      return reply;
+    };
+
+    const report = await runAblation({ cases, diagnoseFn });
+    const ws = report.headline.withSnapshot;
+
+    expect(ws.byClassification['real-bug']).toMatchObject({ total: 2, correct: 1, accuracy: 0.5 });
+    expect(ws.byClassification['test-bug']).toMatchObject({ total: 1, correct: 1, accuracy: 1 });
+    expect(ws.byClassification.flaky).toMatchObject({ total: 1, correct: 1, accuracy: 1 });
+    // Classifications with zero cases: total 0, accuracy 0 (not NaN).
+    expect(ws.byClassification['env-issue']).toMatchObject({ total: 0, correct: 0, accuracy: 0 });
+  });
+
+  // Behavior #14: per-confidence calibration. Keyed by the agent's
+  // EMITTED confidence (not truth.minimumConfidence) — that's the
+  // calibration axis Principle 2 / ADR-0008 cares about: "when the
+  // agent said HIGH, was it actually right?". Deepens the existing
+  // falseConfidenceCount (which only tracks high-but-wrong) into a
+  // full breakdown so the slice #14 CI gate can fail on calibration
+  // regressions across the whole confidence ladder.
+  it('reports accuracy broken down by emitted confidence', async () => {
+    const casesDir = mkdtempSync(join(tmpdir(), 'reactlens-ablation-'));
+    // All four cases expect real-bug — varying the agent's answer
+    // and confidence isolates the per-confidence axis cleanly.
+    makeCuratedCase(casesDir, 'case-01-high-correct', {
+      expectedClassification: 'real-bug',
+      minimumConfidence: 'high',
+    });
+    makeCuratedCase(casesDir, 'case-02-high-wrong', {
+      expectedClassification: 'real-bug',
+      minimumConfidence: 'high',
+    });
+    makeCuratedCase(casesDir, 'case-03-medium-correct', {
+      expectedClassification: 'real-bug',
+      minimumConfidence: 'medium',
+    });
+    makeCuratedCase(casesDir, 'case-04-low-correct', {
+      expectedClassification: 'real-bug',
+      minimumConfidence: 'low',
+    });
+    const cases = loadEvalCases(casesDir);
+
+    // Scripted to land in distinct buckets keyed by agent's confidence:
+    //   high   bucket: 2 total, 1 correct → 0.5  (the calibration failure)
+    //   medium bucket: 1 total, 1 correct → 1
+    //   low    bucket: 1 total, 1 correct → 1
+    const replies: Record<string, Diagnosis> = {
+      'case-01-high-correct': makeDiagnosis({ classification: 'real-bug', confidence: 'high' }),
+      'case-02-high-wrong': makeDiagnosis({ classification: 'test-bug', confidence: 'high' }),
+      'case-03-medium-correct': makeDiagnosis({ classification: 'real-bug', confidence: 'medium' }),
+      'case-04-low-correct': makeDiagnosis({ classification: 'real-bug', confidence: 'low' }),
+    };
+    const diagnoseFn: DiagnoseFn = async ({ case: c }) => {
+      const reply = replies[c.name];
+      if (!reply) throw new Error(`unscripted: ${c.name}`);
+      return reply;
+    };
+
+    const report = await runAblation({ cases, diagnoseFn });
+    const ws = report.headline.withSnapshot;
+
+    expect(ws.byConfidence.high).toMatchObject({ total: 2, correct: 1, accuracy: 0.5 });
+    expect(ws.byConfidence.medium).toMatchObject({ total: 1, correct: 1, accuracy: 1 });
+    expect(ws.byConfidence.low).toMatchObject({ total: 1, correct: 1, accuracy: 1 });
+  });
+
+  // Behavior #17: cache hit. The (case, variant) pair has an entry in
+  // the cache, so the harness short-circuits the diagnoseFn invocation
+  // and accounts the cached diagnosis instead. Saves the per-token
+  // re-bill on every CI run where the case inputs haven't changed —
+  // critical for slice #14 (CI gate) to be affordable.
+  it('uses cache when (case, variant) is already cached', async () => {
+    const casesDir = mkdtempSync(join(tmpdir(), 'reactlens-ablation-'));
+    makeCuratedCase(casesDir, 'case-cached', {
+      expectedClassification: 'real-bug',
+      minimumConfidence: 'high',
+    });
+    const cases = loadEvalCases(casesDir);
+
+    // Cache returns the CORRECT diagnosis for with-snapshot, miss for
+    // without-snapshot. The fresh diagnoseFn would return a WRONG
+    // answer — so if the cache is honored, `withSnapshot` shows the
+    // correct answer; if it's bypassed, both variants are wrong.
+    const cachedDiagnosis = makeDiagnosis({ classification: 'real-bug', confidence: 'high' });
+    const freshDiagnosis = makeDiagnosis({ classification: 'test-bug', confidence: 'high' });
+
+    let diagnoseCalls = 0;
+    const diagnoseFn: DiagnoseFn = async () => {
+      diagnoseCalls += 1;
+      return freshDiagnosis;
+    };
+
+    const cache: AblationCache = {
+      get: async ({ variant }) => (variant === 'with-snapshot' ? cachedDiagnosis : undefined),
+      set: async () => {
+        /* unused for this behavior */
+      },
+    };
+
+    const report = await runAblation({ cases, diagnoseFn, cache });
+
+    // diagnoseFn invoked only for the without-snapshot variant — the
+    // with-snapshot pair was served from cache.
+    expect(diagnoseCalls).toBe(1);
+    // The cached (correct) diagnosis flows through to the report.
+    expect(report.headline.withSnapshot.correctCount).toBe(1);
+    expect(report.headline.withSnapshot.accuracy).toBe(1);
+    // The uncached variant ran fresh and got the wrong answer.
+    expect(report.headline.withoutSnapshot.correctCount).toBe(0);
+  });
+
+  // Behavior #18: cache miss writes through. On a miss, the harness
+  // invokes diagnoseFn AND records the result back into the cache so
+  // the next run over unchanged inputs becomes a hit. Without write-
+  // through, the cache only ever fills from out-of-band warm-up runs
+  // and the issue #8 acceptance criterion ("re-running with no input
+  // changes does not re-invoke the agent") can't hold.
+  it('writes fresh diagnoses back to the cache on miss', async () => {
+    const casesDir = mkdtempSync(join(tmpdir(), 'reactlens-ablation-'));
+    makeCuratedCase(casesDir, 'case-fresh', {
+      expectedClassification: 'real-bug',
+      minimumConfidence: 'high',
+    });
+    const cases = loadEvalCases(casesDir);
+
+    const freshDiagnosis = makeDiagnosis({ classification: 'real-bug', confidence: 'high' });
+    const diagnoseFn: DiagnoseFn = async () => freshDiagnosis;
+
+    // Recording in-memory cache: get always returns undefined (miss),
+    // set captures every (case, variant, diagnosis) the harness writes.
+    const writes: Array<{ caseName: string; variant: string; diagnosis: Diagnosis }> = [];
+    const cache: AblationCache = {
+      get: async () => undefined,
+      set: async ({ case: c, variant, diagnosis }) => {
+        writes.push({ caseName: c.name, variant, diagnosis });
+      },
+    };
+
+    await runAblation({ cases, diagnoseFn, cache });
+
+    // Exactly one write per (case, variant) — one case × two variants.
+    expect(writes).toHaveLength(2);
+    expect(writes.map((w) => w.variant).sort()).toEqual(['with-snapshot', 'without-snapshot']);
+    // Each write carries the diagnoseFn output, not a placeholder.
+    expect(writes[0]?.diagnosis).toBe(freshDiagnosis);
+    expect(writes[1]?.diagnosis).toBe(freshDiagnosis);
+    // Identity of the cached case matches the input case.
+    expect(writes.every((w) => w.caseName === 'case-fresh')).toBe(true);
   });
 });

@@ -3,6 +3,7 @@
 // ablation harness compares (per ADR-0001). The contract: byte-stable,
 // deterministic, and loud-on-misuse (missing markers throws).
 import { describe, expect, it } from 'vitest';
+import { buildUserMessage } from '@reynsu/reactlens-diagnosis-prompts';
 import {
   AblationMarkersMissingError,
   generateVariant,
@@ -86,5 +87,62 @@ describe('generateVariant', () => {
     const promptWithoutMarkers = 'You are a diagnosis agent. Classify the failure.';
     expect(() => generateVariant(promptWithoutMarkers, 'with-snapshot')).not.toThrow();
     expect(generateVariant(promptWithoutMarkers, 'with-snapshot')).toBe(promptWithoutMarkers);
+  });
+});
+
+// Cross-package contract: the regex in this file MUST round-trip on the
+// real output of buildUserMessage from @reynsu/reactlens-diagnosis-prompts.
+// If the prompts package ever rewords the marker block (renames the
+// markers, drops a trailing newline, etc.), the strip would silently
+// no-op or partially strip — both produce a zero moat-contribution
+// delta that the operator would never notice (Principle 2). This block
+// is the regression guard for the published surface.
+describe('generateVariant ↔ buildUserMessage cross-package contract', () => {
+  const failure = {
+    testId: 'cart:flow:t-add',
+    testTitle: 'cart shows declined banner',
+    specFile: '/abs/path/cart.spec.ts',
+    errorMessage: 'Timed out waiting for [data-testid="declined-banner"]',
+    componentSnapshot: {
+      name: 'Cart',
+      props: {},
+      children: [{ name: 'Banner', props: { variant: 'declined' } }],
+    },
+  };
+
+  it('strips the snapshot block emitted by buildUserMessage when given a real failure with a snapshot', () => {
+    const prompt = buildUserMessage(failure);
+    expect(prompt).toContain('<!-- ablation:snapshot-start -->');
+    expect(prompt).toContain('<!-- ablation:snapshot-end -->');
+
+    const stripped = generateVariant(prompt, 'without-snapshot');
+    expect(stripped).not.toContain('ablation:snapshot');
+    expect(stripped).not.toContain('# Component snapshot at failure');
+    expect(stripped).not.toContain('"Banner"');
+
+    // Surrounding bytes must survive: the agent's user message keeps its
+    // title, spec ref, error fence, and tail instruction. If the strip
+    // were greedy across marker pairs it would chew through these.
+    expect(stripped).toContain('cart shows declined banner');
+    expect(stripped).toContain('/abs/path/cart.spec.ts');
+    expect(stripped).toContain('Timed out waiting for');
+    expect(stripped).toMatch(/Output a single JSON object/);
+  });
+
+  it('returns the buildUserMessage output unchanged for the with-snapshot variant', () => {
+    const prompt = buildUserMessage(failure);
+    expect(generateVariant(prompt, 'with-snapshot')).toBe(prompt);
+  });
+
+  it('throws AblationMarkersMissingError on a buildUserMessage output with NO snapshot field (markers omitted by design)', () => {
+    const failureNoSnapshot = {
+      testId: failure.testId,
+      testTitle: failure.testTitle,
+      specFile: failure.specFile,
+      errorMessage: failure.errorMessage,
+    };
+    const prompt = buildUserMessage(failureNoSnapshot);
+    expect(prompt).not.toContain('ablation:snapshot');
+    expect(() => generateVariant(prompt, 'without-snapshot')).toThrow(AblationMarkersMissingError);
   });
 });

@@ -1,0 +1,10 @@
+{
+  "name": "LoginPage",
+  "key": null,
+  "props": {},
+  "children": [],
+  "source": {
+    "file": "tests/diagnostic-eval/cases/case-001-stale-selector/component.tsx",
+    "line": 1
+  }
+}

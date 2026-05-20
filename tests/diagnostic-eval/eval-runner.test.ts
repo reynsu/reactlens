@@ -11,7 +11,7 @@
 //
 // We measure: classification accuracy, false-confidence rate (cases where
 // confidence==='high' but classification was wrong), and per-category recall.
-import { existsSync, readFileSync, readdirSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { afterAll, describe, expect, it } from 'vitest';
 import { canResolveAgent, pickAgentRunner } from '../../src/agent/select';
@@ -22,6 +22,11 @@ import {
   parseTruth,
 } from '@reynsu/reactlens-diagnosis-prompts';
 import { runEvalCase } from '../../src/analyzer/eval-pipeline';
+import { createFileCache } from '../../src/eval/ablation-cache';
+import { runAblation } from '../../src/eval/ablation-harness';
+import { formatAblationReport } from '../../src/eval/ablation-report-formatter';
+import { loadEvalCases } from '../../src/eval/eval-case-loader';
+import { createProductionDiagnoseFn } from '../../src/eval/production-diagnose-fn';
 import { logger } from '../../src/utils/logger';
 
 const CASES_DIR = join(__dirname, 'cases');
@@ -129,4 +134,50 @@ describe.skipIf(!HAS_AGENT)('diagnostic eval (with API)', () => {
     expect(metrics.accuracy, 'eval accuracy must meet DoD #5 (>=80%)').toBeGreaterThanOrEqual(0.8);
     expect(metrics.falseConfidenceRate, 'high-confidence accuracy must meet DoD #5 (<=5% false confidence)').toBeLessThanOrEqual(0.05);
   });
+});
+
+// Ablation block — separately env-gated from the eval gate above so a
+// developer can run the standard accuracy sweep without paying for the
+// extra without-snapshot leg (and vice versa). REACTLENS_ABLATION=1
+// unlocks the block; REACTLENS_ABLATION_UPDATE_BASELINE=1 additionally
+// rewrites the on-disk baseline (used once per intentional moat-
+// contribution recalibration, then NEVER in CI — slice #14 compares
+// against the checked-in baseline).
+//
+// The without-snapshot leg requires PR-B upstream (markers in
+// @reynsu/reactlens-diagnosis-prompts) before it can actually run end-
+// to-end. Until that ships, the block throws AblationMarkersMissingError
+// loudly — the calibration-leak Principle 2 forbids would be the silent
+// alternative.
+const ABLATION = process.env.REACTLENS_ABLATION === '1';
+const ABLATION_UPDATE_BASELINE = process.env.REACTLENS_ABLATION_UPDATE_BASELINE === '1';
+const ABLATION_BASELINE_PATH = join(__dirname, 'ablation-baseline.json');
+const ABLATION_CACHE_ROOT = join(__dirname, '..', '..', '.reactlens', 'eval-cache');
+
+describe.skipIf(!ABLATION || !HAS_AGENT)('diagnostic ablation (with API)', () => {
+  it('runs both variants and prints the AblationReport', async () => {
+    const agent = await pickAgentRunner({ commandName: 'eval' });
+    const cases = loadEvalCases(CASES_DIR);
+    const cwd = join(__dirname, '..', '..');
+    const diagnoseFn = createProductionDiagnoseFn({ agent, cwd });
+    const cache = createFileCache({ root: ABLATION_CACHE_ROOT });
+
+    const report = await runAblation({ cases, diagnoseFn, cache });
+
+    // Print the report on stdout. console.log (not logger.info) because
+    // the issue #8 acceptance criterion specifies STDOUT; logger writes
+    // through pino's JSON pipeline which the operator can't read at a
+    // glance.
+    console.log(formatAblationReport(report));
+
+    if (ABLATION_UPDATE_BASELINE) {
+      writeFileSync(ABLATION_BASELINE_PATH, JSON.stringify(report, null, 2));
+      logger.info({ path: ABLATION_BASELINE_PATH }, 'ablation baseline updated');
+    }
+
+    // Smoke assertion — the block ran end-to-end and produced a
+    // populated headline. The CI-gate threshold check lives in slice
+    // #14, not here.
+    expect(report.headline.withSnapshot.totalCases).toBeGreaterThan(0);
+  }, 60 * 60 * 1000);
 });

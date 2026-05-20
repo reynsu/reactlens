@@ -1,2 +1,13 @@
 allowBuilds:
   esbuild: true
+
+# Exempt the @reynsu/* scope from pnpm 11's default minimumReleaseAge
+# (1440 minutes / 24h). These are first-party packages published by the
+# same maintainer as this repo (reactlens-prompts, reactlens-diff-core,
+# reactlens-dashboard-ui, etc.) — the supply-chain cooldown that
+# protects against compromised third-party packages doesn't apply, and
+# blocking PRs on a 24h wait after every coordinated bump is friction
+# without benefit. The default minimumReleaseAge stays in effect for
+# every other dependency.
+minimumReleaseAgeExclude:
+  - '@reynsu/*'

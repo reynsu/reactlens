@@ -44,7 +44,7 @@
   "dependencies": {
     "@anthropic-ai/claude-agent-sdk": "^0.2.132",
     "@reynsu/reactlens-dashboard-ui": "^0.1.1",
-    "@reynsu/reactlens-diagnosis-prompts": "^0.2.0",
+    "@reynsu/reactlens-diagnosis-prompts": "^0.3.0",
     "@reynsu/reactlens-diff-core": "^0.1.0",
     "axe-core": "^4.11.4",
     "bippy": "^0.5.39",

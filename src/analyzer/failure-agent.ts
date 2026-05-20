@@ -33,8 +33,15 @@ export async function diagnose(opts: {
   agent: AgentRunner;
   failure: FailedTest;
   onChunk?: (text: string) => void;
+  // Optional pre-built user message. When present, replaces the
+  // default `buildUserMessage(failure)`. The AblationHarness's
+  // productionDiagnoseFn uses this seam to substitute the variant-
+  // transformed prompt (snapshot-stripped or not) without
+  // re-implementing the git-context + runAgentJson plumbing.
+  // Absent in every non-ablation call path → behavior unchanged.
+  userMessage?: string;
 }): Promise<Diagnosis> {
-  const userMessage = buildUserMessage(opts.failure);
+  const userMessage = opts.userMessage ?? buildUserMessage(opts.failure);
   const gitCtx = await gatherGitContext({
     cwd: opts.cwd,
     componentFile: opts.failure.componentFile,

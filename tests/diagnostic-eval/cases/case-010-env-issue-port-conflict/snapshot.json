@@ -1,0 +1,8 @@
+{
+  "name": "(no-root)",
+  "key": null,
+  "props": {
+    "reason": "probe did not observe any React fiber root before test failure; page navigation never completed"
+  },
+  "children": []
+}
