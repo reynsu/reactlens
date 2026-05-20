@@ -16,6 +16,7 @@ import { describe, expect, it } from 'vitest';
 import type { Diagnosis } from '@reynsu/reactlens-diagnosis-prompts';
 import { loadEvalCases } from '../../src/eval/eval-case-loader';
 import {
+  type AblationCache,
   type DiagnoseFn,
   runAblation,
 } from '../../src/eval/ablation-harness';
@@ -312,5 +313,89 @@ describe('runAblation', () => {
     expect(ws.byConfidence.high).toMatchObject({ total: 2, correct: 1, accuracy: 0.5 });
     expect(ws.byConfidence.medium).toMatchObject({ total: 1, correct: 1, accuracy: 1 });
     expect(ws.byConfidence.low).toMatchObject({ total: 1, correct: 1, accuracy: 1 });
+  });
+
+  // Behavior #17: cache hit. The (case, variant) pair has an entry in
+  // the cache, so the harness short-circuits the diagnoseFn invocation
+  // and accounts the cached diagnosis instead. Saves the per-token
+  // re-bill on every CI run where the case inputs haven't changed —
+  // critical for slice #14 (CI gate) to be affordable.
+  it('uses cache when (case, variant) is already cached', async () => {
+    const casesDir = mkdtempSync(join(tmpdir(), 'reactlens-ablation-'));
+    makeCuratedCase(casesDir, 'case-cached', {
+      expectedClassification: 'real-bug',
+      minimumConfidence: 'high',
+    });
+    const cases = loadEvalCases(casesDir);
+
+    // Cache returns the CORRECT diagnosis for with-snapshot, miss for
+    // without-snapshot. The fresh diagnoseFn would return a WRONG
+    // answer — so if the cache is honored, `withSnapshot` shows the
+    // correct answer; if it's bypassed, both variants are wrong.
+    const cachedDiagnosis = makeDiagnosis({ classification: 'real-bug', confidence: 'high' });
+    const freshDiagnosis = makeDiagnosis({ classification: 'test-bug', confidence: 'high' });
+
+    let diagnoseCalls = 0;
+    const diagnoseFn: DiagnoseFn = async () => {
+      diagnoseCalls += 1;
+      return freshDiagnosis;
+    };
+
+    const cache: AblationCache = {
+      get: async ({ variant }) => (variant === 'with-snapshot' ? cachedDiagnosis : undefined),
+      set: async () => {
+        /* unused for this behavior */
+      },
+    };
+
+    const report = await runAblation({ cases, diagnoseFn, cache });
+
+    // diagnoseFn invoked only for the without-snapshot variant — the
+    // with-snapshot pair was served from cache.
+    expect(diagnoseCalls).toBe(1);
+    // The cached (correct) diagnosis flows through to the report.
+    expect(report.headline.withSnapshot.correctCount).toBe(1);
+    expect(report.headline.withSnapshot.accuracy).toBe(1);
+    // The uncached variant ran fresh and got the wrong answer.
+    expect(report.headline.withoutSnapshot.correctCount).toBe(0);
+  });
+
+  // Behavior #18: cache miss writes through. On a miss, the harness
+  // invokes diagnoseFn AND records the result back into the cache so
+  // the next run over unchanged inputs becomes a hit. Without write-
+  // through, the cache only ever fills from out-of-band warm-up runs
+  // and the issue #8 acceptance criterion ("re-running with no input
+  // changes does not re-invoke the agent") can't hold.
+  it('writes fresh diagnoses back to the cache on miss', async () => {
+    const casesDir = mkdtempSync(join(tmpdir(), 'reactlens-ablation-'));
+    makeCuratedCase(casesDir, 'case-fresh', {
+      expectedClassification: 'real-bug',
+      minimumConfidence: 'high',
+    });
+    const cases = loadEvalCases(casesDir);
+
+    const freshDiagnosis = makeDiagnosis({ classification: 'real-bug', confidence: 'high' });
+    const diagnoseFn: DiagnoseFn = async () => freshDiagnosis;
+
+    // Recording in-memory cache: get always returns undefined (miss),
+    // set captures every (case, variant, diagnosis) the harness writes.
+    const writes: Array<{ caseName: string; variant: string; diagnosis: Diagnosis }> = [];
+    const cache: AblationCache = {
+      get: async () => undefined,
+      set: async ({ case: c, variant, diagnosis }) => {
+        writes.push({ caseName: c.name, variant, diagnosis });
+      },
+    };
+
+    await runAblation({ cases, diagnoseFn, cache });
+
+    // Exactly one write per (case, variant) — one case × two variants.
+    expect(writes).toHaveLength(2);
+    expect(writes.map((w) => w.variant).sort()).toEqual(['with-snapshot', 'without-snapshot']);
+    // Each write carries the diagnoseFn output, not a placeholder.
+    expect(writes[0]?.diagnosis).toBe(freshDiagnosis);
+    expect(writes[1]?.diagnosis).toBe(freshDiagnosis);
+    // Identity of the cached case matches the input case.
+    expect(writes.every((w) => w.caseName === 'case-fresh')).toBe(true);
   });
 });

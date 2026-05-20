@@ -49,6 +49,20 @@ export type ConfidenceStat = {
 
 export type DiagnoseFn = (args: { case: EvalCase; variant: AblationVariant }) => Promise<Diagnosis>;
 
+// Optional cache for (case, variant) → Diagnosis. When provided, the
+// harness checks `get` before invoking diagnoseFn; on miss, it calls
+// diagnoseFn and then `set` so subsequent runs over unchanged inputs
+// short-circuit the agent (per issue #8 acceptance criterion: re-running
+// with no input changes does not re-invoke the agent).
+//
+// Hashing strategy lives inside the implementation, not on this surface
+// — keeps the harness oblivious to whether the cache is in-memory, file-
+// backed, or sharded.
+export type AblationCache = {
+  get(input: { case: EvalCase; variant: AblationVariant }): Promise<Diagnosis | undefined>;
+  set(input: { case: EvalCase; variant: AblationVariant; diagnosis: Diagnosis }): Promise<void>;
+};
+
 export type VariantReport = {
   variant: AblationVariant;
   totalCases: number;
@@ -108,12 +122,17 @@ export type AblationReport = {
 export type RunAblationArgs = {
   cases: EvalCase[];
   diagnoseFn: DiagnoseFn;
+  // Optional cache. When omitted, every (case, variant) tuple runs
+  // fresh — useful for the first measurement, tests, or one-shot
+  // recalibration. CI gates pass a file-backed cache so unchanged
+  // inputs across commits don't re-pay the per-token bill.
+  cache?: AblationCache;
 };
 
 const VARIANTS: readonly AblationVariant[] = ['with-snapshot', 'without-snapshot'] as const;
 
 export async function runAblation(args: RunAblationArgs): Promise<AblationReport> {
-  const { cases, diagnoseFn } = args;
+  const { cases, diagnoseFn, cache } = args;
   const curatedBucket = newVariantBucket();
   const uncuratedBucket = newVariantBucket();
 
@@ -121,7 +140,19 @@ export async function runAblation(args: RunAblationArgs): Promise<AblationReport
     const bucket = c.curated ? curatedBucket : uncuratedBucket;
     const expected = c.truth.expectedClassification;
     for (const variant of VARIANTS) {
-      const diagnosis = await diagnoseFn({ case: c, variant });
+      // Check cache first — if the (case, variant) pair was already
+      // diagnosed on an unchanged input, reuse the prior answer rather
+      // than re-paying the agent invocation. On miss, write the fresh
+      // result back so subsequent runs become hits (issue #8: re-running
+      // with no input changes does not re-invoke the agent).
+      const cached = await cache?.get({ case: c, variant });
+      let diagnosis: Diagnosis;
+      if (cached !== undefined) {
+        diagnosis = cached;
+      } else {
+        diagnosis = await diagnoseFn({ case: c, variant });
+        await cache?.set({ case: c, variant, diagnosis });
+      }
       const report = bucket[variant];
       report.totalCases += 1;
       const correct = diagnosis.classification === expected;
