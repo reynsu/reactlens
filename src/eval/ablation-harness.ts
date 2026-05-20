@@ -19,6 +19,21 @@ import type { Diagnosis } from '@reynsu/reactlens-diagnosis-prompts';
 import type { EvalCase } from './eval-case-loader';
 import type { AblationVariant } from './ablation-variant-generator';
 
+// The four classifications the diagnosis agent emits (per CLAUDE.md §9
+// and the upstream Diagnosis schema). Listed as a literal tuple so the
+// VariantReport can initialise a record with all keys present — even
+// classifications that didn't appear in this case set get a zero-bucket
+// rather than `undefined`, so the CI gate in slice #14 can read
+// `.byClassification[c].accuracy` without a null check.
+type Classification = Diagnosis['classification'];
+const CLASSIFICATIONS: readonly Classification[] = ['real-bug', 'test-bug', 'flaky', 'env-issue'] as const;
+
+export type ClassificationStat = {
+  total: number;
+  correct: number;
+  accuracy: number;
+};
+
 export type DiagnoseFn = (args: { case: EvalCase; variant: AblationVariant }) => Promise<Diagnosis>;
 
 export type VariantReport = {
@@ -32,6 +47,12 @@ export type VariantReport = {
   // `high` on a wrong answer is worse than one that says `low` on it.
   falseConfidenceCount: number;
   falseConfidenceRate: number;
+  // Per-expected-classification bucket. Keys are the four classifications
+  // the agent emits; values count cases where the EXPECTED classification
+  // is that key (regardless of what the agent said). Lets the CI gate
+  // detect "we got worse at real-bug detection specifically", which a
+  // single accuracy number masks.
+  byClassification: Record<Classification, ClassificationStat>;
 };
 
 export type DeltaReport = {
@@ -78,13 +99,21 @@ export async function runAblation(args: RunAblationArgs): Promise<AblationReport
 
   for (const c of cases) {
     const bucket = c.curated ? curatedBucket : uncuratedBucket;
+    const expected = c.truth.expectedClassification;
     for (const variant of VARIANTS) {
       const diagnosis = await diagnoseFn({ case: c, variant });
       const report = bucket[variant];
       report.totalCases += 1;
-      const correct = diagnosis.classification === c.truth.expectedClassification;
+      const correct = diagnosis.classification === expected;
       if (correct) report.correctCount += 1;
       else if (diagnosis.confidence === 'high') report.falseConfidenceCount += 1;
+
+      // Per-expected-classification bucket — keyed by the EXPECTED
+      // class so an agent that always answers 'real-bug' shows 0%
+      // accuracy on test-bug/flaky/env-issue, exposing the bias.
+      const classBucket = report.byClassification[expected];
+      classBucket.total += 1;
+      if (correct) classBucket.correct += 1;
     }
   }
 
@@ -116,6 +145,10 @@ function finalizeRates(bucket: VariantBucket): void {
     const r = bucket[variant];
     r.accuracy = r.totalCases === 0 ? 0 : r.correctCount / r.totalCases;
     r.falseConfidenceRate = r.totalCases === 0 ? 0 : r.falseConfidenceCount / r.totalCases;
+    for (const c of CLASSIFICATIONS) {
+      const cb = r.byClassification[c];
+      cb.accuracy = cb.total === 0 ? 0 : cb.correct / cb.total;
+    }
   }
 }
 
@@ -137,6 +170,10 @@ function bucketToReport(bucket: VariantBucket): {
 }
 
 function blankVariantReport(variant: AblationVariant): VariantReport {
+  const byClassification = {} as Record<Classification, ClassificationStat>;
+  for (const c of CLASSIFICATIONS) {
+    byClassification[c] = { total: 0, correct: 0, accuracy: 0 };
+  }
   return {
     variant,
     totalCases: 0,
@@ -144,5 +181,6 @@ function blankVariantReport(variant: AblationVariant): VariantReport {
     accuracy: 0,
     falseConfidenceCount: 0,
     falseConfidenceRate: 0,
+    byClassification,
   };
 }

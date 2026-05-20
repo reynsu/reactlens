@@ -207,4 +207,57 @@ describe('runAblation', () => {
     expect(report.uncurated?.withSnapshot.correctCount).toBe(0);
     expect(report.uncurated?.withSnapshot.accuracy).toBe(0);
   });
+
+  // Behavior #13: per-classification breakdown. Knowing the harness is
+  // 90% accurate isn't enough — operators need to know WHICH failure
+  // class regressed when accuracy drops. `byClassification` answers
+  // that, and the CI gate in slice #14 can scope its threshold per
+  // class if needed (e.g., real-bug detection is more critical).
+  it('reports accuracy broken down by classification', async () => {
+    const casesDir = mkdtempSync(join(tmpdir(), 'reactlens-ablation-'));
+    makeCuratedCase(casesDir, 'case-01-real-bug-a', {
+      expectedClassification: 'real-bug',
+      minimumConfidence: 'high',
+    });
+    makeCuratedCase(casesDir, 'case-02-real-bug-b', {
+      expectedClassification: 'real-bug',
+      minimumConfidence: 'high',
+    });
+    makeCuratedCase(casesDir, 'case-03-test-bug', {
+      expectedClassification: 'test-bug',
+      minimumConfidence: 'medium',
+    });
+    makeCuratedCase(casesDir, 'case-04-flaky', {
+      expectedClassification: 'flaky',
+      minimumConfidence: 'low',
+    });
+    const cases = loadEvalCases(casesDir);
+
+    // Scripted by case:
+    //   case-01-real-bug-a: correct (real-bug)
+    //   case-02-real-bug-b: WRONG (test-bug)        → real-bug bucket 1/2
+    //   case-03-test-bug: correct (test-bug)        → test-bug bucket 1/1
+    //   case-04-flaky: correct (flaky)              → flaky bucket 1/1
+    //                                                  env-issue bucket 0/0
+    const replies: Record<string, Diagnosis> = {
+      'case-01-real-bug-a': makeDiagnosis({ classification: 'real-bug', confidence: 'high' }),
+      'case-02-real-bug-b': makeDiagnosis({ classification: 'test-bug', confidence: 'high' }),
+      'case-03-test-bug': makeDiagnosis({ classification: 'test-bug', confidence: 'high' }),
+      'case-04-flaky': makeDiagnosis({ classification: 'flaky', confidence: 'medium' }),
+    };
+    const diagnoseFn: DiagnoseFn = async ({ case: c }) => {
+      const reply = replies[c.name];
+      if (!reply) throw new Error(`unscripted: ${c.name}`);
+      return reply;
+    };
+
+    const report = await runAblation({ cases, diagnoseFn });
+    const ws = report.headline.withSnapshot;
+
+    expect(ws.byClassification['real-bug']).toMatchObject({ total: 2, correct: 1, accuracy: 0.5 });
+    expect(ws.byClassification['test-bug']).toMatchObject({ total: 1, correct: 1, accuracy: 1 });
+    expect(ws.byClassification.flaky).toMatchObject({ total: 1, correct: 1, accuracy: 1 });
+    // Classifications with zero cases: total 0, accuracy 0 (not NaN).
+    expect(ws.byClassification['env-issue']).toMatchObject({ total: 0, correct: 0, accuracy: 0 });
+  });
 });
