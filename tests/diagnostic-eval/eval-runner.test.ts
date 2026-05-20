@@ -22,8 +22,12 @@ import {
   parseTruth,
 } from '@reynsu/reactlens-diagnosis-prompts';
 import { runEvalCase } from '../../src/analyzer/eval-pipeline';
+import {
+  compareToBaseline,
+  DEFAULT_ACCURACY_THRESHOLD_PP,
+} from '../../src/eval/ablation-baseline-comparator';
 import { createFileCache } from '../../src/eval/ablation-cache';
-import { runAblation } from '../../src/eval/ablation-harness';
+import { runAblation, type AblationReport } from '../../src/eval/ablation-harness';
 import { formatAblationReport } from '../../src/eval/ablation-report-formatter';
 import { loadEvalCases } from '../../src/eval/eval-case-loader';
 import { createProductionDiagnoseFn } from '../../src/eval/production-diagnose-fn';
@@ -151,11 +155,33 @@ describe.skipIf(!HAS_AGENT)('diagnostic eval (with API)', () => {
 // alternative.
 const ABLATION = process.env.REACTLENS_ABLATION === '1';
 const ABLATION_UPDATE_BASELINE = process.env.REACTLENS_ABLATION_UPDATE_BASELINE === '1';
+// Slice #14: turn the stdout report into a hard CI gate. When set, the
+// freshly-computed AblationReport is compared against the checked-in
+// baseline via `compareToBaseline`, and any failure mode (accuracy
+// regression, new false-high-confidence, delta inversion) fails the
+// test. Independent of UPDATE_BASELINE so an operator can recalibrate
+// the baseline without ALSO turning the gate on in the same invocation.
+const ABLATION_GATE = process.env.REACTLENS_ABLATION_GATE === '1';
+// Optional override for the accuracy-regression threshold (in percentage
+// points). When unset the comparator's DEFAULT_ACCURACY_THRESHOLD_PP (2)
+// applies. Surfaces a single tuning knob the issue acceptance criterion
+// requires "configurable via a single constant".
+const ABLATION_ACCURACY_THRESHOLD_PP_RAW = process.env.REACTLENS_ABLATION_ACCURACY_THRESHOLD_PP;
 const ABLATION_BASELINE_PATH = join(__dirname, 'ablation-baseline.json');
 const ABLATION_CACHE_ROOT = join(__dirname, '..', '..', '.reactlens', 'eval-cache');
 
 describe.skipIf(!ABLATION || !HAS_AGENT)('diagnostic ablation (with API)', () => {
   it('runs both variants and prints the AblationReport', async () => {
+    // Refuse the obvious operator error of writing the baseline AND
+    // gating in the same run — the gate would trivially pass against
+    // numbers it just wrote, masking whatever drift the CI was supposed
+    // to catch. Loud throw, not silent surprise.
+    if (ABLATION_GATE && ABLATION_UPDATE_BASELINE) {
+      throw new Error(
+        'REACTLENS_ABLATION_GATE and REACTLENS_ABLATION_UPDATE_BASELINE are mutually exclusive — gating against a baseline you just wrote in the same run is meaningless. Pick one.',
+      );
+    }
+
     const agent = await pickAgentRunner({ commandName: 'eval' });
     const cases = loadEvalCases(CASES_DIR);
     const cwd = join(__dirname, '..', '..');
@@ -175,9 +201,40 @@ describe.skipIf(!ABLATION || !HAS_AGENT)('diagnostic ablation (with API)', () =>
       logger.info({ path: ABLATION_BASELINE_PATH }, 'ablation baseline updated');
     }
 
+    if (ABLATION_GATE) {
+      if (!existsSync(ABLATION_BASELINE_PATH)) {
+        throw new Error(
+          `REACTLENS_ABLATION_GATE=1 but no baseline at ${ABLATION_BASELINE_PATH}. Generate one with REACTLENS_ABLATION_UPDATE_BASELINE=1 before turning on the gate.`,
+        );
+      }
+      const baseline = JSON.parse(readFileSync(ABLATION_BASELINE_PATH, 'utf8')) as AblationReport;
+      const thresholdPp = ABLATION_ACCURACY_THRESHOLD_PP_RAW !== undefined
+        ? Number(ABLATION_ACCURACY_THRESHOLD_PP_RAW)
+        : DEFAULT_ACCURACY_THRESHOLD_PP;
+      if (!Number.isFinite(thresholdPp) || thresholdPp < 0) {
+        throw new Error(
+          `REACTLENS_ABLATION_ACCURACY_THRESHOLD_PP='${ABLATION_ACCURACY_THRESHOLD_PP_RAW}' must be a non-negative finite number.`,
+        );
+      }
+      const result = compareToBaseline(report, baseline, { maxAccuracyRegressionPp: thresholdPp });
+      // Always log the comparison outcome — even a pass is useful CI
+      // signal because it confirms which baseline was compared against.
+      logger.info(
+        { ok: result.ok, failures: result.failures, thresholdPp },
+        'ablation gate compared current report against baseline',
+      );
+      if (!result.ok) {
+        // Inline the failures so the CI job log shows the reason without
+        // needing to follow a structured-log link to find it.
+        console.error('\nAblation gate FAILED:');
+        for (const f of result.failures) console.error(`  - ${f}`);
+      }
+      expect(result.ok, `ablation gate (failures: ${result.failures.join(' | ')})`).toBe(true);
+    }
+
     // Smoke assertion — the block ran end-to-end and produced a
-    // populated headline. The CI-gate threshold check lives in slice
-    // #14, not here.
+    // populated headline. The CI-gate threshold check above this line
+    // does the moat-rubric enforcement.
     expect(report.headline.withSnapshot.totalCases).toBeGreaterThan(0);
   }, 60 * 60 * 1000);
 });
