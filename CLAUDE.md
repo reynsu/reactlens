@@ -48,10 +48,11 @@ This is not "AI-powered Playwright with a nicer UI". This is a fundamentally dif
 ### Goals
 
 - **React-only, deeply.** The component-tree integration is the moat. Don't dilute it.
-- **Local-first.** Everything runs on the developer's machine. No cloud.
+- **Sovereignty-first.** No SaaS, no telemetry, no cloud sync — these are hard invariants. Offline operation is preserved for non-LLM commands (`run`, dashboard, replay, `diff`); LLM-backed features (`generate`, `diagnose`) require network and that is acknowledged, not hidden. See [ADR-0003](docs/adr/0003-sovereignty-first-not-offline-first.md).
 - **Two questions answered, every time:** Is this a test bug or a real bug? Where exactly?
-- **Page Object Model is the only test pattern we generate.** No exceptions.
-- **The diagnosis is always actionable.** A diagnosis without a concrete suggested fix is a bug.
+- **The moat is defined by serving diagnosis.** Every capability is evaluated by whether it makes diagnosis measurably better under the ablation methodology of [ADR-0001](docs/adr/0001-ablation-as-moat-metric.md). See [ADR-0008](docs/adr/0008-moat-is-defined-by-serving-diagnosis.md).
+- **POM is the default test pattern; Component-Object Pattern is opt-in** for teams committed to reactlens. See [ADR-0006](docs/adr/0006-component-object-pattern-as-opt-in.md).
+- **The diagnosis is always actionable.** A diagnosis without a concrete suggested fix is a bug. v0.3 closes the loop with apply-fix; see [ADR-0007](docs/adr/0007-close-the-diagnosis-loop-in-v0.3.md).
 - **Zero-config for common React stacks** (Vite + React Router, Next.js App Router, TanStack Router).
 
 ### Non-goals
@@ -64,11 +65,30 @@ This is not "AI-powered Playwright with a nicer UI". This is a fundamentally dif
 
 ---
 
-## 4. The five differentiating capabilities
+## 4. Capabilities
 
-These are the features that justify the project's existence. Every line of code in this repository should ultimately serve one of them.
+The moat is not the list below. The moat is **work that makes diagnosis measurably better** — see [ADR-0008](docs/adr/0008-moat-is-defined-by-serving-diagnosis.md). Each capability below is tagged with its current classification:
 
-### 4.1 Component-aware test execution (CORE — v0.1.0)
+- **[moat]** — directly serves diagnosis under the ablation methodology of [ADR-0001](docs/adr/0001-ablation-as-moat-metric.md).
+- **[moat-adjacent]** — indirectly serves diagnosis (e.g. richer specs feed richer snapshots; replay surfaces past diagnoses).
+- **[gray-zone]** — claim of moat status is unverified; current ablation may demote it to built-in.
+- **[built-in convenience]** — useful, shipped, but does not differentiate. Not sold as a moat capability. See [ADR-0002](docs/adr/0002-table-stakes-vs-moat-capabilities.md).
+
+Current classification (re-evaluated whenever the ablation methodology of ADR-0001 produces fresh evidence):
+
+| Capability | Classification | Notes |
+|---|---|---|
+| 4.1 Component-aware execution | moat | Captures the signal diagnosis consumes |
+| 4.2 Component-aware generation | moat-adjacent | Better tests → richer snapshots → better diagnosis |
+| 4.3 Test-bug vs real-bug classification | moat | The diagnosis itself |
+| 4.4 Dashboard with component inspector | moat-adjacent | Makes the diagnosed snapshot legible to the user |
+| 4.5 Time-travel debugging | moat-adjacent | Replay surfaces past diagnoses without re-running |
+| 4.6 Watch mode | built-in convenience | Any test runner has this |
+| 4.7 Behavior contracts | moat-adjacent | Living doc of the AST→spec mapping; feeds generation, not diagnosis directly |
+| 4.8 Semantic visual regression | mixed | Component-tree diff is moat; a11y-tree diff is gray-zone pending ablation |
+| 4.9 Built-in accessibility (axe) | built-in convenience | `@axe-core/playwright` exists |
+
+### 4.1 Component-aware test execution (CORE — v0.1.0) **[moat]**
 
 During every test run, we capture the React component tree at every step:
 
@@ -81,7 +101,7 @@ We do this by injecting a hook into the running React app that connects to the s
 
 This is the foundation everything else depends on.
 
-### 4.2 Component-aware test generation (CORE — v0.1.0)
+### 4.2 Component-aware test generation (CORE — v0.1.0) **[moat-adjacent]**
 
 When generating tests, we don't just look at the rendered DOM. We:
 
@@ -472,19 +492,25 @@ Discriminate on `t`. Every frontend handler MUST use exhaustive switch.
 
 ### Principle 1: Capture is sacred, processing is replaceable
 
-The `component:snapshot` data we capture during a test run is the foundation of everything. If our capture is incomplete or wrong, no amount of clever AI prompting will save us. If our capture is rich and accurate, even mediocre prompts produce useful results.
+The `component:snapshot` data we capture during a test run is the foundation of everything *as long as it reaches diagnosis*. If our capture is incomplete or wrong, no amount of clever AI prompting will save us. If our capture is rich and accurate but never makes it into the diagnosis prompt, it is not actually sacred — it is dead weight that we keep capturing out of habit. Per [ADR-0008](docs/adr/0008-moat-is-defined-by-serving-diagnosis.md), the test for whether a capture signal is sacred is whether removing it from the diagnosis prompt degrades accuracy under the ablation methodology of [ADR-0001](docs/adr/0001-ablation-as-moat-metric.md).
 
-**Implication:** spend disproportionate engineering effort on the component bridge. Cut corners on the dashboard CSS first; on capture, last.
+**Implication:** spend disproportionate engineering effort on the component bridge *and* on the diagnosis prompt that consumes it. Cut corners on the dashboard CSS first; on the capture → diagnosis pipeline, last.
 
 ### Principle 2: Confidence must be calibrated, not asserted
 
-A diagnosis that says "high confidence" must actually be right at high frequency. We maintain `tests/diagnostic-eval/` with hand-labeled failure cases. Before any release, we run the diagnosis agent against this set and measure accuracy per confidence level.
+A diagnosis that says "high confidence" must actually be right at high frequency. We maintain `tests/diagnostic-eval/` with labeled failure cases (grown via dogfooding and corpus harvest per [ADR-0004](docs/adr/0004-eval-growth-via-dogfooding-and-corpus-harvest.md)). Before any release, we run the diagnosis agent against this set in both `with-snapshot` and `without-snapshot` modes and measure accuracy per confidence level **and the moat-contribution delta**.
 
-**Implication:** if we degrade calibration, we don't ship.
+**Implication:** if we degrade calibration, we don't ship. If a change does not move the moat-contribution delta in the intended direction, it is not moat work even if it touches the probe.
 
-### Principle 3: Local-first, always
+### Principle 3: Sovereignty-first (not necessarily offline-first)
 
-Everything runs on the developer's machine. The Anthropic API is the only network call we make, and only when the developer explicitly invokes generation or diagnosis. No telemetry. No cloud sync.
+Three properties, in priority order:
+
+1. **No SaaS, no proprietary lock-in.** The repository the developer runs is complete. There is no backend that could be shut down. This is a hard invariant.
+2. **No telemetry, no data egress without explicit invocation.** The developer's code is not uploaded to any service unless they explicitly run an LLM-backed command. This is a hard invariant.
+3. **Offline operation is preserved for non-LLM commands.** `run`, dashboard, replay, `diff`, and reading existing contracts work without network. `generate` and `diagnose` require an LLM (Anthropic API by default, or the user's local `claude` CLI via `--use-claude-code`) and may therefore require network. This is acknowledged, not hidden — it is *not* a violation of the philosophy.
+
+The `--use-claude-code` flag is part of the sovereignty story, not a developer-convenience footnote: if the user already pays for Claude Max, reactlens uses that session instead of double-billing. See [ADR-0003](docs/adr/0003-sovereignty-first-not-offline-first.md).
 
 ### Principle 4: One framework, deeply
 
@@ -530,6 +556,8 @@ pnpm build && node bin/reactlens.js diff <runIdA> <runIdB> --cwd <app>  # semant
 ## 13. Things you must not do
 
 - Do NOT broaden scope beyond React. Reject "what about Vue?" with a pointer to Section 3.
+- Do NOT label work as moat / differentiator unless it makes diagnosis measurably better under the ablation methodology of [ADR-0001](docs/adr/0001-ablation-as-moat-metric.md). The rubric is: *does this work make diagnosis better?* See [ADR-0008](docs/adr/0008-moat-is-defined-by-serving-diagnosis.md).
+- Do NOT market as a differentiator anything a competitor with Playwright + npm can replicate in under a day. Such features ship as "Built-in conveniences" in §4, not as moat. See [ADR-0002](docs/adr/0002-table-stakes-vs-moat-capabilities.md).
 - Do NOT touch `__REACT_DEVTOOLS_GLOBAL_HOOK__` directly. Use `bippy`.
 - Do NOT change the event protocol (Section 9) without updating the runner, the bridge, the server, and the frontend in the same commit.
 - Do NOT bypass `parseRunEvent` at any ingestion point that converts untyped JSON into a `RunEvent`. The boundary parser is the single source of runtime validation; new ingestion points (CI artifact upload, future probes) MUST go through it.
@@ -582,4 +610,6 @@ Pieces of this repo that two consumers needed (reactlens itself + the nativelens
 
 **Why `zod` is a peerDependency on `@reynsu/reactlens-diagnosis-prompts` (0.2.0 vs 0.1.0).** Reactlens uses zod 4; nativelens uses zod 3. The 0.1.0 publish hardcoded zod 3 → two-zod hell with reactlens. 0.2.0 moved zod to `peerDependencies: ">=3.23.8 <5"`. The surface uses only stable zod APIs (`object`, `enum`, `optional`, `infer`, `discriminatedUnion`) verified compatible across majors.
 
-**Dashboard extraction is deferred.** The original three-package plan included `@reactlens/dashboard` (Express + ws + React/Vite/Tailwind frontend, per nativelens ADR-0007). It is not extracted yet: the dashboard frontend has no plugin registry, and host-agnostic generalization would be substantial without a second concrete consumer to shape it. Nativelens P6/P7 is the natural forcing function — extracting first and refactoring later would be double work. Decision: defer until nativelens P6 starts.
+**Dashboard extraction shipped against the original deferral.** The original three-package plan included `@reactlens/dashboard` (Express + ws + React/Vite/Tailwind frontend, per nativelens ADR-0007). The decision recorded earlier in this section was to defer until nativelens P6 started. That deferral was overridden — `@reynsu/reactlens-dashboard-ui` was extracted ahead of schedule (commits `2a1bf68` + `0f811e7`) and is consumed by reactlens via the `feature/consume-dashboard-ui` branch. Nativelens P6/P7 has not started, so the package still has only one production consumer. This is documented as a known disonance, not endorsed — see [ADR-0005](docs/adr/0005-pause-package-extractions.md), which both captures the lesson and pauses further extractions.
+
+**Soft guideline: pause new `@reynsu/*` extractions until existing packages prove their reuse claim.** No new code is extracted from reactlens into a published `@reynsu/*` package until at least two production consumers — or one production consumer with a written commitment to ship within 60 days — have validated the existing API surface of the previously-extracted packages (`diagnosis-prompts`, `diff-core`, `dashboard-ui`). This is a guideline in this section, not an invariant in §13: a PR that violates the rule is *discussed* with a recorded justification, not auto-rejected. See [ADR-0005](docs/adr/0005-pause-package-extractions.md) for rationale and the open `feature/consume-dashboard-ui` branch as a symptom of the cost of ignoring it.

@@ -7,16 +7,21 @@ Every existing E2E tool — Playwright, Cypress, QA Wolf — treats your app as 
 reactlens runs alongside Playwright and captures the React component tree, the accessibility tree, and axe-core findings at every test — and persists the whole run timeline so you can replay it offline. That changes what you can do:
 
 - **Generate tests** that exercise every render branch — loading, error, empty, success — by reading your source via AST, not guessing from one DOM snapshot. Each component gets a `<Component>.contract.md` next to its spec, documenting the visual-state set reactlens enumerated.
-- **Diagnose failures** by reading the actual prop that was wrong, the hook that returned bad data, the recent commit that touched the relevant file. Each diagnosis is classified `real-bug | test-bug | flaky | env-issue` with calibrated confidence (100% accuracy on the 16-case eval set).
+- **Diagnose failures** by reading the actual prop that was wrong, the hook that returned bad data, the recent commit that touched the relevant file. Each diagnosis is classified `real-bug | test-bug | flaky | env-issue` with calibrated confidence (16/16 on the in-tree eval set in the `with-snapshot` condition; the `without-snapshot` baseline that would prove the moat is the headline metric is pending per [ADR-0001](docs/adr/0001-ablation-as-moat-metric.md), and the eval set is being grown via dogfooding and corpus harvest per [ADR-0004](docs/adr/0004-eval-growth-via-dogfooding-and-corpus-harvest.md)).
 - **Inspect** any test step in a live dashboard — DOM preview alongside the React tree at that moment, with all props and hook values visible. The active step highlights the exact fiber Playwright is interacting with, resolved via the probe-built testid → fiber map.
 - **Replay past runs** offline. Every run writes its events + per-step frames to `.reactlens/runs/<id>/`; the dashboard picks them up from a dropdown and scrubs through with a timeline slider — no re-run needed.
+- **Semantic diff** (`reactlens diff <runA> <runB>`): structural changes in the component tree, not pixel-level noise — catches regressions pixel diffing misses. Accessibility-tree diff is bundled for free but is currently classified gray-zone pending the ablation in [ADR-0001](docs/adr/0001-ablation-as-moat-metric.md).
+
+### Built-in conveniences (not differentiators)
+
+These ship with reactlens because you're already using Playwright. They are not the moat — any team can wire equivalents in an afternoon. See [ADR-0002](docs/adr/0002-table-stakes-vs-moat-capabilities.md).
+
 - **Watch mode** (`--watch`): editing a file under `src/` or `e2e/` triggers an automatic re-run, debounced so two rapid saves yield one run.
-- **Semantic diff** (`reactlens diff <runA> <runB>`): structural changes in the component tree AND the accessibility tree, not pixel-level noise. Catches regressions pixel diffing misses.
-- **Built-in a11y**: axe-core runs against every test; violations land in the run timeline so the dashboard (and your CI) can surface them as first-class evidence.
+- **axe-core a11y**: runs against every test; violations land in the run timeline so the dashboard (and your CI) can surface them.
 
 ## Status
 
-reactlens is at **v0.2** — 7 of 9 v0.2 phases shipped (P8 → P13). The moat (component-tree integration) works end-to-end on **four fixture stacks**: Vite + React Router (React 18 and 19), Next.js 14 App Router, and TanStack Router. Time-travel replay, watch mode, behavior contracts, semantic diff (component + a11y), and per-test axe-core are all live. AI-driven generation and diagnosis are wired to the Anthropic API and ready for your `ANTHROPIC_API_KEY`. 137/137 unit + 8/8 integration green; 16/16 diagnostic-eval cases at 100% accuracy.
+reactlens is at **v0.2** — 7 of 9 v0.2 phases shipped (P8 → P13). The component-tree capture works end-to-end on **four fixture stacks**: Vite + React Router (React 18 and 19), Next.js 14 App Router, and TanStack Router. Time-travel replay, watch mode, behavior contracts, semantic diff (component + a11y), and per-test axe-core are all live. AI-driven generation and diagnosis are wired to the Anthropic API (or your local `claude` CLI via `--use-claude-code`) and ready when you provide a key or sign-in. 137/137 unit + 8/8 integration green; 16/16 diagnostic-eval cases pass in the `with-snapshot` condition — the without-snapshot baseline that proves the moat actually contributes to that number is the next mandatory measurement (see [ADR-0001](docs/adr/0001-ablation-as-moat-metric.md)). v0.3 priorities are committed: Component-Object Pattern ([ADR-0006](docs/adr/0006-component-object-pattern-as-opt-in.md)) and apply-fix loop closure ([ADR-0007](docs/adr/0007-close-the-diagnosis-loop-in-v0.3.md)).
 
 Remaining v0.2 work: P14 (CI Auto-PR mode, deferred), P15/P16 stretch (multi-user flows, opt-in telemetry).
 
@@ -52,7 +57,7 @@ reactlens supports React 18 and React 19 projects on **Vite + React Router**, **
 - `reactlens run --max-cost <usd>` — hard cap on aggregate diagnosis spend; aborts at the next message boundary once exceeded. Same flag on `generate`/`analyze`/`regen`.
 - `reactlens generate --pages 'src/pages/Login.tsx'` — limit generation to one component.
 - `reactlens init --dry-run` — list what `init` would do without writing.
-- `reactlens generate --use-claude-code` (and the same flag on `run`/`regen`/`analyze`) — route through your local `claude` CLI binary instead of the API. Bills against your Claude.ai/Max subscription; **local development only** — Anthropic's TOS prohibits this for distributed tools. See [docs/troubleshooting.md](docs/troubleshooting.md#use-claude-code).
+- `reactlens generate --use-claude-code` (and the same flag on `run`/`regen`/`analyze`) — part of the **sovereignty story** ([ADR-0003](docs/adr/0003-sovereignty-first-not-offline-first.md)): route through your local `claude` CLI binary instead of the API so reactlens uses your existing Claude.ai/Max session rather than double-billing you on per-token API charges. **Local development only** — Anthropic's TOS prohibits this for distributed tools. See [docs/troubleshooting.md](docs/troubleshooting.md#use-claude-code).
 
 ## How the moat works
 
@@ -93,10 +98,11 @@ export default defineConfig({
 ## Goals and non-goals
 
 **Goals**
-- React-only, deeply. The component-tree integration is the moat.
-- Local-first. Everything runs on your machine. No telemetry.
+- React-only, deeply. The component-tree integration is the substrate of the moat.
+- The moat is **defined by serving diagnosis**: every capability is evaluated by whether it makes diagnosis measurably better under the ablation methodology of [ADR-0001](docs/adr/0001-ablation-as-moat-metric.md). See [ADR-0008](docs/adr/0008-moat-is-defined-by-serving-diagnosis.md).
+- Sovereignty-first. No SaaS, no telemetry, no cloud sync (hard invariants). Offline operation is preserved for non-LLM commands; LLM-backed commands acknowledge they require network. See [ADR-0003](docs/adr/0003-sovereignty-first-not-offline-first.md).
 - Two questions answered for every failure: is this a test bug or a real bug? Where exactly?
-- Page Object Model is the only test pattern we generate.
+- POM is the default test pattern; Component-Object Pattern is opt-in for teams committed to reactlens. See [ADR-0006](docs/adr/0006-component-object-pattern-as-opt-in.md).
 - Zero-config for common React stacks.
 
 **Non-goals**
