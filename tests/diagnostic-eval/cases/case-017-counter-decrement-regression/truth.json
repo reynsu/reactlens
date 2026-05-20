@@ -1,0 +1,6 @@
+{
+  "expectedClassification": "real-bug",
+  "minimumConfidence": "high",
+  "category": "increment-decrement-swap",
+  "notes": "Counter component regressed: onClick handler reads setCount(count - 1) instead of setCount(count + 1). Spec asserts the count becomes '1' after a single click; the planted regression makes it '-1' instead. Pure component bug, spec is correct. Curated from the synthetic-from-corpus/counter-fixture/case-001 harvest output as proof of the curation lifecycle (issue #12 acceptance criterion #7)."
+}
