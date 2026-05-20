@@ -61,15 +61,34 @@ describe('createProductionDiagnoseFn', () => {
     expect(diagnosis.classification).toBe('real-bug');
     expect(diagnosis.rootCause).toBe('derived from production composition');
 
-    // The agent saw a prompt derived from the case's failure shape.
-    // Two markers worth asserting:
-    //  - "case-001-tracer" appears (testTitle = case.name)
-    //  - the spec file path appears (FailedTest.specFile)
-    // Both come from buildUserMessage(caseToFailure(c)) — they prove the
-    // composition pipeline ran, without coupling to the exact prompt
-    // formatting (which lives in the published prompts package).
+    // The case name flows through the prompt (testTitle = case.name).
+    // We don't assert on the exact spec path because sandboxing replaces
+    // it — see the sandboxing test below.
     const prompt = agent.calls[0]?.prompt ?? '';
     expect(prompt).toContain('case-001-tracer');
-    expect(prompt).toContain(join(c.path, 'spec.ts'));
+  });
+
+  // Calibration leak prevention per Principle 2 / ADR-0008. The
+  // diagnosis agent has Read in its allowedTools (failure-agent.ts:53);
+  // if we pointed the FailedTest's specFile/componentFile at the
+  // original case directory, the agent could trivially Read
+  // `<dir>/truth.json` and produce a "correct" classification by
+  // copying the expected answer. The sandbox dance (mirror of the one
+  // in eval-pipeline.ts:39-77) copies only the agent-visible inputs to
+  // a tmpdir and points the failure paths there, so truth.json never
+  // appears in the agent's accessible cwd.
+  it('sandboxes the case so truth.json is not reachable from the agent cwd', async () => {
+    const cwd = mkdtempSync(join(tmpdir(), 'reactlens-prod-diagnose-'));
+    const c = makeCase(cwd, 'case-002-leak-check');
+    const agent = new FakeAgentRunner(VALID_DIAGNOSIS_JSON);
+
+    const diagnoseFn = createProductionDiagnoseFn({ agent, cwd });
+    await diagnoseFn({ case: c, variant: 'with-snapshot' });
+
+    // The prompt does NOT reveal the original case directory path —
+    // that would let the agent's Read tool walk back into the case
+    // directory and find truth.json on a real run.
+    const prompt = agent.calls[0]?.prompt ?? '';
+    expect(prompt).not.toContain(c.path);
   });
 });
