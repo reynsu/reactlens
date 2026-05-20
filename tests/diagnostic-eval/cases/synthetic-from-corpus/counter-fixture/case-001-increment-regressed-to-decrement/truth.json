@@ -1,0 +1,6 @@
+{
+  "expectedClassification": "env-issue",
+  "minimumConfidence": "low",
+  "curated": false,
+  "notes": "UNCURATED — harvested by scripts/harvest-eval.ts. A human MUST verify the planted failure actually triggers the documented behavior, set expectedClassification + minimumConfidence to real values, then either delete this `curated: false` field or move the case to tests/diagnostic-eval/cases/case-N-<slug>/ (the loader treats anything outside synthetic-from-corpus/ as curated)."
+}

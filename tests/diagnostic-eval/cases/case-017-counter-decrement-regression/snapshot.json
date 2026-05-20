@@ -1,0 +1,13 @@
+{
+  "name": "Counter",
+  "key": null,
+  "props": {},
+  "hooks": [
+    { "kind": "state", "value": -1, "name": "count" }
+  ],
+  "children": [],
+  "source": {
+    "file": "tests/diagnostic-eval/cases/case-017-counter-decrement-regression/component.tsx",
+    "line": 3
+  }
+}

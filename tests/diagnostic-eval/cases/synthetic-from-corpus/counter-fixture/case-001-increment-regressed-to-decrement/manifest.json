@@ -1,0 +1,13 @@
+{
+  "entryName": "counter-fixture",
+  "sourceRepo": "tests/fixtures/harvest-corpus-counter",
+  "sourceMode": "local-fixture",
+  "plantedFailure": {
+    "kind": "file-replace",
+    "path": "src/Counter.tsx",
+    "oldString": "setCount(count + 1)",
+    "newString": "setCount(count - 1)",
+    "description": "Increment regressed to decrement"
+  },
+  "harvestedAt": "2026-05-20T21:45:52.261Z"
+}
