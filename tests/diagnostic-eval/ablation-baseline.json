@@ -1,0 +1,102 @@
+{
+  "headline": {
+    "withSnapshot": {
+      "variant": "with-snapshot",
+      "totalCases": 16,
+      "correctCount": 16,
+      "accuracy": 1,
+      "falseConfidenceCount": 0,
+      "falseConfidenceRate": 0,
+      "byClassification": {
+        "real-bug": {
+          "total": 4,
+          "correct": 4,
+          "accuracy": 1
+        },
+        "test-bug": {
+          "total": 4,
+          "correct": 4,
+          "accuracy": 1
+        },
+        "flaky": {
+          "total": 6,
+          "correct": 6,
+          "accuracy": 1
+        },
+        "env-issue": {
+          "total": 2,
+          "correct": 2,
+          "accuracy": 1
+        }
+      },
+      "byConfidence": {
+        "high": {
+          "total": 16,
+          "correct": 16,
+          "accuracy": 1
+        },
+        "medium": {
+          "total": 0,
+          "correct": 0,
+          "accuracy": 0
+        },
+        "low": {
+          "total": 0,
+          "correct": 0,
+          "accuracy": 0
+        }
+      }
+    },
+    "withoutSnapshot": {
+      "variant": "without-snapshot",
+      "totalCases": 16,
+      "correctCount": 16,
+      "accuracy": 1,
+      "falseConfidenceCount": 0,
+      "falseConfidenceRate": 0,
+      "byClassification": {
+        "real-bug": {
+          "total": 4,
+          "correct": 4,
+          "accuracy": 1
+        },
+        "test-bug": {
+          "total": 4,
+          "correct": 4,
+          "accuracy": 1
+        },
+        "flaky": {
+          "total": 6,
+          "correct": 6,
+          "accuracy": 1
+        },
+        "env-issue": {
+          "total": 2,
+          "correct": 2,
+          "accuracy": 1
+        }
+      },
+      "byConfidence": {
+        "high": {
+          "total": 16,
+          "correct": 16,
+          "accuracy": 1
+        },
+        "medium": {
+          "total": 0,
+          "correct": 0,
+          "accuracy": 0
+        },
+        "low": {
+          "total": 0,
+          "correct": 0,
+          "accuracy": 0
+        }
+      }
+    },
+    "delta": {
+      "accuracy": 0,
+      "falseConfidenceRate": 0
+    }
+  }
+}
