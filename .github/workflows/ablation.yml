@@ -1,0 +1,128 @@
+name: Ablation moat-rubric gate
+
+# Operational teeth for ADR-0008's moat-contribution rubric (slice #14
+# of v0.3 #7). Runs the ablation harness against the curated eval set
+# and compares the result to the checked-in baseline at
+# tests/diagnostic-eval/ablation-baseline.json. Fails the build on:
+#
+#   - Overall accuracy regression > REACTLENS_ABLATION_ACCURACY_THRESHOLD_PP
+#     (default 2 percentage points)
+#   - New false-high-confidence classification (count strictly up)
+#   - Delta inversion (with-snapshot worse than without-snapshot)
+#
+# Required secret: ANTHROPIC_API_KEY. Without it the eval-runner skips
+# the live block entirely and this workflow becomes a no-op — same
+# fail-open semantics as the existing diagnostic eval gate, because
+# forked-PR runs cannot see secrets and should not fail-close on a
+# capability they structurally cannot exercise.
+#
+# Path filter: only runs on PRs that touch files which could shift the
+# diagnosis agent's input shape — the probe (`src/component-bridge/`),
+# the diagnosis agent itself (`src/analyzer/`), the eval pipeline
+# (`src/eval/`, the case set), the event protocol (`src/runner/events.ts`),
+# or the generator prompts (`src/generator/prompts/`). Every other PR
+# skips the gate because nothing it touches can move the delta.
+#
+# Manual trigger (`workflow_dispatch`) lets a maintainer replay the gate
+# after fixing prompts upstream without pushing a new commit.
+#
+# On `main`: the workflow runs but does NOT auto-write the baseline.
+# Acceptance criterion says "committed back by the bot or surfaced as
+# an artifact to be hand-committed — pick one and document". We picked
+# artifact-for-hand-commit because automated baseline rewrites would
+# silently move the comparison point any time main accidentally
+# regresses (Principle 2). The operator-only `REACTLENS_ABLATION_UPDATE_BASELINE=1`
+# remains the single path that rewrites tests/diagnostic-eval/ablation-baseline.json.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'src/component-bridge/**'
+      - 'src/analyzer/**'
+      - 'src/eval/**'
+      - 'src/generator/prompts/**'
+      - 'src/runner/events.ts'
+      - 'tests/diagnostic-eval/**'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+      - '.github/workflows/ablation.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'src/component-bridge/**'
+      - 'src/analyzer/**'
+      - 'src/eval/**'
+      - 'src/generator/prompts/**'
+      - 'src/runner/events.ts'
+      - 'tests/diagnostic-eval/**'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+      - '.github/workflows/ablation.yml'
+  workflow_dispatch:
+
+jobs:
+  ablation-gate:
+    name: Compare ablation delta against baseline
+    runs-on: ubuntu-latest
+    # 90-minute cap. 16 cases × 2 variants = 32 agent calls; observed
+    # local wall-clock with subscription was ~20 min, with the SDK in CI
+    # closer to 30-40 min once cold. 90 min leaves headroom for case-set
+    # growth and per-call retries without becoming an attack vector.
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11
+
+      - name: Cache pnpm store
+        uses: actions/cache@v4
+        with:
+          path: ~/.local/share/pnpm/store
+          key: pnpm-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-keys: pnpm-${{ runner.os }}-
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Build
+        run: pnpm build
+
+      - name: Run ablation gate
+        # REACTLENS_ABLATION=1 unlocks the ablation block in the
+        # eval-runner; REACTLENS_ABLATION_GATE=1 turns its stdout
+        # report into a hard pass/fail via compareToBaseline.
+        # NOT setting REACTLENS_ABLATION_UPDATE_BASELINE — that's
+        # the operator-only path; CI never rewrites the baseline.
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          REACTLENS_ABLATION: '1'
+          REACTLENS_ABLATION_GATE: '1'
+          # Override at workflow level if a temporary calibration storm
+          # needs a wider window. Otherwise the comparator default (2pp)
+          # applies. Documented in ADR-0008 / src/eval/ablation-baseline-comparator.ts.
+          # REACTLENS_ABLATION_ACCURACY_THRESHOLD_PP: '2'
+        run: pnpm test:eval
+
+      - name: Upload fresh ablation report (artifact for hand-commit if accepted)
+        # On any run, surface the freshly-computed report so a maintainer
+        # who intentionally moved the moat-contribution numbers can copy
+        # it into tests/diagnostic-eval/ablation-baseline.json by hand.
+        # Always uploaded (success or failure) so a failed gate's full
+        # numbers are inspectable without re-running the job.
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ablation-report-${{ github.run_id }}
+          path: tests/diagnostic-eval/ablation-baseline.json
+          # Short retention — these are inspection artifacts, not the
+          # source of truth. The checked-in baseline is the source of truth.
+          retention-days: 14
