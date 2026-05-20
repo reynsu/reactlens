@@ -13,10 +13,10 @@ importers:
         version: 0.2.141(zod@4.4.3)
       '@reynsu/reactlens-dashboard-ui':
         specifier: ^0.1.1
-        version: 0.1.1(@reynsu/reactlens-diagnosis-prompts@0.2.0(zod@4.4.3))
+        version: 0.1.1(@reynsu/reactlens-diagnosis-prompts@0.3.0(zod@4.4.3))
       '@reynsu/reactlens-diagnosis-prompts':
-        specifier: ^0.2.0
-        version: 0.2.0(zod@4.4.3)
+        specifier: ^0.3.0
+        version: 0.3.0(zod@4.4.3)
       '@reynsu/reactlens-diff-core':
         specifier: ^0.1.0
         version: 0.1.0
@@ -74,7 +74,7 @@ importers:
         version: 8.18.1
       tsup:
         specifier: ^8.5.1
-        version: 8.5.1(postcss@8.5.14)(tsx@4.22.0)(typescript@6.0.3)
+        version: 8.5.1(postcss@8.5.15)(tsx@4.22.0)(typescript@6.0.3)
       tsx:
         specifier: ^4.21.0
         version: 4.22.0
@@ -522,8 +522,8 @@ packages:
     peerDependencies:
       '@reynsu/reactlens-diagnosis-prompts': '>=0.2.0 <1'
 
-  '@reynsu/reactlens-diagnosis-prompts@0.2.0':
-    resolution: {integrity: sha512-lq9D86iXqw25aBgOmE3ZaH/slrFJMzhnaYkxng6bCo5Hlt/G/FO1lZghl84Ir7y8kacVkEjfIhyEMBwc5tNfDw==}
+  '@reynsu/reactlens-diagnosis-prompts@0.3.0':
+    resolution: {integrity: sha512-qfhqDBvlphForvddw0WYuQDxrYkFoqtPD5QFu6K+vi10Qe/66r7gFNOqJcbf11y0aF7mxnof/nWweM3P6pnraQ==}
     peerDependencies:
       zod: '>=3.23.8 <5'
 
@@ -1482,8 +1482,8 @@ packages:
       yaml:
         optional: true
 
-  postcss@8.5.14:
-    resolution: {integrity: sha512-SoSL4+OSEtR99LHFZQiJLkT59C5B1amGO1NzTwj7TT1qCUgUO6hxOvzkOYxD+vMrXBM3XJIKzokoERdqQq/Zmg==}
+  postcss@8.5.15:
+    resolution: {integrity: sha512-FfR8sjd4em2T6fb3I2MwAJU7HWVMr9zba+enmQeeWFfCbm+UOC/0X4DS8XtpUTMwWMGbjKYP7xjfNekzyGmB3A==}
     engines: {node: ^10 || ^12 || >=14}
 
   pretty-ms@9.3.0:
@@ -2153,11 +2153,11 @@ snapshots:
     dependencies:
       playwright: 1.60.0
 
-  '@reynsu/reactlens-dashboard-ui@0.1.1(@reynsu/reactlens-diagnosis-prompts@0.2.0(zod@4.4.3))':
+  '@reynsu/reactlens-dashboard-ui@0.1.1(@reynsu/reactlens-diagnosis-prompts@0.3.0(zod@4.4.3))':
     dependencies:
-      '@reynsu/reactlens-diagnosis-prompts': 0.2.0(zod@4.4.3)
+      '@reynsu/reactlens-diagnosis-prompts': 0.3.0(zod@4.4.3)
 
-  '@reynsu/reactlens-diagnosis-prompts@0.2.0(zod@4.4.3)':
+  '@reynsu/reactlens-diagnosis-prompts@0.3.0(zod@4.4.3)':
     dependencies:
       zod: 4.4.3
 
@@ -2997,14 +2997,14 @@ snapshots:
     optionalDependencies:
       fsevents: 2.3.2
 
-  postcss-load-config@6.0.1(postcss@8.5.14)(tsx@4.22.0):
+  postcss-load-config@6.0.1(postcss@8.5.15)(tsx@4.22.0):
     dependencies:
       lilconfig: 3.1.3
     optionalDependencies:
-      postcss: 8.5.14
+      postcss: 8.5.15
       tsx: 4.22.0
 
-  postcss@8.5.14:
+  postcss@8.5.15:
     dependencies:
       nanoid: 3.3.12
       picocolors: 1.1.1
@@ -3266,7 +3266,7 @@ snapshots:
   tslib@2.8.1:
     optional: true
 
-  tsup@8.5.1(postcss@8.5.14)(tsx@4.22.0)(typescript@6.0.3):
+  tsup@8.5.1(postcss@8.5.15)(tsx@4.22.0)(typescript@6.0.3):
     dependencies:
       bundle-require: 5.1.0(esbuild@0.27.7)
       cac: 6.7.14
@@ -3277,7 +3277,7 @@ snapshots:
       fix-dts-default-cjs-exports: 1.0.1
       joycon: 3.1.1
       picocolors: 1.1.1
-      postcss-load-config: 6.0.1(postcss@8.5.14)(tsx@4.22.0)
+      postcss-load-config: 6.0.1(postcss@8.5.15)(tsx@4.22.0)
       resolve-from: 5.0.0
       rollup: 4.60.4
       source-map: 0.7.6
@@ -3286,7 +3286,7 @@ snapshots:
       tinyglobby: 0.2.16
       tree-kill: 1.2.2
     optionalDependencies:
-      postcss: 8.5.14
+      postcss: 8.5.15
       typescript: 6.0.3
     transitivePeerDependencies:
       - jiti
@@ -3322,7 +3322,7 @@ snapshots:
     dependencies:
       lightningcss: 1.32.0
       picomatch: 4.0.4
-      postcss: 8.5.14
+      postcss: 8.5.15
       rolldown: 1.0.1
       tinyglobby: 0.2.16
     optionalDependencies:
