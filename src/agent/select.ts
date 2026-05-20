@@ -42,7 +42,11 @@ export type AgentDetectors = {
 
 const defaultDetectors: AgentDetectors = {
   hasClaudeCli: isClaudeCliAvailable,
-  hasApiKey: () => process.env.ANTHROPIC_API_KEY !== undefined,
+  // GitHub Actions exposes a missing secret as an empty string (not undefined),
+  // so `!== undefined` would treat an unset key as present and silently route
+  // to the SDK — which then fails downstream with "Not logged in". Treat empty
+  // as absent to preserve the fail-open semantics the eval workflow documents.
+  hasApiKey: () => Boolean(process.env.ANTHROPIC_API_KEY),
 };
 
 export async function pickAgentRunner(
