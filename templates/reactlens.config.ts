@@ -1,6 +1,6 @@
 // User-facing reactlens config. Validated by Zod via src/config/schema.ts.
 // Anything you change here is the contract between your app and reactlens.
-import { defineConfig } from 'reactlens/config';
+import { defineConfig } from '@reynsu/reactlens/config';
 
 export default defineConfig({
   // Glob of components reactlens analyzes for visual states.

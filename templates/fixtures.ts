@@ -46,12 +46,12 @@ function locateProbeBundle(): string | null {
   const override = process.env.REACTLENS_PROBE_PATH;
   if (override !== undefined && override.length > 0) candidates.push(override);
   try {
-    const pkg = require.resolve('reactlens/package.json');
+    const pkg = require.resolve('@reynsu/reactlens/package.json');
     candidates.push(join(dirname(pkg), 'dist', 'probe', 'probe.global.js'));
   } catch {
     /* not installed */
   }
-  candidates.push(join(process.cwd(), 'node_modules', 'reactlens', 'dist', 'probe', 'probe.global.js'));
+  candidates.push(join(process.cwd(), 'node_modules', '@reynsu', 'reactlens', 'dist', 'probe', 'probe.global.js'));
   for (const p of candidates) {
     try {
       readFileSync(p);
