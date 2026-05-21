@@ -160,7 +160,25 @@ export type RunEvent =
     }
   | { t: 'diagnosis:start'; testId: string }
   | { t: 'diagnosis:chunk'; testId: string; text: string }
-  | { t: 'diagnosis:end'; testId: string; result: Diagnosis };
+  | { t: 'diagnosis:end'; testId: string; result: Diagnosis }
+  // Slice #11 phase 1 — Apply Fix WS round-trip. The dashboard server's
+  // WS handler invokes PatchApplier on an inbound patch:apply request
+  // and emits one of these onto the bus. Persisted into events.jsonl
+  // so a future operator can audit which fixes were applied to which
+  // run (and which were refused, with the reason verbatim).
+  | { t: 'patch:applied'; testId: string; file: string; oldStr: string; newStr: string }
+  | {
+      t: 'patch:rejected';
+      testId: string;
+      file: string;
+      // Same closed enum as PatchApplier's discriminated result. Keeping
+      // it in lock-step (rather than free-form) means the dashboard can
+      // switch on `reason` without falling back to a default branch.
+      reason: 'oldStr-not-found' | 'oldStr-not-unique' | 'fs-error';
+      // Match count for 'oldStr-not-unique'; error message for 'fs-error';
+      // undefined for 'oldStr-not-found'.
+      detail?: string;
+    };
 
 export type RunEventType = RunEvent['t'];
 export type RunEventByType<T extends RunEventType> = Extract<RunEvent, { t: T }>;
@@ -183,6 +201,8 @@ export const ALL_EVENT_TYPES = [
   'diagnosis:start',
   'diagnosis:chunk',
   'diagnosis:end',
+  'patch:applied',
+  'patch:rejected',
 ] as const satisfies readonly RunEventType[];
 
 // Compile-time exhaustiveness: this assignment fails if a RunEvent variant
@@ -392,6 +412,20 @@ export const runEventSchema = z.discriminatedUnion('t', [
     t: z.literal('diagnosis:end'),
     testId: z.string(),
     result: diagnosisSchema,
+  }),
+  z.object({
+    t: z.literal('patch:applied'),
+    testId: z.string(),
+    file: z.string(),
+    oldStr: z.string(),
+    newStr: z.string(),
+  }),
+  z.object({
+    t: z.literal('patch:rejected'),
+    testId: z.string(),
+    file: z.string(),
+    reason: z.enum(['oldStr-not-found', 'oldStr-not-unique', 'fs-error']),
+    detail: z.string().optional(),
   }),
 ]);
 
