@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { runAnalyze } from './commands/analyze';
 import { runDiff } from './commands/diff';
+import { runEvalAddFromLastFailure } from './commands/eval-add-from-last-failure';
 import { runGenerate } from './commands/generate';
 import { runInit } from './commands/init';
 import { runRegen } from './commands/regen';
@@ -138,6 +139,19 @@ function buildProgram(): Command {
         forceApi: opts.forceApi,
         ...(opts.maxCost !== undefined ? { maxCost: opts.maxCost } : {}),
       });
+      process.exitCode = code;
+    });
+
+  // `reactlens eval` — eval-set tooling (slice #15 of v0.3 #7).
+  // Subcommands live under this parent so future eval helpers
+  // (export-baseline, etc.) can land without polluting the top level.
+  const evalCmd = program.command('eval').description('eval-set tooling (harvest, dogfood, baseline)');
+  evalCmd
+    .command('add-from-last-failure')
+    .description('turn the most recent failing test from .reactlens/runs/ into a stub eval case under synthetic-from-corpus/dogfood/')
+    .option('--cwd <path>', 'project directory', process.cwd())
+    .action(async (opts: { cwd: string }) => {
+      const code = await runEvalAddFromLastFailure({ cwd: opts.cwd });
       process.exitCode = code;
     });
 

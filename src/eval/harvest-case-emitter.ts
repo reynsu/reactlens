@@ -29,26 +29,53 @@ import { join } from 'node:path';
 import type { PlantedFailure } from './corpus-manifest';
 
 // Provenance manifest written alongside the case. Records what was
-// planted, against what source, when, by which corpus entry — enough
-// for a future operator to reproduce the case or invalidate it when
-// the upstream source has drifted.
+// planted (or discovered), against what source, when — enough for a
+// future operator to reproduce the case or invalidate it when the
+// upstream source has drifted.
+//
+// Two origin shapes are supported:
+//
+//   - Corpus harvest (slice #12): sourceMode 'local-fixture' | 'real-clone'.
+//     `plantedFailure` records the recipe the harvest applied.
+//   - Dogfood (slice #15): sourceMode 'dogfood'. `discoveredFailure`
+//     records the testId / testTitle / errorMessage that surfaced in
+//     a real run. No recipe — the failure was organic.
+//
+// `plantedFailure` and `discoveredFailure` are both optional at the
+// type level; in practice at least one is set, but they're decoupled
+// so future origins (e.g., manual-construction, replayed-trace) can
+// land without forcing every emit-site to provide a fake plant.
 export type HarvestManifest = {
-  // Entry name from harvest-corpus.json. Doubles as the directory
-  // slug under tests/diagnostic-eval/cases/synthetic-from-corpus/.
+  // Entry name from harvest-corpus.json (slice #12) OR a synthesized
+  // identifier for dogfood cases ('dogfood-<test-slug>'). Doubles as
+  // part of the case directory path.
   entryName: string;
-  // localFixturePath OR repoUrl, surfaced verbatim so the operator
-  // doesn't have to cross-reference the corpus manifest.
+  // For corpus harvest: localFixturePath or repoUrl. For dogfood: the
+  // cwd of the project the failure was observed in. Surfaced verbatim
+  // so the operator doesn't cross-reference another file.
   sourceRepo: string;
-  sourceMode: 'local-fixture' | 'real-clone';
-  // The recipe that was applied, copied from the corpus entry. Lets
-  // the curator see what was planted without diffing against the
-  // unplanted source.
-  plantedFailure: PlantedFailure;
-  // ISO-8601 UTC. Reproducibility marker for the corpus entry's
-  // upstream state at harvest time.
+  sourceMode: 'local-fixture' | 'real-clone' | 'dogfood';
+  // The corpus-harvest recipe that was applied. Absent for dogfood
+  // origins — the failure was discovered, not planted.
+  plantedFailure?: PlantedFailure;
+  // The organically-discovered failure attribution for dogfood origins.
+  // Absent for corpus-harvest entries.
+  discoveredFailure?: {
+    testId: string;
+    testTitle: string;
+    errorMessage?: string;
+    // RunId of the persisted reactlens run the failure came from —
+    // lets a future operator scrub back to the original frames /
+    // snapshot timeline if they need more context than the case stub
+    // captures.
+    sourceRunId: string;
+  };
+  // ISO-8601 UTC. Reproducibility marker for the source's upstream
+  // state at harvest / discovery time.
   harvestedAt: string;
   // Optional commit SHA — present only when sourceMode === 'real-clone'
-  // AND the entry pinned a commit. Fixture-mode entries have no SHA.
+  // AND the corpus entry pinned a commit. Fixture-mode and dogfood
+  // entries have no SHA.
   commitSha?: string;
 };
 
