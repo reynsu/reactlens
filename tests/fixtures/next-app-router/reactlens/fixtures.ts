@@ -17,6 +17,25 @@ import { test as base, expect, type Page } from '@playwright/test';
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import WebSocket from 'ws';
+// v0.3 slice 6: Component-Object Pattern runtime. The helper lives in a
+// sibling template file (component-object.ts) so the fixture stays modular
+// and the user doesn't have to install a separate package subpath. The
+// reactlens auto-fixture below binds the testId and connects the WS
+// subscriber on every test; specs that don't use Component(...) pay only
+// one TCP handshake against localhost per test.
+import {
+  Component,
+  ComponentNotMountedError,
+  SnapshotStreamDisconnectedError,
+  bindTestId,
+  connectAccessor,
+  disconnectAccessor,
+} from './component-object';
+export {
+  Component,
+  ComponentNotMountedError,
+  SnapshotStreamDisconnectedError,
+};
 
 let cachedProbeSource: string | null | undefined;
 
@@ -374,6 +393,22 @@ export const test = base.extend<{ reactlens: void }>({
       }
       const frameSocket = openFrameSocket(wsUrl);
       const detach = await attachScreencast(page, testInfo.testId, frameSocket);
+
+      // v0.3 slice 6: bind this test's id so Component(name).props.<x> resolves
+      // to its snapshots, then open the dashboard-side WS subscriber.
+      // The dashboard URL is the probe URL with /ws/probe → /ws/dashboard.
+      // Eager connect (phase-1/2 simplification — design doc calls for lazy,
+      // but lazy + sync read is hard; cost is one local TCP handshake / test).
+      bindTestId(testInfo.testId);
+      const dashboardWsUrl = wsUrl.replace('/ws/probe', '/ws/dashboard');
+      try {
+        await connectAccessor(dashboardWsUrl);
+      } catch {
+        // Non-fatal: specs that never call Component() keep working.
+        // Specs that do will throw the typed
+        // SnapshotStreamDisconnectedError on first read — clear failure.
+      }
+
       try {
         await use();
       } finally {
@@ -387,6 +422,7 @@ export const test = base.extend<{ reactlens: void }>({
         await detach();
         await new Promise((r) => setTimeout(r, 100));
         frameSocket.close();
+        disconnectAccessor();
       }
     },
     { auto: true },

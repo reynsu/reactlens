@@ -60,6 +60,10 @@ export async function runGenerate(opts: GenerateCommandOptions): Promise<number>
         outputs: config.output,
         mswHandlers: config.msw.handlers,
         agent,
+        // Phase 2: the delegate uses this to branch POM vs CO. CLI --pattern
+        // overrides config.pattern; we merge here so the delegate sees the
+        // resolved value as if it were the config.
+        config: { pattern: effectivePattern, output: config.output },
         onProgress: (e) => {
           if (e.kind === 'wrote') logger.info({ file: e.file }, 'wrote');
           else if (e.kind === 'tool') logger.debug({ tool: e.name }, 'tool call');
@@ -69,7 +73,7 @@ export async function runGenerate(opts: GenerateCommandOptions): Promise<number>
       // P11: write the behavior contract alongside the spec. Best-effort —
       // a write failure here doesn't fail generation; the spec itself is
       // already on disk and useful without the contract.
-      await writeContract(cwd, config.output.specs, analysis).then(
+      await writeContract(cwd, config.output.specs, analysis, effectivePattern).then(
         (path) => {
           contractsWritten += 1;
           logger.info({ file: path }, 'wrote contract');
@@ -92,12 +96,17 @@ export async function runGenerate(opts: GenerateCommandOptions): Promise<number>
   return 0;
 }
 
-async function writeContract(cwd: string, specsDir: string, analysis: ComponentAnalysis): Promise<string> {
+async function writeContract(
+  cwd: string,
+  specsDir: string,
+  analysis: ComponentAnalysis,
+  pattern: 'pom' | 'component-object',
+): Promise<string> {
   const dir = resolve(cwd, specsDir);
   await mkdir(dir, { recursive: true });
   const path = join(dir, `${analysis.componentName}.contract.md`);
   const generatedAt = new Date().toISOString().slice(0, 10);
-  await writeFile(path, renderContract(analysis, { generatedAt }), 'utf8');
+  await writeFile(path, renderContract(analysis, { generatedAt, pattern }), 'utf8');
   return path;
 }
 

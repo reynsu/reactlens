@@ -29,6 +29,11 @@ const FILE_LAYOUT: Array<{ template: string; destRel: string }> = [
   { template: 'streaming-reporter.ts', destRel: 'reactlens/streaming-reporter.ts' },
   { template: 'global-setup.ts', destRel: 'reactlens/global-setup.ts' },
   { template: 'fixtures.ts', destRel: 'reactlens/fixtures.ts' },
+  // v0.3 slice 6: the Component-Object runtime helper. fixtures.ts imports
+  // it relatively (`./component-object`) and re-exports Component + errors
+  // so user specs can do `import { test, expect, Component } from
+  // '../../reactlens/fixtures'`.
+  { template: 'component-object.ts', destRel: 'reactlens/component-object.ts' },
 ];
 
 async function planFiles(opts: InitOptions): Promise<FilePlan[]> {
