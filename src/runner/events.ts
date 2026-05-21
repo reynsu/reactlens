@@ -178,7 +178,20 @@ export type RunEvent =
       // Match count for 'oldStr-not-unique'; error message for 'fs-error';
       // undefined for 'oldStr-not-found'.
       detail?: string;
-    };
+    }
+  // Apply-fix loop closure. The dashboard's DiagnosticsPanel posts an
+  // inbound `{ kind: 'test:rerun-request', testId }` over /ws/dashboard
+  // after Apply Fix lands; the server validates and emits this event
+  // onto the bus as the acknowledgement. Broadcasted back to every
+  // dashboard client (so the UI can render "rerun queued") and persisted
+  // into events.jsonl (so an operator scrubbing the run can audit which
+  // re-runs were requested and when).
+  //
+  // Actually relaunching Playwright with `--grep <testId>` is a separate
+  // slice — see the PR body for the runner-orchestration follow-up. A
+  // future subscriber on this event spawns the re-run; today the event
+  // is purely an acknowledgement.
+  | { t: 'test:rerun-requested'; testId: string };
 
 export type RunEventType = RunEvent['t'];
 export type RunEventByType<T extends RunEventType> = Extract<RunEvent, { t: T }>;
@@ -203,6 +216,7 @@ export const ALL_EVENT_TYPES = [
   'diagnosis:end',
   'patch:applied',
   'patch:rejected',
+  'test:rerun-requested',
 ] as const satisfies readonly RunEventType[];
 
 // Compile-time exhaustiveness: this assignment fails if a RunEvent variant
@@ -426,6 +440,10 @@ export const runEventSchema = z.discriminatedUnion('t', [
     file: z.string(),
     reason: z.enum(['oldStr-not-found', 'oldStr-not-unique', 'fs-error']),
     detail: z.string().optional(),
+  }),
+  z.object({
+    t: z.literal('test:rerun-requested'),
+    testId: z.string(),
   }),
 ]);
 

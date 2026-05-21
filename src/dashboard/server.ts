@@ -27,6 +27,19 @@ const applyRequestSchema = z.object({
   }),
 });
 
+// WS rerun-request schema (apply-fix loop closure). The dashboard sends
+// `{ kind: 'test:rerun-request', testId }` after Apply Fix lands; the
+// server validates and emits `test:rerun-requested` onto the bus as the
+// acknowledgement. Symmetric to applyRequestSchema. Malformed inputs
+// drop silently (no testId to attribute the error to).
+//
+// Wire-level only — actually spawning a re-targeted Playwright run is
+// the consumer's job (a future bus subscriber), not this handler's.
+const rerunRequestSchema = z.object({
+  kind: z.literal('test:rerun-request'),
+  testId: z.string(),
+});
+
 export type DashboardServerOptions = {
   port: number;
   bus: EventBus;
@@ -185,9 +198,23 @@ export async function startDashboardServer(opts: DashboardServerOptions): Promis
         // Unparseable JSON — no testId means no patch:rejected; just drop.
         return;
       }
-      const result = applyRequestSchema.safeParse(parsed);
-      if (!result.success) return; // not an apply request (or malformed)
-      handleApplyRequest(result.data, opts.bus, opts.runsArea);
+      const applyResult = applyRequestSchema.safeParse(parsed);
+      if (applyResult.success) {
+        handleApplyRequest(applyResult.data, opts.bus, opts.runsArea);
+        return;
+      }
+      // Apply-fix loop closure: a separate inbound message kind asks
+      // the server to re-run a single test by id. Wire-only here; an
+      // actual re-run spawn is its own slice. The handler just emits
+      // the acknowledgement event onto the bus.
+      const rerunResult = rerunRequestSchema.safeParse(parsed);
+      if (rerunResult.success) {
+        opts.bus.emit({ t: 'test:rerun-requested', testId: rerunResult.data.testId });
+        return;
+      }
+      // Neither schema matched. Could be a future client→server message
+      // we don't yet recognise; drop silently. Strict rejection here would
+      // break forward compat with newer dashboard-ui versions.
     });
     client.on('error', (err) => logger.warn({ err }, 'dashboard client error'));
   });
