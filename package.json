@@ -38,6 +38,7 @@
     "test:watch": "vitest --project unit",
     "test:integration": "vitest run --project integration",
     "test:eval": "vitest run --project eval",
+    "check:drift": "tsx scripts/check-component-object-drift.ts",
     "prepublishOnly": "pnpm build && pnpm test && pnpm typecheck"
   },
   "devDependencies": {

@@ -1,0 +1,60 @@
+name: Component-Object drift check
+
+# Protects the v0.3 slice 6 "sibling template" decision: the runtime
+# helper exists in two places — src/component-object/snapshot-accessor.ts
+# (source-of-truth, unit-tested) and templates/component-object.ts
+# (sync'd copy that `reactlens init` places in user projects).
+#
+# If the two drift, users get a silently-broken helper while the unit
+# tests against the source pass green. This gate prevents that.
+#
+# Path filter: only runs on PRs/pushes that touch either copy or the
+# checker itself. Other PRs skip — no need to spend CI minutes on
+# unrelated changes.
+#
+# Failure mode: script exits 1 with a diff stub naming the first
+# diverging line. Fix is one of:
+#   - copy source body into template (or vice versa), then re-run
+#   - if a refactor moved the `import WebSocket` anchor line, update
+#     ANCHOR in the script and re-run
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'src/component-object/**'
+      - 'templates/component-object.ts'
+      - 'scripts/check-component-object-drift.ts'
+      - '.github/workflows/component-object-drift.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'src/component-object/**'
+      - 'templates/component-object.ts'
+      - 'scripts/check-component-object-drift.ts'
+      - '.github/workflows/component-object-drift.yml'
+  workflow_dispatch:
+
+jobs:
+  drift-check:
+    name: src/component-object vs templates/component-object
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Check drift
+        run: pnpm tsx scripts/check-component-object-drift.ts

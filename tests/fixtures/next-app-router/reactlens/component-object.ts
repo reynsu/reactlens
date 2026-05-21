@@ -37,6 +37,8 @@ type ComponentSnapshotEvent = {
   tree: ComponentNode;
 };
 
+// Error message format is locked — diagnosis prompts match against these
+// prefixes. Changing the message is a breaking change for the prompts package.
 export class ComponentNotMountedError extends Error {
   readonly kind = 'ComponentNotMountedError' as const;
   constructor(public readonly componentName: string, public readonly testId: string) {
@@ -126,6 +128,23 @@ export function disconnectAccessor(): void {
     }
     state.ws = null;
   }
+}
+
+// Test-only: clear state between cases so the singleton doesn't leak across
+// describe blocks. Production code (the reactlens fixture) does not call this.
+export function resetAccessorForTest(): void {
+  if (state.ws !== null) {
+    try {
+      state.ws.terminate();
+    } catch {
+      /* ignore */
+    }
+  }
+  state.ws = null;
+  state.latestByTest.clear();
+  state.closedAfterConnect = false;
+  state.lastSnapshotAt = null;
+  state.boundTestId = null;
 }
 
 function findByName(node: ComponentNode, name: string): ComponentNode | null {
