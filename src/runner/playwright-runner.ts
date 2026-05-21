@@ -19,7 +19,7 @@ export type RunnerOptions = {
   // Filesystem path to the probe IIFE bundle. Used to pin lookup during
   // reactlens development (when the package isn't installed into the target
   // project's node_modules); in published use, the fixtures.ts default
-  // resolution via require.resolve('reactlens/package.json') is preferred.
+  // resolution via require.resolve('@reynsu/reactlens/package.json') is preferred.
   probePath?: string;
   // Filesystem path to axe-core/axe.min.js. Same dev/prod distinction as
   // probePath — reactlens-installed users get it for free via
