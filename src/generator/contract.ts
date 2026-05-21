@@ -11,6 +11,10 @@ export type ContractOptions = {
   // option so the unit tests can pin a value; production passes the current
   // local date.
   generatedAt: string;
+  // v0.3 slice 6: when 'component-object', append the CO surface section
+  // documenting how specs address the component and which hooks are
+  // assertable. Omitted ⇒ no CO section (POM-default behavior preserved).
+  pattern?: 'pom' | 'component-object';
 };
 
 function renderState(state: VisualState): string {
@@ -39,10 +43,43 @@ function renderEndpoints(endpoints: string[]): string {
   return endpoints.map((e) => `- \`${e}\``).join('\n');
 }
 
+function renderComponentObjectSurface(analysis: ComponentAnalysis): string {
+  const lines: string[] = [
+    '## Component-Object surface',
+    '',
+    `Specs in this project use the Component-Object Pattern (\`pattern: 'component-object'\` in \`reactlens.config.ts\`). They assert directly on \`${analysis.componentName}\`'s props via the runtime helper:`,
+    '',
+    '```ts',
+    `await expect.poll(() => Component('${analysis.componentName}').props.<key>, { timeout: 5_000 }).toBe(<expected>);`,
+    '```',
+    '',
+    `Addressing key: \`Component('${analysis.componentName}')\` (matches the React fiber \`displayName\`).`,
+    '',
+    '### Assertable surface (hooks captured by AST)',
+    '',
+  ];
+  if (analysis.hooks.length === 0) {
+    lines.push(
+      '_no hooks captured — the AST analyzer did not find `useState`/`useReducer`/`useQuery`/`useSWR`/`useForm` calls in this component. CO specs can still assert on whatever props the React fiber emits at runtime, but the AST has nothing to enumerate here._',
+    );
+  } else {
+    lines.push(
+      'These hook calls were enumerated from the source. The actual props that reach `Component(...).props.<x>` come from the React fiber at runtime — open the reactlens dashboard during a run to see the live shape. Listed here as authoring hints, not as a closed enumeration:',
+      '',
+    );
+    for (const h of analysis.hooks) {
+      const initial = h.initial !== undefined ? ` — initial: \`${h.initial}\`` : '';
+      lines.push(`- \`${h.name}\`${initial}`);
+    }
+  }
+  lines.push('');
+  return lines.join('\n');
+}
+
 export function renderContract(analysis: ComponentAnalysis, opts: ContractOptions): string {
   const stateCount = analysis.states.length;
   const stateCountText = stateCount === 1 ? '**1 visual state**' : `**${stateCount} distinct visual states**`;
-  return [
+  const sections: string[] = [
     `# ${analysis.componentName} — behavior contract`,
     '',
     `**Source**: \`${analysis.filePath}\`  `,
@@ -61,9 +98,15 @@ export function renderContract(analysis: ComponentAnalysis, opts: ContractOption
     '',
     renderEndpoints(analysis.endpoints),
     '',
+  ];
+  if (opts.pattern === 'component-object') {
+    sections.push(renderComponentObjectSurface(analysis));
+  }
+  sections.push(
     '---',
     '',
     `> This file is **overwritten on every \`reactlens generate\` run**. Don't hand-edit it — change the component source instead.`,
     '',
-  ].join('\n');
+  );
+  return sections.join('\n');
 }

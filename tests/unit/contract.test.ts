@@ -72,4 +72,47 @@ describe('renderContract', () => {
     const a = analysis();
     expect(renderContract(a, { generatedAt: FIXED_DATE })).toBe(renderContract(a, { generatedAt: FIXED_DATE }));
   });
+
+  describe('Component-Object Pattern surface (v0.3 slice 6)', () => {
+    it('omits the CO section by default (pattern not specified)', () => {
+      const md = renderContract(analysis(), { generatedAt: FIXED_DATE });
+      expect(md).not.toContain('## Component-Object surface');
+    });
+
+    it('omits the CO section when pattern is pom', () => {
+      const md = renderContract(analysis(), { generatedAt: FIXED_DATE, pattern: 'pom' });
+      expect(md).not.toContain('## Component-Object surface');
+    });
+
+    it('includes a CO surface section when pattern is component-object', () => {
+      const md = renderContract(analysis(), {
+        generatedAt: FIXED_DATE,
+        pattern: 'component-object',
+      });
+      expect(md).toContain('## Component-Object surface');
+      // Addressing key is the component display name.
+      expect(md).toContain("`Component('CheckoutPage')`");
+      // Mentions expect.poll composition (locked in the design doc).
+      expect(md).toMatch(/expect\.poll/);
+    });
+
+    it('lists assertable hooks under the CO section', () => {
+      const md = renderContract(analysis(), {
+        generatedAt: FIXED_DATE,
+        pattern: 'component-object',
+      });
+      // Hooks already enumerated by the AST become candidate assertion
+      // targets; the section advertises them.
+      expect(md).toContain('### Assertable surface (hooks captured by AST)');
+      expect(md).toContain('`useState`');
+      expect(md).toContain('`useQuery`');
+    });
+
+    it('hedges honestly when no hooks were captured', () => {
+      const a = analysis({ hooks: [] });
+      const md = renderContract(a, { generatedAt: FIXED_DATE, pattern: 'component-object' });
+      expect(md).toContain('## Component-Object surface');
+      expect(md).toMatch(/no hooks captured/i);
+    });
+  });
 });
