@@ -10,6 +10,16 @@ export default defineConfig([
     clean: true,
     sourcemap: true,
     banner: { js: '#!/usr/bin/env node' },
+    // Inline the ESM-only @reynsu/* helper packages into the CJS bundle.
+    // Without this, `node bin/reactlens.js` crashes at module load with
+    // ERR_PACKAGE_PATH_NOT_EXPORTED because Node's CJS loader can't
+    // require() a package that only ships an `import` export condition.
+    // These are pure helpers (prompts, Zod schemas, tree-diff functions)
+    // with no top-level await, so transpile-to-CJS is safe.
+    noExternal: [
+      '@reynsu/reactlens-diagnosis-prompts',
+      '@reynsu/reactlens-diff-core',
+    ],
   },
   {
     entry: { reporter: 'src/runner/reporter.ts' },
