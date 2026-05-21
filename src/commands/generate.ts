@@ -20,11 +20,18 @@ export type GenerateCommandOptions = {
   // Hard cap on aggregate USD across all query() calls. The decorator throws
   // AGENT_COST_EXCEEDED at the next message boundary once the cap is hit.
   maxCost?: number;
+  // v0.3 slice 6: --pattern flag overrides config.pattern. 'pom' generates
+  // Page-Object specs; 'component-object' emits specs that assert via the
+  // Component() helper. Phase 1 wires the flag through; phase 2 wires the
+  // generator branch that actually emits CO specs.
+  pattern?: 'pom' | 'component-object';
 };
 
 export async function runGenerate(opts: GenerateCommandOptions): Promise<number> {
   const cwd = resolve(opts.cwd);
   const config = await loadConfig(cwd);
+  const effectivePattern = opts.pattern ?? config.pattern;
+  logger.info({ pattern: effectivePattern }, 'generate pattern resolved');
   const { agent, tracker } = await resolveAgentForCommand({
     commandName: 'generate',
     useClaudeCode: opts.useClaudeCode,

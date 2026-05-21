@@ -11,6 +11,14 @@ import { runRun } from './commands/run';
 import { ReactLensError } from './utils/errors';
 import { logger } from './utils/logger';
 
+function parsePattern(raw: string): 'pom' | 'component-object' {
+  if (raw === 'pom' || raw === 'component-object') return raw;
+  throw new ReactLensError(
+    `--pattern must be 'pom' or 'component-object', got: ${JSON.stringify(raw)}`,
+    { code: 'INVALID_PATTERN_FLAG' },
+  );
+}
+
 function readPackageVersion(): string {
   const pkgPath = join(__dirname, '..', 'package.json');
   const raw = readFileSync(pkgPath, 'utf8');
@@ -50,7 +58,8 @@ function buildProgram(): Command {
     .option('--use-claude-code', 'require the local Claude CLI (subscription billing); fail if not installed', false)
     .option('--force-api', 'force ANTHROPIC_API_KEY billing, bypassing any local Claude Code subscription', false)
     .option('--max-cost <usd>', 'abort the command once aggregate cost crosses this USD value', parseFloat)
-    .action(async (opts: { cwd: string; pages?: string; skipTypecheck: boolean; useClaudeCode: boolean; forceApi: boolean; maxCost?: number }) => {
+    .option('--pattern <kind>', 'override config.pattern: pom | component-object', parsePattern)
+    .action(async (opts: { cwd: string; pages?: string; skipTypecheck: boolean; useClaudeCode: boolean; forceApi: boolean; maxCost?: number; pattern?: 'pom' | 'component-object' }) => {
       const code = await runGenerate({
         cwd: opts.cwd,
         pages: opts.pages,
@@ -58,6 +67,7 @@ function buildProgram(): Command {
         useClaudeCode: opts.useClaudeCode,
         forceApi: opts.forceApi,
         ...(opts.maxCost !== undefined ? { maxCost: opts.maxCost } : {}),
+        ...(opts.pattern !== undefined ? { pattern: opts.pattern } : {}),
       });
       process.exitCode = code;
     });
@@ -132,12 +142,14 @@ function buildProgram(): Command {
     .option('--use-claude-code', 'require the local Claude CLI (subscription billing); fail if not installed', false)
     .option('--force-api', 'force ANTHROPIC_API_KEY billing, bypassing any local Claude Code subscription', false)
     .option('--max-cost <usd>', 'abort the command once aggregate cost crosses this USD value', parseFloat)
-    .action(async (opts: { cwd: string; useClaudeCode: boolean; forceApi: boolean; maxCost?: number }) => {
+    .option('--pattern <kind>', 'override config.pattern: pom | component-object', parsePattern)
+    .action(async (opts: { cwd: string; useClaudeCode: boolean; forceApi: boolean; maxCost?: number; pattern?: 'pom' | 'component-object' }) => {
       const code = await runRegen({
         cwd: opts.cwd,
         useClaudeCode: opts.useClaudeCode,
         forceApi: opts.forceApi,
         ...(opts.maxCost !== undefined ? { maxCost: opts.maxCost } : {}),
+        ...(opts.pattern !== undefined ? { pattern: opts.pattern } : {}),
       });
       process.exitCode = code;
     });

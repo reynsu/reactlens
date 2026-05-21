@@ -15,7 +15,8 @@
     "isolatedModules": true,
     "noEmit": true,
     "outDir": "dist",
-    "types": ["node"]
+    "types": ["node"],
+    "ignoreDeprecations": "6.0"
   },
   "include": ["src/**/*", "tsup.config.ts", "vitest.config.ts", "tests/unit/**/*", "tests/integration/**/*", "tests/diagnostic-eval/**/*.test.ts"],
   "exclude": ["node_modules", "dist", "tests/fixtures", "templates", "src/dashboard/web", "tests/diagnostic-eval/cases"]

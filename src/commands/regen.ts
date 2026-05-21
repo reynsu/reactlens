@@ -36,9 +36,21 @@ async function saveCache(cwd: string, cache: CacheShape): Promise<void> {
   await writeFile(path, JSON.stringify(cache, null, 2));
 }
 
-export async function runRegen(opts: { cwd: string; useClaudeCode?: boolean; forceApi?: boolean; maxCost?: number }): Promise<number> {
+export type RegenCommandOptions = {
+  cwd: string;
+  useClaudeCode?: boolean;
+  forceApi?: boolean;
+  maxCost?: number;
+  // v0.3 slice 6: same shape as generate's --pattern. Overrides config.pattern
+  // for this run; phase 2 wires the generator branch.
+  pattern?: 'pom' | 'component-object';
+};
+
+export async function runRegen(opts: RegenCommandOptions): Promise<number> {
   const cwd = resolve(opts.cwd);
   const config = await loadConfig(cwd);
+  const effectivePattern = opts.pattern ?? config.pattern;
+  logger.info({ pattern: effectivePattern }, 'regen pattern resolved');
   const { agent, tracker } = await resolveAgentForCommand({
     commandName: 'regen',
     useClaudeCode: opts.useClaudeCode,
