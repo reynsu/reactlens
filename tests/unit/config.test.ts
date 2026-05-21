@@ -21,6 +21,26 @@ describe('loadConfig', () => {
     expect(cfg.dashboard.open).toBe(true);
     expect(cfg.output.pages).toBe('e2e/pages');
     expect(cfg.componentGlobs.length).toBeGreaterThan(0);
+    // v0.3 slice 6: pattern field. Default is 'pom' so existing setups don't
+    // suddenly start emitting Component-Object specs.
+    expect(cfg.pattern).toBe('pom');
+  });
+
+  it('accepts pattern: component-object', async () => {
+    await writeFile(
+      join(tmp, 'reactlens.config.ts'),
+      `export default { pattern: 'component-object' };\n`,
+    );
+    const cfg = await loadConfig(tmp);
+    expect(cfg.pattern).toBe('component-object');
+  });
+
+  it('rejects unknown pattern values', async () => {
+    await writeFile(
+      join(tmp, 'reactlens.config.ts'),
+      `export default { pattern: 'cypress-mode' };\n`,
+    );
+    await expect(loadConfig(tmp)).rejects.toBeInstanceOf(ConfigError);
   });
 
   it('loads a valid .ts config and merges with defaults', async () => {

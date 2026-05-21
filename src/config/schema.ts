@@ -31,6 +31,12 @@ export const reactlensConfigSchema = z.object({
   output: withDefault(outputSchema),
   msw: withDefault(mswSchema),
   dashboard: withDefault(dashboardSchema),
+  // v0.3 slice 6 (ADR-0006): test pattern selection.
+  //   - 'pom' (default): generated specs use Page Object Pattern, portable
+  //     under plain Playwright without reactlens.
+  //   - 'component-object': generated specs assert via Component(name).props,
+  //     which requires reactlens at runtime. See docs/design/snapshot-accessor.md.
+  pattern: z.enum(['pom', 'component-object']).default('pom'),
 });
 
 export type ReactLensConfig = z.infer<typeof reactlensConfigSchema>;

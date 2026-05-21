@@ -7,6 +7,22 @@
   "bin": {
     "reactlens": "bin/reactlens.js"
   },
+  "exports": {
+    ".": {
+      "default": "./dist/cli.js"
+    },
+    "./config": {
+      "types": "./dist/config/schema.d.ts",
+      "import": "./dist/config/schema.mjs",
+      "require": "./dist/config/schema.js"
+    },
+    "./component-object": {
+      "types": "./dist/component-object/snapshot-accessor.d.ts",
+      "import": "./dist/component-object/snapshot-accessor.mjs",
+      "require": "./dist/component-object/snapshot-accessor.js"
+    },
+    "./package.json": "./package.json"
+  },
   "files": [
     "dist",
     "bin",
