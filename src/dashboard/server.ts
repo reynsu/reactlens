@@ -1,12 +1,31 @@
 import express from 'express';
 import { createServer, type Server as HttpServer } from 'node:http';
 import { readFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { join, resolve, sep } from 'node:path';
+import { z } from 'zod';
 import { WebSocketServer, type WebSocket } from 'ws';
+import { applyPatch } from '../applier/patch-applier';
 import { logger } from '../utils/logger';
 import { EventBus } from '../runner/event-bus';
 import { ALL_EVENT_TYPES, parseRunEvent, type RunEvent } from '../runner/events';
 import { frameExists, type RunsArea } from '../runs/run-paths';
+
+// WS apply request schema. The dashboard client sends this in over the
+// `/ws/dashboard` socket to ask the server to apply a diagnosis patch
+// to a real file. Validated at the boundary; malformed inputs are
+// dropped silently (no patch:rejected emit) because there's no testId
+// to attribute the error to. Well-formed-but-unsafe requests (path
+// escapes cwd, no runsArea context) emit a patch:rejected so the UI
+// can render the refusal.
+const applyRequestSchema = z.object({
+  kind: z.literal('patch:apply'),
+  testId: z.string(),
+  patch: z.object({
+    file: z.string(),
+    oldStr: z.string(),
+    newStr: z.string(),
+  }),
+});
 
 export type DashboardServerOptions = {
   port: number;
@@ -152,6 +171,24 @@ export async function startDashboardServer(opts: DashboardServerOptions): Promis
         /* ignore */
       }
     }
+    // Slice #11 phase 1 — Apply Fix WS round-trip. Dashboard clients
+    // can post `{ kind: 'patch:apply', testId, patch }` to ask the
+    // server to apply a diagnosis patch. The server invokes
+    // PatchApplier and emits the resulting patch:applied or
+    // patch:rejected event onto the bus, which the broadcaster sends
+    // back to every connected dashboard (including the one that asked).
+    client.on('message', (data) => {
+      let parsed: unknown;
+      try {
+        parsed = JSON.parse(data.toString());
+      } catch {
+        // Unparseable JSON — no testId means no patch:rejected; just drop.
+        return;
+      }
+      const result = applyRequestSchema.safeParse(parsed);
+      if (!result.success) return; // not an apply request (or malformed)
+      handleApplyRequest(result.data, opts.bus, opts.runsArea);
+    });
     client.on('error', (err) => logger.warn({ err }, 'dashboard client error'));
   });
 
@@ -241,6 +278,70 @@ export async function startDashboardServer(opts: DashboardServerOptions): Promis
     probeWsUrl: `ws://localhost:${port}/ws/probe`,
     close,
   };
+}
+
+// Apply-request handler. Resolves the patch's file path under cwd (path-
+// traversal defence), invokes PatchApplier, and emits the resulting
+// patch:applied or patch:rejected event onto the bus. The broadcaster
+// loop above subscribes to ALL_EVENT_TYPES so the events flow back to
+// every dashboard client + get persisted to events.jsonl via the run
+// command's persistor subscription.
+//
+// Refuses two boundary cases:
+//   - runsArea undefined: dashboard was started in legacy mode without
+//     a project root, so we have no cwd to resolve patch.file against.
+//     Emit a clear patch:rejected so the UI explains the refusal.
+//   - resolved path escapes cwd: patch.file = '../etc/passwd' or an
+//     absolute path. Same defence the diff route applies elsewhere in
+//     this file via assertSafeId/resolveFramePath.
+function handleApplyRequest(
+  req: z.infer<typeof applyRequestSchema>,
+  bus: EventBus,
+  runsArea: RunsArea | undefined,
+): void {
+  if (runsArea === undefined) {
+    bus.emit({
+      t: 'patch:rejected',
+      testId: req.testId,
+      file: req.patch.file,
+      reason: 'fs-error',
+      detail: 'dashboard started without a runsArea — no cwd context for path resolution',
+    });
+    return;
+  }
+  const absPath = resolve(runsArea.cwd, req.patch.file);
+  if (absPath !== runsArea.cwd && !absPath.startsWith(runsArea.cwd + sep)) {
+    bus.emit({
+      t: 'patch:rejected',
+      testId: req.testId,
+      file: req.patch.file,
+      reason: 'fs-error',
+      detail: `resolved path escapes project root: ${absPath}`,
+    });
+    return;
+  }
+  const result = applyPatch({
+    file: absPath,
+    oldStr: req.patch.oldStr,
+    newStr: req.patch.newStr,
+  });
+  if (result.ok) {
+    bus.emit({
+      t: 'patch:applied',
+      testId: req.testId,
+      file: req.patch.file,
+      oldStr: req.patch.oldStr,
+      newStr: req.patch.newStr,
+    });
+    return;
+  }
+  bus.emit({
+    t: 'patch:rejected',
+    testId: req.testId,
+    file: req.patch.file,
+    reason: result.reason,
+    ...(result.detail !== undefined ? { detail: result.detail } : {}),
+  });
 }
 
 async function shutdownOn(server: DashboardServer, signals: NodeJS.Signals[]): Promise<void> {
