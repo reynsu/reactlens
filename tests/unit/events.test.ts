@@ -236,6 +236,64 @@ describe('parseRunEvent — happy path per variant', () => {
       expect(end.result.gitContext?.specLastChanged?.sha).toBe('abc');
     }
   });
+
+  // Slice #11 phase 1 — Apply Fix WS round-trip.
+  //
+  // patch:applied carries enough provenance (file + oldStr + newStr) for
+  // the persisted JSONL to be re-run-able. patch:rejected carries the
+  // PatchApplier reason verbatim so the dashboard can switch on it
+  // without reconstructing the failure mode from a free-form string.
+  it('parses patch:applied with the full apply provenance', () => {
+    const out = parseRunEvent({
+      t: 'patch:applied',
+      testId: 't1',
+      file: 'src/Counter.tsx',
+      oldStr: 'count + 1',
+      newStr: 'count - 1',
+    });
+    expect(out?.t).toBe('patch:applied');
+    if (out?.t === 'patch:applied') {
+      expect(out.file).toBe('src/Counter.tsx');
+      expect(out.oldStr).toBe('count + 1');
+      expect(out.newStr).toBe('count - 1');
+    }
+  });
+
+  it('parses patch:rejected with each reason variant', () => {
+    for (const reason of ['oldStr-not-found', 'oldStr-not-unique', 'fs-error'] as const) {
+      const out = parseRunEvent({
+        t: 'patch:rejected',
+        testId: 't1',
+        file: 'src/Counter.tsx',
+        reason,
+      });
+      expect(out?.t).toBe('patch:rejected');
+      if (out?.t === 'patch:rejected') expect(out.reason).toBe(reason);
+    }
+  });
+
+  it('parses patch:rejected with optional detail string', () => {
+    const out = parseRunEvent({
+      t: 'patch:rejected',
+      testId: 't1',
+      file: 'src/Counter.tsx',
+      reason: 'oldStr-not-unique',
+      detail: '3',
+    });
+    expect(out?.t).toBe('patch:rejected');
+    if (out?.t === 'patch:rejected') expect(out.detail).toBe('3');
+  });
+
+  it('rejects patch:rejected with an unknown reason value', () => {
+    // The enum must stay closed — a downstream consumer switching on
+    // reason can't have a "what is this?" branch silently appear.
+    expect(parseRunEvent({
+      t: 'patch:rejected',
+      testId: 't1',
+      file: 'x.ts',
+      reason: 'made-up-reason',
+    })).toBeNull();
+  });
 });
 
 describe('parseRunEvent — rejection cases', () => {
