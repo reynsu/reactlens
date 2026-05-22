@@ -32,6 +32,15 @@ jobs:
     # dominates). 15 min leaves headroom for test growth without
     # becoming an attack vector.
     timeout-minutes: 15
+    env:
+      # Share one browser cache across the root install AND every
+      # fixture's playwright invocation. Fixtures pin the same
+      # @playwright/test version (^1.59.1) so a single install in the
+      # root step satisfies all four. Without this, each fixture would
+      # look in its own node_modules/playwright-core/.local-browsers/
+      # and find nothing — `reactlens run` would spawn a headless
+      # browser that never exists, emitting zero test:start events.
+      PLAYWRIGHT_BROWSERS_PATH: ${{ github.workspace }}/.pw-browsers
 
     steps:
       - uses: actions/checkout@v4
