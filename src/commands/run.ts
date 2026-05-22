@@ -47,6 +47,12 @@ export type RunCommandOptions = {
   // any change. Each iteration writes its own .reactlens/runs/<id>/ dir.
   // Dashboard + bus + costTracker persist across iterations. Exits on SIGINT.
   watch?: boolean;
+  // Optional positional spec path(s) forwarded to `playwright test` as a
+  // filter so only matching specs run. Comes from `reactlens run -- <path>`
+  // on the CLI; useful for the operator-gated `co-generate-roundtrip`
+  // integration test that wants to run ONLY the spec it just generated.
+  // Multiple paths forwarded verbatim.
+  specPaths?: string[];
 };
 
 type Status = 'running' | 'passed' | 'failed' | 'skipped' | 'timedOut';
@@ -179,6 +185,9 @@ export async function runRun(opts: RunCommandOptions): Promise<number> {
       probeWsUrl: dashboard?.probeWsUrl,
       probePath: locatePackagedProbe(),
       axePath: locatePackagedAxe(),
+      ...(opts.specPaths !== undefined && opts.specPaths.length > 0
+        ? { extraArgs: opts.specPaths }
+        : {}),
     });
     if (dashboard !== null) await dashboard.close();
     await persistor.flush();

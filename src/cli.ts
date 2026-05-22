@@ -74,6 +74,7 @@ function buildProgram(): Command {
   program
     .command('run')
     .description('run tests with the live dashboard')
+    .argument('[specPaths...]', 'optional spec file path(s) — only matching specs run (forwarded to `playwright test`)')
     .option('--cwd <path>', 'project directory', process.cwd())
     .option('--reporter <kind>', 'text | json', 'text')
     .option('--skip-web-server', 'do not auto-start the user webServer', false)
@@ -86,7 +87,7 @@ function buildProgram(): Command {
     .option('--save-snapshots-to <dir>', 'write per-test component snapshots (one <testId>.json + manifest.json) into <dir> after the run')
     .option('--max-cost <usd>', 'abort the command once aggregate cost crosses this USD value', parseFloat)
     .option('--watch', 'after the initial run, re-run on changes under <cwd>/src and <cwd>/e2e (P10)', false)
-    .action(async (opts: { cwd: string; reporter: string; skipWebServer: boolean; dashboard: boolean; open: boolean; analyze: boolean; ci: boolean; useClaudeCode: boolean; forceApi: boolean; saveSnapshotsTo?: string; maxCost?: number; watch: boolean }) => {
+    .action(async (specPaths: string[], opts: { cwd: string; reporter: string; skipWebServer: boolean; dashboard: boolean; open: boolean; analyze: boolean; ci: boolean; useClaudeCode: boolean; forceApi: boolean; saveSnapshotsTo?: string; maxCost?: number; watch: boolean }) => {
       const reporter = opts.reporter === 'json' ? 'json' : 'text';
       const code = await runRun({
         cwd: opts.cwd,
@@ -97,6 +98,7 @@ function buildProgram(): Command {
         noAnalyze: !opts.analyze,
         ci: opts.ci,
         useClaudeCode: opts.useClaudeCode,
+        ...(specPaths.length > 0 ? { specPaths } : {}),
         forceApi: opts.forceApi,
         watch: opts.watch,
         ...(opts.saveSnapshotsTo !== undefined ? { saveSnapshotsTo: opts.saveSnapshotsTo } : {}),
