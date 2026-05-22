@@ -2,15 +2,15 @@
   "headline": {
     "withSnapshot": {
       "variant": "with-snapshot",
-      "totalCases": 16,
-      "correctCount": 16,
+      "totalCases": 18,
+      "correctCount": 18,
       "accuracy": 1,
       "falseConfidenceCount": 0,
       "falseConfidenceRate": 0,
       "byClassification": {
         "real-bug": {
-          "total": 4,
-          "correct": 4,
+          "total": 6,
+          "correct": 6,
           "accuracy": 1
         },
         "test-bug": {
@@ -31,8 +31,8 @@
       },
       "byConfidence": {
         "high": {
-          "total": 16,
-          "correct": 16,
+          "total": 18,
+          "correct": 18,
           "accuracy": 1
         },
         "medium": {
@@ -49,15 +49,15 @@
     },
     "withoutSnapshot": {
       "variant": "without-snapshot",
-      "totalCases": 16,
-      "correctCount": 16,
+      "totalCases": 18,
+      "correctCount": 18,
       "accuracy": 1,
       "falseConfidenceCount": 0,
       "falseConfidenceRate": 0,
       "byClassification": {
         "real-bug": {
-          "total": 4,
-          "correct": 4,
+          "total": 6,
+          "correct": 6,
           "accuracy": 1
         },
         "test-bug": {
@@ -78,8 +78,8 @@
       },
       "byConfidence": {
         "high": {
-          "total": 16,
-          "correct": 16,
+          "total": 18,
+          "correct": 18,
           "accuracy": 1
         },
         "medium": {
