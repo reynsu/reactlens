@@ -1,0 +1,110 @@
+name: Integration test gate
+
+# Runs the integration suite on every PR + push to main. The suite
+# exercises the published surface — the bundled CLI binary + subpath
+# exports — and the tarball-install test specifically replicates
+# `npm install @reynsu/reactlens` from a clean fixture so packaging
+# regressions are caught before users see them.
+#
+# Why this exists: the v0.3 release runbook surfaced three packaging
+# bugs (#25 CJS/ESM mismatch, #29 wrong scope in templates, #34
+# bundled-CLI prompt-loader path) that shipped past unit tests because
+# no always-on test exercised the installed-from-npm path. Without
+# this gate, the same pattern recurs on every release.
+#
+# No secrets required: integration tests do not invoke the agent. The
+# tarball-install probe loads prompts without making any LLM call.
+#
+# A subset of tests (run-flow, replay-from-disk, watch-mode) is
+# CI-skipped via `describe.skipIf(Boolean(process.env.CI))` — they
+# fail under headless chromium in GitHub Actions runners because the
+# in-app probe + CDP screencast emit zero events. Tracked in #40.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  integration:
+    name: Run integration suite
+    runs-on: ubuntu-latest
+    # Cap on total job wall-clock. Local runs of the full integration
+    # suite take ~2-3 min; first-run CI without caches takes ~5-7 min
+    # (npm install of all runtime deps inside the tarball fixture
+    # dominates). 15 min leaves headroom for test growth without
+    # becoming an attack vector.
+    timeout-minutes: 15
+    env:
+      # Share one browser cache across the root install AND every
+      # fixture's playwright invocation. Fixtures pin the same
+      # @playwright/test version (^1.59.1) so a single install in the
+      # root step satisfies all four. Without this, each fixture would
+      # look in its own node_modules/playwright-core/.local-browsers/
+      # and find nothing — `reactlens run` would spawn a headless
+      # browser that never exists, emitting zero test:start events.
+      PLAYWRIGHT_BROWSERS_PATH: ${{ github.workspace }}/.pw-browsers
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11
+
+      - name: Cache pnpm store
+        uses: actions/cache@v4
+        with:
+          path: ~/.local/share/pnpm/store
+          key: pnpm-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-keys: pnpm-${{ runner.os }}-
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Install fixture deps
+        # Each tests/fixtures/* is a standalone pnpm project (its own
+        # package.json + pnpm-lock.yaml) — they are NOT pnpm-workspace
+        # members, so `pnpm install` at the root does not reach them.
+        # run-flow.test.ts and replay-from-disk.test.ts spawn
+        # `reactlens run` against these fixtures, which boots a real
+        # Vite/Next dev server inside each fixture; without their
+        # node_modules the server fails to start and the tests see
+        # zero events. The pnpm store cache from the previous step is
+        # shared, so this is fast on warm runs.
+        #
+        # --ignore-scripts: pnpm 10+ requires explicit approval for
+        # build scripts (ERR_PNPM_IGNORED_BUILDS for esbuild + msw in
+        # these fixtures). The build scripts are not critical here:
+        # esbuild ships precompiled platform binaries via optional
+        # deps; msw's postinstall copies a service-worker file used
+        # only in browser MSW (these tests use the node MSW server).
+        run: |
+          set -e
+          for d in tests/fixtures/*/; do
+            if [ -f "$d/package.json" ]; then
+              echo "::group::Installing $d"
+              (cd "$d" && pnpm install --frozen-lockfile --ignore-scripts)
+              echo "::endgroup::"
+            fi
+          done
+
+      - name: Install Playwright chromium
+        # Several integration tests (run-flow, watch-mode) launch real
+        # Playwright sessions against fixtures. Install just chromium
+        # with system deps; the other browsers are not exercised.
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Build
+        run: pnpm build
+
+      - name: Run integration suite
+        run: pnpm test:integration
