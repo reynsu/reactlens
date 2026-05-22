@@ -1,6 +1,6 @@
 {
   "name": "@reynsu/reactlens",
-  "version": "0.1.0",
+  "version": "0.3.0",
   "description": "The first E2E testing tool that understands your React code, not just your DOM.",
   "license": "MIT",
   "type": "commonjs",
