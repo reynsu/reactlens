@@ -19,7 +19,7 @@
 // #15's PR). Calling startDashboardServer directly through vitest's
 // ESM-friendly transform exercises every layer this slice owns.
 import { describe, expect, it, afterEach } from 'vitest';
-import { mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import WebSocket from 'ws';
@@ -212,5 +212,61 @@ describe('Apply Fix WS round-trip — rejection paths', () => {
     expect(event.t).toBe('patch:rejected');
     if (event.t !== 'patch:rejected') throw new Error('typing guard');
     expect(event.reason).toBe('fs-error');
+  });
+
+  // Defensive depth on top of the existing resolve+startsWith guard. A
+  // file that's inside cwd at the path level but is a symlink pointing
+  // OUTSIDE cwd would pass the lexical guard. realpath() resolves the
+  // symlink and lets us re-check containment, so the agent can't be
+  // tricked into mutating /etc/anything via a planted symlink in the
+  // user's tree. Detail message intentionally mentions "symlink" so the
+  // operator can distinguish from the lexical-escape case above.
+  it('emits patch:rejected reason=fs-error when patch.file is a symlink pointing outside cwd', async () => {
+    harness = await makeHarness();
+    // Real target lives OUTSIDE cwd — emulates an attacker-controlled
+    // file (or just an unrelated /etc/-shaped target) that the agent
+    // should never reach.
+    const outsideDir = await mkdtemp(join(tmpdir(), 'reactlens-patch-outside-'));
+    const outsideTarget = join(outsideDir, 'sensitive.txt');
+    await writeFile(outsideTarget, 'do not touch\n');
+    // Plant a symlink INSIDE cwd that points to it. Lexical guard
+    // (resolve + startsWith) passes — the symlink path is under cwd.
+    const insideLink = join(harness.cwd, 'planted-link.txt');
+    await symlink(outsideTarget, insideLink);
+
+    const event = await applyOverWs(harness.server, 't1', {
+      file: 'planted-link.txt',
+      oldStr: 'do not touch',
+      newStr: 'mutated',
+    });
+    expect(event.t).toBe('patch:rejected');
+    if (event.t !== 'patch:rejected') throw new Error('typing guard');
+    expect(event.reason).toBe('fs-error');
+    expect(String(event.detail)).toMatch(/symlink|escapes/i);
+    // The real target file must NOT have been mutated — defence-in-
+    // depth is meaningless if the write still landed.
+    expect(await readFile(outsideTarget, 'utf8')).toBe('do not touch\n');
+  });
+
+  // Regression: a symlink whose realpath is STILL under cwd is legitimate
+  // (e.g., monorepo with internal symlinked packages). The realpath check
+  // must allow it through — the guard catches escapes, not all symlinks.
+  it('allows a symlink whose realpath is still under cwd', async () => {
+    harness = await makeHarness();
+    const realTarget = join(harness.cwd, 'src', 'Real.tsx');
+    await mkdir(dirname(realTarget), { recursive: true });
+    await writeFile(realTarget, 'export const x = 1;\n');
+    const link = join(harness.cwd, 'Linked.tsx');
+    await symlink(realTarget, link);
+
+    const event = await applyOverWs(harness.server, 't1', {
+      file: 'Linked.tsx',
+      oldStr: 'const x = 1',
+      newStr: 'const x = 2',
+    });
+    expect(event.t).toBe('patch:applied');
+    // Real underlying file mutates — that's the documented atomic-write
+    // behavior; the guard only refuses cross-root targets.
+    expect(await readFile(realTarget, 'utf8')).toBe('export const x = 2;\n');
   });
 });

@@ -1,6 +1,6 @@
 import express from 'express';
 import { createServer, type Server as HttpServer } from 'node:http';
-import { readFileSync } from 'node:fs';
+import { readFileSync, realpathSync } from 'node:fs';
 import { join, resolve, sep } from 'node:path';
 import { z } from 'zod';
 import { WebSocketServer, type WebSocket } from 'ws';
@@ -320,8 +320,58 @@ function handleApplyRequest(
     });
     return;
   }
+  // Defensive depth on top of the lexical guard above. A file whose
+  // path is under cwd but is a symlink pointing OUTSIDE cwd would have
+  // passed startsWith() and let the agent mutate /etc/anything. Resolve
+  // symlinks via realpath and re-check containment against the realpath
+  // of cwd (cwd itself may be a symlink — e.g. macOS /tmp -> /private/tmp).
+  //
+  // If realpath fails on the patch.file (typically ENOENT — the user
+  // patched a file that doesn't exist yet, or it was deleted between
+  // resolve and realpath), fall through. The applier downstream will
+  // surface a clean 'fs-error' for the missing file; rejecting here on
+  // realpath failure would regress the existing "target file does not
+  // exist" test path and confuse the operator with a wrong reason.
+  //
+  // If realpath fails on cwd itself, that's a real environment problem
+  // worth surfacing — don't paper over it.
+  let realCwd: string;
+  try {
+    realCwd = realpathSync(runsArea.cwd);
+  } catch (err) {
+    bus.emit({
+      t: 'patch:rejected',
+      testId: req.testId,
+      file: req.patch.file,
+      reason: 'fs-error',
+      detail: `realpath(cwd) failed: ${(err as Error).message}`,
+    });
+    return;
+  }
+  let realPath: string | null;
+  try {
+    realPath = realpathSync(absPath);
+  } catch {
+    realPath = null; // file probably doesn't exist yet; let applier handle it
+  }
+  if (realPath !== null && realPath !== realCwd && !realPath.startsWith(realCwd + sep)) {
+    bus.emit({
+      t: 'patch:rejected',
+      testId: req.testId,
+      file: req.patch.file,
+      reason: 'fs-error',
+      detail: `symlink target escapes project root: ${realPath}`,
+    });
+    return;
+  }
+  // Hand the applier the realpath when we have it (so the atomic-rename
+  // step lands on the real underlying file rather than replacing the
+  // symlink itself, which would silently break legitimate intra-cwd
+  // symlinks). Otherwise stick with the lexical path the applier will
+  // honestly fail on with 'fs-error'.
+  const file = realPath ?? absPath;
   const result = applyPatch({
-    file: absPath,
+    file,
     oldStr: req.patch.oldStr,
     newStr: req.patch.newStr,
   });
