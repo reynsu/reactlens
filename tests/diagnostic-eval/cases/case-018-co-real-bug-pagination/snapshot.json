@@ -1,0 +1,14 @@
+{
+  "name": "Pagination",
+  "key": null,
+  "props": {
+    "total": 11,
+    "pageSize": 5
+  },
+  "hooks": [],
+  "children": [],
+  "source": {
+    "file": "tests/diagnostic-eval/cases/case-018-co-real-bug-pagination/component.tsx",
+    "line": 9
+  }
+}
