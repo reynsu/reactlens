@@ -276,6 +276,17 @@ export async function runRun(opts: RunCommandOptions): Promise<number> {
     reprint(state, isTty);
   });
 
+  // Apply-fix loop closure: the dashboard server emits this when a client
+  // posts `test:rerun-request` over /ws/dashboard. Today the runner just
+  // logs the acknowledgement — actually spawning a re-targeted Playwright
+  // invocation mid-session is its own slice (process-orchestration around
+  // execa, cancel/wait for the active run, dedupe overlapping requests).
+  // The wire infrastructure being in place lets that future slice land
+  // without touching the event protocol or the dashboard server.
+  bus.on('test:rerun-requested', (e) => {
+    logger.info({ testId: e.testId }, 'test rerun requested (runner orchestration is a follow-up slice)');
+  });
+
   async function executeOneRun(): Promise<RunSummary> {
     let summary: RunSummary;
     try {

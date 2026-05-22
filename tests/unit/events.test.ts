@@ -284,6 +284,33 @@ describe('parseRunEvent — happy path per variant', () => {
     if (out?.t === 'patch:rejected') expect(out.detail).toBe('3');
   });
 
+  // Re-run-request WS round-trip (apply-fix loop closure).
+  //
+  // After Apply Fix mutates a source file, the dashboard's DiagnosticsPanel
+  // needs to be able to ask the server "please re-run just this test so I
+  // can see whether the fix worked". The wire shape is symmetric to the
+  // patch:apply pattern: the WS request itself is server-internal (not a
+  // RunEvent); the server's acknowledgement is `test:rerun-requested`,
+  // a bus event that flows back to every dashboard client + persists.
+  //
+  // Actually spawning the re-run is its own slice (runner orchestration);
+  // this event is the wire infrastructure that closes the diagnosis loop
+  // visually (UI sees the request was accepted) and on disk (operator
+  // scrubbing events.jsonl can audit which re-runs were requested).
+  it('parses test:rerun-requested', () => {
+    const out = parseRunEvent({ t: 'test:rerun-requested', testId: 't1' });
+    expect(out?.t).toBe('test:rerun-requested');
+    if (out?.t === 'test:rerun-requested') expect(out.testId).toBe('t1');
+  });
+
+  it('rejects test:rerun-requested with missing testId', () => {
+    expect(parseRunEvent({ t: 'test:rerun-requested' })).toBeNull();
+  });
+
+  it('rejects test:rerun-requested with non-string testId', () => {
+    expect(parseRunEvent({ t: 'test:rerun-requested', testId: 42 })).toBeNull();
+  });
+
   it('rejects patch:rejected with an unknown reason value', () => {
     // The enum must stay closed — a downstream consumer switching on
     // reason can't have a "what is this?" branch silently appear.
