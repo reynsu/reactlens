@@ -2,15 +2,15 @@
   "headline": {
     "withSnapshot": {
       "variant": "with-snapshot",
-      "totalCases": 18,
-      "correctCount": 18,
+      "totalCases": 20,
+      "correctCount": 20,
       "accuracy": 1,
       "falseConfidenceCount": 0,
       "falseConfidenceRate": 0,
       "byClassification": {
         "real-bug": {
-          "total": 6,
-          "correct": 6,
+          "total": 8,
+          "correct": 8,
           "accuracy": 1
         },
         "test-bug": {
@@ -31,14 +31,14 @@
       },
       "byConfidence": {
         "high": {
-          "total": 18,
-          "correct": 18,
+          "total": 19,
+          "correct": 19,
           "accuracy": 1
         },
         "medium": {
-          "total": 0,
-          "correct": 0,
-          "accuracy": 0
+          "total": 1,
+          "correct": 1,
+          "accuracy": 1
         },
         "low": {
           "total": 0,
@@ -49,15 +49,15 @@
     },
     "withoutSnapshot": {
       "variant": "without-snapshot",
-      "totalCases": 18,
-      "correctCount": 18,
+      "totalCases": 20,
+      "correctCount": 20,
       "accuracy": 1,
       "falseConfidenceCount": 0,
       "falseConfidenceRate": 0,
       "byClassification": {
         "real-bug": {
-          "total": 6,
-          "correct": 6,
+          "total": 8,
+          "correct": 8,
           "accuracy": 1
         },
         "test-bug": {
@@ -78,8 +78,8 @@
       },
       "byConfidence": {
         "high": {
-          "total": 18,
-          "correct": 18,
+          "total": 20,
+          "correct": 20,
           "accuracy": 1
         },
         "medium": {
@@ -98,5 +98,12 @@
       "accuracy": 0,
       "falseConfidenceRate": 0
     }
+  },
+  "calibration": {
+    "speculativeHighCount": 1,
+    "speculativeHighRate": 0.05,
+    "confidenceBoostCount": 0,
+    "confidenceBoostRate": 0,
+    "confidenceMatchCount": 19
   }
 }
