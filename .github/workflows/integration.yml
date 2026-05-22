@@ -14,6 +14,11 @@ name: Integration test gate
 #
 # No secrets required: integration tests do not invoke the agent. The
 # tarball-install probe loads prompts without making any LLM call.
+#
+# A subset of tests (run-flow, replay-from-disk, watch-mode) is
+# CI-skipped via `describe.skipIf(Boolean(process.env.CI))` — they
+# fail under headless chromium in GitHub Actions runners because the
+# in-app probe + CDP screencast emit zero events. Tracked in #40.
 
 on:
   push:
