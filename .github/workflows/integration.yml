@@ -66,12 +66,19 @@ jobs:
         # node_modules the server fails to start and the tests see
         # zero events. The pnpm store cache from the previous step is
         # shared, so this is fast on warm runs.
+        #
+        # --ignore-scripts: pnpm 10+ requires explicit approval for
+        # build scripts (ERR_PNPM_IGNORED_BUILDS for esbuild + msw in
+        # these fixtures). The build scripts are not critical here:
+        # esbuild ships precompiled platform binaries via optional
+        # deps; msw's postinstall copies a service-worker file used
+        # only in browser MSW (these tests use the node MSW server).
         run: |
           set -e
           for d in tests/fixtures/*/; do
             if [ -f "$d/package.json" ]; then
               echo "::group::Installing $d"
-              (cd "$d" && pnpm install --frozen-lockfile)
+              (cd "$d" && pnpm install --frozen-lockfile --ignore-scripts)
               echo "::endgroup::"
             fi
           done
