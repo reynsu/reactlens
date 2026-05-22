@@ -1,0 +1,6 @@
+{
+  "expectedClassification": "real-bug",
+  "minimumConfidence": "high",
+  "category": "co-pattern-derived-state-inverted",
+  "notes": "Component-Object-shaped real bug (v0.3 slice 6 / #13). The spec uses Component('Pagination').props.total to confirm the prop was wired correctly (passes), then asserts the rendered DOM contains a page-1 button (fails). The component regressed by inverting Math.floor(total / pageSize) to Math.floor(pageSize / total), producing zero page buttons whenever pageSize <= total. Spec is correct; this is a pure component bug. Lives in the eval set to validate that adding Component-Object cases does NOT regress diagnosis accuracy versus POM cases — see PR description for the operator runbook to recompute the ablation baseline."
+}

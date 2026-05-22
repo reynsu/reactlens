@@ -1,0 +1,21 @@
+Error: expect(locator).toBeVisible()
+
+Locator: getByTestId('page-1')
+Expected: visible
+Received: <element(s) not found>
+Call log:
+  - expect.toBeVisible with timeout 5000ms
+  - waiting for getByTestId('page-1')
+
+   18 |
+   19 |   // DOM assertion: with total=11 and pageSize=5, we expect 2 page buttons.
+   20 |   // Fails on the planted bug (inverted division → 0 buttons rendered).
+>  21 |   await expect(page.getByTestId('page-1')).toBeVisible();
+      |                                            ^
+   22 | });
+
+    at /eval/cases/case-018-co-real-bug-pagination/spec.ts:21:44
+
+Component-Object snapshot at failure (props.total === 11, props.pageSize === 5)
+proves the props arrived correctly; the failure is downstream in the derived
+pageCount.
