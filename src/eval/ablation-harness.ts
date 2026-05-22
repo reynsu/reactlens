@@ -100,6 +100,35 @@ export type DeltaReport = {
   falseConfidenceRate: number;
 };
 
+// Calibration: cross-variant confidence comparison. The headline metric
+// (accuracy + falseConfidenceRate) is structurally blind to cases where
+// both variants classify correctly but emit different confidence levels
+// — yet that asymmetry is the moat signal case-020 surfaced
+// (finding_ablation_delta_zero.md 2026-05-22). `speculativeHighCount`
+// counts cases where without-snapshot says 'high' but with-snapshot
+// says less — i.e. cases where the snapshot induced appropriate
+// humility on inputs the snapshotless agent was over-confident about.
+// Optional field, secondary metric — not in headline, not in CI gate,
+// ADR-0001 intentionally unchanged.
+export type Calibration = {
+  speculativeHighCount: number;
+  speculativeHighRate: number;
+  // `confidenceBoostCount` counts the symmetric case: with-snapshot
+  // strictly exceeds without-snapshot. Interpretation: the snapshot
+  // resolved source-level ambiguity, letting the agent commit higher
+  // when the source alone wouldn't have justified it.
+  confidenceBoostCount: number;
+  confidenceBoostRate: number;
+  // Cases where both variants emit the same confidence level. The
+  // snapshot didn't change the agent's certainty either way — either
+  // both at high (source-clear) or both at low (source AND tree
+  // equally lost). Together with humility + boost, the three
+  // counts partition paired cases.
+  confidenceMatchCount: number;
+};
+
+const CONFIDENCE_RANK: Record<Confidence, number> = { high: 3, medium: 2, low: 1 };
+
 export type AblationReport = {
   // Curated cases only. This is the moat-contribution number reactlens
   // claims publicly — uncurated harvest output never enters the
@@ -117,6 +146,10 @@ export type AblationReport = {
     withoutSnapshot: VariantReport;
     delta: DeltaReport;
   };
+  // Optional. Populated when at least one curated case ran through both
+  // variants. Backward-compat: old baselines lack this field, so the
+  // comparator must tolerate `undefined` (slice-1 contract).
+  calibration?: Calibration;
 };
 
 export type RunAblationArgs = {
@@ -135,6 +168,10 @@ export async function runAblation(args: RunAblationArgs): Promise<AblationReport
   const { cases, diagnoseFn, cache } = args;
   const curatedBucket = newVariantBucket();
   const uncuratedBucket = newVariantBucket();
+  // Per-case confidence pairing for calibration computation. Curated
+  // only — uncurated cases never feed any moat metric (ADR-0004), and
+  // calibration is a moat metric just like accuracy.
+  const curatedPerCase = new Map<string, { with?: Confidence; without?: Confidence }>();
 
   for (const c of cases) {
     const bucket = c.curated ? curatedBucket : uncuratedBucket;
@@ -173,6 +210,16 @@ export async function runAblation(args: RunAblationArgs): Promise<AblationReport
       const confBucket = report.byConfidence[diagnosis.confidence];
       confBucket.total += 1;
       if (correct) confBucket.correct += 1;
+
+      // Calibration: remember this variant's confidence so the
+      // cross-variant comparison can fire at the end. Curated only —
+      // uncurated cases don't feed moat metrics.
+      if (c.curated) {
+        const key = c.name;
+        const existing = curatedPerCase.get(key) ?? {};
+        existing[variant === 'with-snapshot' ? 'with' : 'without'] = diagnosis.confidence;
+        curatedPerCase.set(key, existing);
+      }
     }
   }
 
@@ -187,7 +234,37 @@ export async function runAblation(args: RunAblationArgs): Promise<AblationReport
   if (uncuratedBucket['with-snapshot'].totalCases > 0) {
     report.uncurated = bucketToReport(uncuratedBucket);
   }
+  // Calibration aggregate. Computed from per-case confidence pairs
+  // collected during the variant loop. Skips cases where either
+  // variant errored (missing confidence) — those drop out of the
+  // denominator.
+  const calibration = computeCalibration(curatedPerCase);
+  if (calibration !== undefined) report.calibration = calibration;
   return report;
+}
+
+function computeCalibration(
+  perCase: Map<string, { with?: Confidence; without?: Confidence }>,
+): Calibration | undefined {
+  let speculativeHighCount = 0;
+  let confidenceBoostCount = 0;
+  let confidenceMatchCount = 0;
+  let paired = 0;
+  for (const pair of perCase.values()) {
+    if (pair.with === undefined || pair.without === undefined) continue;
+    paired += 1;
+    if (pair.without === 'high' && pair.with !== 'high') speculativeHighCount += 1;
+    if (CONFIDENCE_RANK[pair.with] > CONFIDENCE_RANK[pair.without]) confidenceBoostCount += 1;
+    if (pair.with === pair.without) confidenceMatchCount += 1;
+  }
+  if (paired === 0) return undefined;
+  return {
+    speculativeHighCount,
+    speculativeHighRate: speculativeHighCount / paired,
+    confidenceBoostCount,
+    confidenceBoostRate: confidenceBoostCount / paired,
+    confidenceMatchCount,
+  };
 }
 
 type VariantBucket = Record<AblationVariant, VariantReport>;

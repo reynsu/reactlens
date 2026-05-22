@@ -59,6 +59,26 @@ export function formatAblationReport(report: AblationReport): string {
     lines.push(`  ${c.padEnd(12)} ${rowFor(w, wo)}`);
   }
 
+  // Cross-variant calibration. Optional secondary metric (per
+  // finding_ablation_delta_zero.md 2026-05-22): catches the moat signal
+  // the headline accuracy metric is structurally blind to — cases where
+  // both variants classify correctly but the without-snapshot agent
+  // emits 'high' while with-snapshot honestly drops to lower confidence.
+  // When the field is undefined (legacy baselines, empty case set), the
+  // whole section disappears rather than rendering a "none" stub.
+  if (report.calibration !== undefined) {
+    const cal = report.calibration;
+    lines.push('');
+    lines.push('Calibration (cross-variant confidence shifts):');
+    lines.push(
+      `  speculative-high (without=high, with<high)  ${cal.speculativeHighCount} (${pct(cal.speculativeHighRate)})`,
+    );
+    lines.push(
+      `  confidence-boost (with>without)             ${cal.confidenceBoostCount} (${pct(cal.confidenceBoostRate)})`,
+    );
+    lines.push(`  confidence-match (with==without)            ${cal.confidenceMatchCount}`);
+  }
+
   return lines.join('\n');
 }
 

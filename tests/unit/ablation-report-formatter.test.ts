@@ -103,4 +103,32 @@ describe('formatAblationReport', () => {
     expect(envLine).toContain('no cases');
     expect(envLine).not.toMatch(/\b0\.0%/);
   });
+
+  // Calibration is the secondary metric introduced as the case-020
+  // remediation (finding_ablation_delta_zero.md 2026-05-22). The
+  // formatter renders it as its own section so the operator can find
+  // it independently of the headline. When the field is undefined
+  // (e.g. legacy baselines, empty case set), the section disappears
+  // entirely — no "Calibration: none" stub.
+  it('renders a Calibration section when report.calibration is present', () => {
+    const out = formatAblationReport(
+      makeReport({
+        calibration: {
+          speculativeHighCount: 1,
+          speculativeHighRate: 0.25,
+          confidenceBoostCount: 0,
+          confidenceBoostRate: 0,
+          confidenceMatchCount: 3,
+        },
+      }),
+    );
+    expect(out).toMatch(/Calibration/);
+    expect(out).toMatch(/speculative-high/i);
+    expect(out).toMatch(/25\.0%/);
+  });
+
+  it('omits the Calibration section when report.calibration is undefined', () => {
+    const out = formatAblationReport(makeReport());
+    expect(out).not.toMatch(/Calibration/);
+  });
 });

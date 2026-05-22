@@ -399,3 +399,136 @@ describe('runAblation', () => {
     expect(writes.every((w) => w.caseName === 'case-fresh')).toBe(true);
   });
 });
+
+// Calibration: cross-variant confidence shifts that the headline metric
+// (accuracy + falseConfidenceRate) structurally cannot see. case-020
+// surfaced the problem — both variants correct, but without-snapshot
+// stayed at high confidence while with-snapshot honestly dropped to
+// medium. The new `calibration` field counts these shifts directly.
+// Lives as a secondary metric (per finding_ablation_delta_zero.md
+// 2026-05-22 update) — not in headline, not in CI gate, ADR-0001
+// intentionally unchanged for now.
+describe('runAblation calibration', () => {
+  it('counts a speculative-high case when without-snapshot is high and with-snapshot is medium', async () => {
+    const casesDir = mkdtempSync(join(tmpdir(), 'reactlens-ablation-cal-'));
+    makeCuratedCase(casesDir, 'case-001-real-bug', {
+      expectedClassification: 'real-bug',
+      minimumConfidence: 'low',
+    });
+    const cases = loadEvalCases(casesDir);
+
+    const diagnoseFn: DiagnoseFn = async ({ variant }) =>
+      makeDiagnosis({
+        classification: 'real-bug',
+        confidence: variant === 'with-snapshot' ? 'medium' : 'high',
+      });
+
+    const report = await runAblation({ cases, diagnoseFn });
+
+    expect(report.calibration?.speculativeHighCount).toBe(1);
+    expect(report.calibration?.speculativeHighRate).toBe(1);
+  });
+
+  it('counts a confidence-boost case when with-snapshot is high and without-snapshot is medium', async () => {
+    const casesDir = mkdtempSync(join(tmpdir(), 'reactlens-ablation-cal-'));
+    makeCuratedCase(casesDir, 'case-001-real-bug', {
+      expectedClassification: 'real-bug',
+      minimumConfidence: 'low',
+    });
+    const cases = loadEvalCases(casesDir);
+
+    const diagnoseFn: DiagnoseFn = async ({ variant }) =>
+      makeDiagnosis({
+        classification: 'real-bug',
+        confidence: variant === 'with-snapshot' ? 'high' : 'medium',
+      });
+
+    const report = await runAblation({ cases, diagnoseFn });
+
+    expect(report.calibration?.confidenceBoostCount).toBe(1);
+    expect(report.calibration?.confidenceBoostRate).toBe(1);
+  });
+
+  it('counts a confidence-match case when both variants emit the same confidence', async () => {
+    const casesDir = mkdtempSync(join(tmpdir(), 'reactlens-ablation-cal-'));
+    makeCuratedCase(casesDir, 'case-001-real-bug', {
+      expectedClassification: 'real-bug',
+      minimumConfidence: 'low',
+    });
+    const cases = loadEvalCases(casesDir);
+
+    const diagnoseFn: DiagnoseFn = async () =>
+      makeDiagnosis({ classification: 'real-bug', confidence: 'high' });
+
+    const report = await runAblation({ cases, diagnoseFn });
+
+    expect(report.calibration?.confidenceMatchCount).toBe(1);
+    expect(report.calibration?.speculativeHighCount).toBe(0);
+    expect(report.calibration?.confidenceBoostCount).toBe(0);
+  });
+
+  it('counts confidence shift regardless of whether classifications agree', async () => {
+    const casesDir = mkdtempSync(join(tmpdir(), 'reactlens-ablation-cal-'));
+    makeCuratedCase(casesDir, 'case-001-real-bug', {
+      expectedClassification: 'real-bug',
+      minimumConfidence: 'low',
+    });
+    const cases = loadEvalCases(casesDir);
+
+    // Variants disagree on classification AND on confidence. The
+    // calibration metric should still see the confidence shift —
+    // grilling decision: confidence shift is signal independent of
+    // classification agreement (operator interprets afterwards).
+    const diagnoseFn: DiagnoseFn = async ({ variant }) =>
+      variant === 'with-snapshot'
+        ? makeDiagnosis({ classification: 'real-bug', confidence: 'medium' })
+        : makeDiagnosis({ classification: 'test-bug', confidence: 'high' });
+
+    const report = await runAblation({ cases, diagnoseFn });
+
+    expect(report.calibration?.speculativeHighCount).toBe(1);
+  });
+
+  it('computes rates as count divided by paired-case count', async () => {
+    const casesDir = mkdtempSync(join(tmpdir(), 'reactlens-ablation-cal-'));
+    makeCuratedCase(casesDir, 'case-001-spec-high', {
+      expectedClassification: 'real-bug',
+      minimumConfidence: 'low',
+    });
+    makeCuratedCase(casesDir, 'case-002-match', {
+      expectedClassification: 'real-bug',
+      minimumConfidence: 'low',
+    });
+    makeCuratedCase(casesDir, 'case-003-match', {
+      expectedClassification: 'real-bug',
+      minimumConfidence: 'low',
+    });
+    const cases = loadEvalCases(casesDir);
+
+    // case-001 → speculative-high (with=medium, without=high)
+    // case-002 → match (both high)
+    // case-003 → match (both high)
+    const diagnoseFn: DiagnoseFn = async ({ case: c, variant }) => {
+      if (c.name === 'case-001-spec-high') {
+        return makeDiagnosis({
+          classification: 'real-bug',
+          confidence: variant === 'with-snapshot' ? 'medium' : 'high',
+        });
+      }
+      return makeDiagnosis({ classification: 'real-bug', confidence: 'high' });
+    };
+
+    const report = await runAblation({ cases, diagnoseFn });
+
+    expect(report.calibration?.speculativeHighCount).toBe(1);
+    expect(report.calibration?.speculativeHighRate).toBeCloseTo(1 / 3);
+    expect(report.calibration?.confidenceMatchCount).toBe(2);
+    expect(report.calibration?.confidenceBoostCount).toBe(0);
+  });
+
+  it('omits calibration when no curated cases ran', async () => {
+    const diagnoseFn: DiagnoseFn = async () => makeDiagnosis();
+    const report = await runAblation({ cases: [], diagnoseFn });
+    expect(report.calibration).toBeUndefined();
+  });
+});
