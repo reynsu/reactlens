@@ -21,5 +21,11 @@ captured-*/
 .claude/skills/
 skills-lock.json
 
+# Per-session Claude Code harness artifacts. Auto-created during runs and
+# auto-cleaned at exit; they shouldn't pollute `git status` between
+# invocations. The harness recreates them as needed.
+.claude/scheduled_tasks.lock
+.claude/worktrees/
+
 # Generated explainer artifacts (regenerable from docs/explainer.html via Playwright).
 Tabs-Testing-Proposal.pdf
