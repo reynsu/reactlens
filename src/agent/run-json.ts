@@ -49,16 +49,31 @@ export type RunAgentJsonOpts<T> = {
   onChunk?: (text: string) => void;
 };
 
-// Resolves a prompt file across the dist/src dual layout that the project
-// has shipped with since v0.1. KNOWN GAP: not robust for npm-published
-// packages — `files` in package.json does not include `src/`, so the second
-// candidate fails. Fix lives in tsup.config.ts (copy prompts into dist/) and
-// will land alongside the first npm publish.
+// Resolves a prompt file across the dual layout this project ships with:
+//
+//   - Bundled CLI (`dist/cli.js`): __dirname = <pkg>/dist. Prompts live at
+//     <pkg>/src/<area>/prompts/<name> because `files` in package.json
+//     ships `src/generator/prompts`. Candidate: __dirname/../src/<area>/...
+//   - Dev (tsx running `src/agent/run-json.ts` directly): __dirname =
+//     <pkg>/src/agent. Prompts at <pkg>/src/<area>/prompts/<name>.
+//     Candidate: __dirname/../<area>/...
+//   - (Optional future) tsup-copies-prompts-into-dist: candidate
+//     __dirname/<area>/... covers that without changing call sites.
+//
+// Order matters: try the bundled-CLI path first because that's the
+// production path on every installed user. Dev fallback after.
 export async function loadPromptSource(src: PromptSource): Promise<string> {
   if ('text' in src) return src.text;
   const candidates = [
+    // Bundled CLI: dist/cli.js → ../src/<area>/prompts/<name>
+    join(__dirname, '..', 'src', src.area, 'prompts', src.name),
+    // Dev (tsx): src/agent/run-json.ts → ../<area>/prompts/<name>
     join(__dirname, '..', src.area, 'prompts', src.name),
-    join(__dirname, '..', '..', 'src', src.area, 'prompts', src.name),
+    // tsup-copies-prompts-into-dist: dist/<area>/prompts/<name>
+    join(__dirname, src.area, 'prompts', src.name),
+    // Same as candidate 2 via dirname(__filename) — guards against ESM-shim
+    // edge cases where __dirname is the bundle dir but __filename normalizes
+    // differently. Kept for parity with prior versions.
     join(dirname(__filename), '..', src.area, 'prompts', src.name),
   ];
   for (const c of candidates) {
