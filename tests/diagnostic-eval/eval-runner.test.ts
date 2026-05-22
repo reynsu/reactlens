@@ -183,7 +183,17 @@ describe.skipIf(!ABLATION || !HAS_AGENT)('diagnostic ablation (with API)', () =>
     }
 
     const agent = await pickAgentRunner({ commandName: 'eval' });
-    const cases = loadEvalCases(CASES_DIR);
+    // Filter to cases that actually HAVE a component snapshot. The
+    // ablation harness measures "moat-contribution delta" by stripping
+    // the component-snapshot section from the with-snapshot prompt; for
+    // cases without a snapshot.json (today: all `synthetic-from-corpus/*`
+    // entries land snapshotless from the harvest pipeline per slice 4),
+    // buildUserMessage emits no markers and generateVariant correctly
+    // refuses to silently ablate nothing. Skipping at the eval-runner
+    // boundary keeps the harness contract sharp (markers present ⇒
+    // ablatable) without weakening the AblationMarkersMissingError guard.
+    const allCases = loadEvalCases(CASES_DIR);
+    const cases = allCases.filter((c) => existsSync(join(c.path, 'snapshot.json')));
     const cwd = join(__dirname, '..', '..');
     const diagnoseFn = createProductionDiagnoseFn({ agent, cwd });
     const cache = createFileCache({ root: ABLATION_CACHE_ROOT });
