@@ -56,6 +56,26 @@ jobs:
       - name: Install
         run: pnpm install --frozen-lockfile
 
+      - name: Install fixture deps
+        # Each tests/fixtures/* is a standalone pnpm project (its own
+        # package.json + pnpm-lock.yaml) — they are NOT pnpm-workspace
+        # members, so `pnpm install` at the root does not reach them.
+        # run-flow.test.ts and replay-from-disk.test.ts spawn
+        # `reactlens run` against these fixtures, which boots a real
+        # Vite/Next dev server inside each fixture; without their
+        # node_modules the server fails to start and the tests see
+        # zero events. The pnpm store cache from the previous step is
+        # shared, so this is fast on warm runs.
+        run: |
+          set -e
+          for d in tests/fixtures/*/; do
+            if [ -f "$d/package.json" ]; then
+              echo "::group::Installing $d"
+              (cd "$d" && pnpm install --frozen-lockfile)
+              echo "::endgroup::"
+            fi
+          done
+
       - name: Install Playwright chromium
         # Several integration tests (run-flow, watch-mode) launch real
         # Playwright sessions against fixtures. Install just chromium
