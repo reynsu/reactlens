@@ -1,0 +1,14 @@
+{
+  "entryName": "tanstack-router-kitchen-sink",
+  "sourceRepo": "https://github.com/reynsu/router.git",
+  "sourceMode": "real-clone",
+  "plantedFailure": {
+    "kind": "file-replace",
+    "path": "e2e/react-router/kitchen-sink-react-query/src/main.tsx",
+    "oldString": "const invoiceQuery = useSuspenseQuery(invoiceQueryOptions(params.invoiceId))",
+    "newString": "const invoiceQuery = useSuspenseQuery(invoiceQueryOptions(params.invoiceId + 1))",
+    "description": "Invoice detail fetches off-by-one invoice id"
+  },
+  "harvestedAt": "2026-05-22T14:55:56.438Z",
+  "commitSha": "4ca6eacb35b449f764e0c89aa41237907fda36a6"
+}

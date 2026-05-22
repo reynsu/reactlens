@@ -1,0 +1,6 @@
+{
+  "expectedClassification": "real-bug",
+  "minimumConfidence": "high",
+  "category": "off-by-one-on-query-arg",
+  "notes": "InvoiceComponent (src/main.tsx:434) calls useSuspenseQuery(invoiceQueryOptions(params.invoiceId + 1)) instead of params.invoiceId. Result: navigating to /dashboard/invoices/1 renders invoice 2's body. Spec at tests/app.spec.ts:11 asserts getByText('Body of invoice 1') is visible after clicking #1 - Invoice 1; the planted off-by-one makes invoice 2's body render instead, so the locator never resolves and the assertion times out. Pure component bug, spec is correct (POM-style navigation: Dashboard → Invoices → first invoice → assert body text). Tree-distinguishable because the snapshot at the failing step shows InvoiceFields receiving { id: 2, title: 'Invoice 2', ... } while the URL params indicate invoiceId=1 — the runtime discrepancy is observable in the component tree without re-deriving it from source. Curated from synthetic-from-corpus/tanstack-router-kitchen-sink/case-001 harvest output."
+}

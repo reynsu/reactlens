@@ -40,6 +40,34 @@
       },
       "candidateSpec": "client-side-validation/tests/form.spec.ts",
       "candidateComponent": "client-side-validation/app/components/Form.tsx"
+    },
+    {
+      "name": "tanstack-router-kitchen-sink",
+      "repoUrl": "https://github.com/reynsu/router.git",
+      "commitSha": "4ca6eacb35b449f764e0c89aa41237907fda36a6",
+      "plantedFailure": {
+        "kind": "file-replace",
+        "path": "e2e/react-router/kitchen-sink-react-query/src/main.tsx",
+        "oldString": "const invoiceQuery = useSuspenseQuery(invoiceQueryOptions(params.invoiceId))",
+        "newString": "const invoiceQuery = useSuspenseQuery(invoiceQueryOptions(params.invoiceId + 1))",
+        "description": "Invoice detail fetches off-by-one invoice id"
+      },
+      "candidateSpec": "e2e/react-router/kitchen-sink-react-query/tests/app.spec.ts",
+      "candidateComponent": "e2e/react-router/kitchen-sink-react-query/src/main.tsx"
+    },
+    {
+      "name": "tanstack-router-kitchen-sink-mocktodos",
+      "repoUrl": "https://github.com/reynsu/router.git",
+      "commitSha": "4ca6eacb35b449f764e0c89aa41237907fda36a6",
+      "plantedFailure": {
+        "kind": "file-replace",
+        "path": "e2e/react-router/kitchen-sink-react-query/src/mockTodos.ts",
+        "oldString": "ensureInvoices().then(() => {\n      const invoice = invoices.find((d) => d.id === id)",
+        "newString": "ensureInvoices().then(() => {\n      const invoice = invoices.find((d) => d.id === id + 1)",
+        "description": "fetchInvoiceById returns off-by-one invoice (criterion-3: bug in file not visible to agent)"
+      },
+      "candidateSpec": "e2e/react-router/kitchen-sink-react-query/tests/app.spec.ts",
+      "candidateComponent": "e2e/react-router/kitchen-sink-react-query/src/main.tsx"
     }
   ]
 }

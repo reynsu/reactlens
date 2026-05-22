@@ -1,0 +1,14 @@
+{
+  "entryName": "tanstack-router-kitchen-sink-mocktodos",
+  "sourceRepo": "https://github.com/reynsu/router.git",
+  "sourceMode": "real-clone",
+  "plantedFailure": {
+    "kind": "file-replace",
+    "path": "e2e/react-router/kitchen-sink-react-query/src/mockTodos.ts",
+    "oldString": "ensureInvoices().then(() => {\n      const invoice = invoices.find((d) => d.id === id)",
+    "newString": "ensureInvoices().then(() => {\n      const invoice = invoices.find((d) => d.id === id + 1)",
+    "description": "fetchInvoiceById returns off-by-one invoice (criterion-3: bug in file not visible to agent)"
+  },
+  "harvestedAt": "2026-05-22T16:28:28.251Z",
+  "commitSha": "4ca6eacb35b449f764e0c89aa41237907fda36a6"
+}
