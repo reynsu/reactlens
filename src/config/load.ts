@@ -62,10 +62,46 @@ function formatZodError(err: z.ZodError): string {
   return `invalid reactlens config:\n${lines.join('\n')}`;
 }
 
+// Env knobs that override config-file (or default) values AFTER Zod parsing.
+// Tiny surface intentionally — only the fields operators actually need to
+// flip at the command line without editing their reactlens.config.ts.
+//
+// Empty-string is treated as unset so accidental `export REACTLENS_OUTPUT_SPECS=`
+// (or shell scripts that produce a blank value) don't silently break the
+// generator. Adding fields here means documenting them too — see README.
+type EnvOverride = {
+  envVar: string;
+  apply: (cfg: ReactLensConfig, value: string) => void;
+};
+
+const ENV_OVERRIDES: EnvOverride[] = [
+  {
+    envVar: 'REACTLENS_OUTPUT_SPECS',
+    apply: (cfg, value) => {
+      cfg.output.specs = value;
+    },
+  },
+  {
+    envVar: 'REACTLENS_OUTPUT_PAGES',
+    apply: (cfg, value) => {
+      cfg.output.pages = value;
+    },
+  },
+];
+
+function applyEnvOverrides(cfg: ReactLensConfig): ReactLensConfig {
+  for (const { envVar, apply } of ENV_OVERRIDES) {
+    const raw = process.env[envVar];
+    if (raw === undefined || raw.length === 0) continue;
+    apply(cfg, raw);
+  }
+  return cfg;
+}
+
 export async function loadConfig(cwd: string): Promise<ReactLensConfig> {
   const file = findConfigFile(cwd);
   if (file === undefined) {
-    return reactlensConfigSchema.parse({});
+    return applyEnvOverrides(reactlensConfigSchema.parse({}));
   }
   let raw: unknown;
   try {
@@ -77,5 +113,5 @@ export async function loadConfig(cwd: string): Promise<ReactLensConfig> {
   if (!parsed.success) {
     throw new ConfigError(formatZodError(parsed.error));
   }
-  return parsed.data;
+  return applyEnvOverrides(parsed.data);
 }

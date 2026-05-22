@@ -79,4 +79,54 @@ describe('loadConfig', () => {
     await writeFile(join(tmp, 'reactlens.config.ts'), `throw new Error('boom');\n`);
     await expect(loadConfig(tmp)).rejects.toBeInstanceOf(ConfigError);
   });
+
+  describe('env overrides (REACTLENS_OUTPUT_SPECS / REACTLENS_OUTPUT_PAGES)', () => {
+    // Operators (and the gated `co-generate-roundtrip` integration test in
+    // #33 specifically) need to redirect generator output without editing
+    // the user's reactlens.config.ts. The env knobs apply ON TOP of whatever
+    // the config resolves to — including "no config file at all".
+
+    const SAVED_SPECS = process.env.REACTLENS_OUTPUT_SPECS;
+    const SAVED_PAGES = process.env.REACTLENS_OUTPUT_PAGES;
+
+    afterEach(() => {
+      // Restore so a single test never leaks state across the suite.
+      if (SAVED_SPECS === undefined) delete process.env.REACTLENS_OUTPUT_SPECS;
+      else process.env.REACTLENS_OUTPUT_SPECS = SAVED_SPECS;
+      if (SAVED_PAGES === undefined) delete process.env.REACTLENS_OUTPUT_PAGES;
+      else process.env.REACTLENS_OUTPUT_PAGES = SAVED_PAGES;
+    });
+
+    it('REACTLENS_OUTPUT_SPECS overrides output.specs when no config file is present', async () => {
+      process.env.REACTLENS_OUTPUT_SPECS = 'tmp/specs-scratch';
+      const cfg = await loadConfig(tmp);
+      expect(cfg.output.specs).toBe('tmp/specs-scratch');
+      // Other defaults untouched.
+      expect(cfg.output.pages).toBe('e2e/pages');
+    });
+
+    it('REACTLENS_OUTPUT_SPECS overrides the config-file value', async () => {
+      await writeFile(
+        join(tmp, 'reactlens.config.ts'),
+        `export default { output: { specs: 'e2e/specs', pages: 'e2e/pages' } };\n`,
+      );
+      process.env.REACTLENS_OUTPUT_SPECS = 'tmp/specs-scratch';
+      const cfg = await loadConfig(tmp);
+      expect(cfg.output.specs).toBe('tmp/specs-scratch');
+      expect(cfg.output.pages).toBe('e2e/pages'); // config-file value preserved
+    });
+
+    it('REACTLENS_OUTPUT_PAGES overrides output.pages independently of specs', async () => {
+      process.env.REACTLENS_OUTPUT_PAGES = 'tmp/pages-scratch';
+      const cfg = await loadConfig(tmp);
+      expect(cfg.output.pages).toBe('tmp/pages-scratch');
+      expect(cfg.output.specs).toBe('e2e/specs');
+    });
+
+    it('empty-string env value is ignored (treated as unset, not as "")', async () => {
+      process.env.REACTLENS_OUTPUT_SPECS = '';
+      const cfg = await loadConfig(tmp);
+      expect(cfg.output.specs).toBe('e2e/specs');
+    });
+  });
 });
