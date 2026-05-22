@@ -6,6 +6,7 @@ import { runDiff } from './commands/diff';
 import { runEvalAddFromLastFailure } from './commands/eval-add-from-last-failure';
 import { runGenerate } from './commands/generate';
 import { runInit } from './commands/init';
+import { runInternalProbeBundle } from './commands/internal-probe-bundle';
 import { runRegen } from './commands/regen';
 import { runRun } from './commands/run';
 import { ReactLensError } from './utils/errors';
@@ -167,6 +168,21 @@ function buildProgram(): Command {
     .action(async (opts: { cwd: string }) => {
       const code = await runEvalAddFromLastFailure({ cwd: opts.cwd });
       process.exitCode = code;
+    });
+
+  // Maintainer/CI probe — verifies every prompt that ships in the
+  // bundled package can be loaded by the agent-bearing path. Hidden
+  // from --help by the `internal:` prefix convention (commander has
+  // no native hide flag for subcommands prior to v13). Emits a single
+  // JSON line to stdout; exits 1 if any prompt fails to load. Wired
+  // by tests/integration/tarball-install.test.ts.
+  program
+    .command('internal:probe-bundle')
+    .description('internal: verify bundled artifacts load from this install (CI/maintainers)')
+    .action(async () => {
+      const result = await runInternalProbeBundle({ version: readPackageVersion() });
+      process.stdout.write(`${JSON.stringify(result)}\n`);
+      process.exitCode = result.ok ? 0 : 1;
     });
 
   return program;

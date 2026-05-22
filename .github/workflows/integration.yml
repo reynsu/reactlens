@@ -1,0 +1,69 @@
+name: Integration test gate
+
+# Runs the integration suite on every PR + push to main. The suite
+# exercises the published surface — the bundled CLI binary + subpath
+# exports — and the tarball-install test specifically replicates
+# `npm install @reynsu/reactlens` from a clean fixture so packaging
+# regressions are caught before users see them.
+#
+# Why this exists: the v0.3 release runbook surfaced three packaging
+# bugs (#25 CJS/ESM mismatch, #29 wrong scope in templates, #34
+# bundled-CLI prompt-loader path) that shipped past unit tests because
+# no always-on test exercised the installed-from-npm path. Without
+# this gate, the same pattern recurs on every release.
+#
+# No secrets required: integration tests do not invoke the agent. The
+# tarball-install probe loads prompts without making any LLM call.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  integration:
+    name: Run integration suite
+    runs-on: ubuntu-latest
+    # Cap on total job wall-clock. Local runs of the full integration
+    # suite take ~2-3 min; first-run CI without caches takes ~5-7 min
+    # (npm install of all runtime deps inside the tarball fixture
+    # dominates). 15 min leaves headroom for test growth without
+    # becoming an attack vector.
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11
+
+      - name: Cache pnpm store
+        uses: actions/cache@v4
+        with:
+          path: ~/.local/share/pnpm/store
+          key: pnpm-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-keys: pnpm-${{ runner.os }}-
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Playwright chromium
+        # Several integration tests (run-flow, watch-mode) launch real
+        # Playwright sessions against fixtures. Install just chromium
+        # with system deps; the other browsers are not exercised.
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Build
+        run: pnpm build
+
+      - name: Run integration suite
+        run: pnpm test:integration
