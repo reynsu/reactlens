@@ -2,7 +2,8 @@ import { execa, type ResultPromise, type Subprocess } from 'execa';
 import { ReactLensError } from '../utils/errors';
 import { logger } from '../utils/logger';
 import { EventBus } from './event-bus';
-import { parseRunEvent, type RunEvent } from './events';
+import { tryIngestRunEvent } from './event-ingestion';
+import type { RunEvent } from './events';
 
 export type RunnerOptions = {
   cwd: string;
@@ -40,13 +41,13 @@ export type RunSummary = {
   exitCode: number;
 };
 
+// Thin wrapper that combines the perf early-bail (most stdout lines
+// from Playwright are progress/log text, not JSON) with the typed
+// ingestion boundary. tryIngestRunEvent handles JSON.parse failures
+// + schema mismatches; the early bail keeps the hot path cheap.
 function tryParseEvent(line: string): RunEvent | null {
   if (line.length === 0 || line[0] !== '{') return null;
-  try {
-    return parseRunEvent(JSON.parse(line));
-  } catch {
-    return null;
-  }
+  return tryIngestRunEvent(line);
 }
 
 class LineSplitter {

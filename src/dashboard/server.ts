@@ -7,7 +7,8 @@ import { WebSocketServer, type WebSocket } from 'ws';
 import { applyPatch } from '../applier/patch-applier';
 import { logger } from '../utils/logger';
 import { EventBus } from '../runner/event-bus';
-import { ALL_EVENT_TYPES, parseRunEvent, type RunEvent } from '../runner/events';
+import { tryIngestRunEvent } from '../runner/event-ingestion';
+import { ALL_EVENT_TYPES, type RunEvent } from '../runner/events';
 import { frameExists, type RunsArea } from '../runs/run-paths';
 
 // WS apply request schema. The dashboard client sends this in over the
@@ -221,12 +222,16 @@ export async function startDashboardServer(opts: DashboardServerOptions): Promis
 
   probeWss.on('connection', (client: WebSocket) => {
     client.on('message', (data) => {
+      // tryIngestRunEvent handles both Buffer + string and combines
+      // JSON.parse + schema validation; returns null on either failure
+      // for the soft path the probe pipeline wants (drop bad frames,
+      // keep streaming the good ones).
+      const event = tryIngestRunEvent(data as Buffer);
+      if (event === null) {
+        logger.warn({ preview: data.toString().slice(0, 200) }, 'probe message failed JSON.parse or schema validation; dropped');
+        return;
+      }
       try {
-        const event = parseRunEvent(JSON.parse(data.toString()));
-        if (event === null) {
-          logger.warn({ preview: data.toString().slice(0, 200) }, 'probe message failed schema validation; dropped');
-          return;
-        }
         // Rewrite stepId on component-* events so it reflects the active
         // Playwright step rather than the testId-shaped default the probe
         // baked in at addInitScript time. See the activeStep comment above
