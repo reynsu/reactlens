@@ -38,10 +38,10 @@ function firstEmittedCase(dirs: readonly string[]): string {
   return d;
 }
 
-describe('runHarvest — fixture-mode end-to-end', () => {
-  it('processes the counter-fixture entry and emits exactly one case', () => {
+describe('runHarvest — fixture-mode end-to-end', async () => {
+  it('processes the counter-fixture entry and emits exactly one case', async () => {
     const outRoot = mkdtempSync(join(tmpdir(), 'reactlens-harvest-smoke-'));
-    const result = runHarvest({
+    const result = await runHarvest({
       repoRoot: REPO_ROOT,
       outputRoot: outRoot,
       entryName: 'counter-fixture',
@@ -50,9 +50,9 @@ describe('runHarvest — fixture-mode end-to-end', () => {
     expect(result.emittedCaseDirs).toHaveLength(1);
   });
 
-  it('emitted case directory has the expected file layout', () => {
+  it('emitted case directory has the expected file layout', async () => {
     const outRoot = mkdtempSync(join(tmpdir(), 'reactlens-harvest-smoke-'));
-    const { emittedCaseDirs } = runHarvest({
+    const { emittedCaseDirs } = await runHarvest({
       repoRoot: REPO_ROOT,
       outputRoot: outRoot,
       entryName: 'counter-fixture',
@@ -65,12 +65,12 @@ describe('runHarvest — fixture-mode end-to-end', () => {
     expect(existsSync(join(caseDir, 'truth.json'))).toBe(true);
   });
 
-  it('emitted component.tsx contains the planted change (count + 1 became count - 1)', () => {
+  it('emitted component.tsx contains the planted change (count + 1 became count - 1)', async () => {
     // The whole point: if the plant didn't actually plant, the harvested
     // case is a passing test mislabeled as failing — the calibration
     // poison that Principle 2 forbids. This assertion is the contract.
     const outRoot = mkdtempSync(join(tmpdir(), 'reactlens-harvest-smoke-'));
-    const { emittedCaseDirs } = runHarvest({
+    const { emittedCaseDirs } = await runHarvest({
       repoRoot: REPO_ROOT,
       outputRoot: outRoot,
       entryName: 'counter-fixture',
@@ -80,9 +80,9 @@ describe('runHarvest — fixture-mode end-to-end', () => {
     expect(component).not.toContain('setCount(count + 1)');
   });
 
-  it('manifest.json records sourceMode=local-fixture + the planted recipe', () => {
+  it('manifest.json records sourceMode=local-fixture + the planted recipe', async () => {
     const outRoot = mkdtempSync(join(tmpdir(), 'reactlens-harvest-smoke-'));
-    const { emittedCaseDirs } = runHarvest({
+    const { emittedCaseDirs } = await runHarvest({
       repoRoot: REPO_ROOT,
       outputRoot: outRoot,
       entryName: 'counter-fixture',
@@ -99,9 +99,9 @@ describe('runHarvest — fixture-mode end-to-end', () => {
     expect(manifest.harvestedAt).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/);
   });
 
-  it('emitted truth.json is the uncurated stub', () => {
+  it('emitted truth.json is the uncurated stub', async () => {
     const outRoot = mkdtempSync(join(tmpdir(), 'reactlens-harvest-smoke-'));
-    const { emittedCaseDirs } = runHarvest({
+    const { emittedCaseDirs } = await runHarvest({
       repoRoot: REPO_ROOT,
       outputRoot: outRoot,
       entryName: 'counter-fixture',
@@ -112,9 +112,9 @@ describe('runHarvest — fixture-mode end-to-end', () => {
     expect(String(truth.notes).toLowerCase()).toContain('uncurated');
   });
 
-  it('case directory lands under <outRoot>/<entry-slug>/case-NNN-<plant-slug>/', () => {
+  it('case directory lands under <outRoot>/<entry-slug>/case-NNN-<plant-slug>/', async () => {
     const outRoot = mkdtempSync(join(tmpdir(), 'reactlens-harvest-smoke-'));
-    const { emittedCaseDirs } = runHarvest({
+    const { emittedCaseDirs } = await runHarvest({
       repoRoot: REPO_ROOT,
       outputRoot: outRoot,
       entryName: 'counter-fixture',
@@ -128,13 +128,13 @@ describe('runHarvest — fixture-mode end-to-end', () => {
     expect(tail).toContain('increment-regressed-to-decrement');
   });
 
-  it('re-running the harvest adds case-002-* rather than overwriting case-001-*', () => {
+  it('re-running the harvest adds case-002-* rather than overwriting case-001-*', async () => {
     // Idempotence-via-incrementing: an operator running the harvest
     // twice should not lose the first run's output. The emitter scans
     // existing case-N-* dirs to pick max(N)+1 — this test locks that.
     const outRoot = mkdtempSync(join(tmpdir(), 'reactlens-harvest-smoke-'));
-    runHarvest({ repoRoot: REPO_ROOT, outputRoot: outRoot, entryName: 'counter-fixture' });
-    runHarvest({ repoRoot: REPO_ROOT, outputRoot: outRoot, entryName: 'counter-fixture' });
+    await runHarvest({ repoRoot: REPO_ROOT, outputRoot: outRoot, entryName: 'counter-fixture' });
+    await runHarvest({ repoRoot: REPO_ROOT, outputRoot: outRoot, entryName: 'counter-fixture' });
     const repoSlugDir = join(outRoot, 'counter-fixture');
     const cases = readdirSync(repoSlugDir).filter((n) => n.startsWith('case-'));
     expect(cases).toHaveLength(2);
@@ -143,15 +143,15 @@ describe('runHarvest — fixture-mode end-to-end', () => {
   });
 });
 
-describe('runHarvest — operator-error surfacing', () => {
-  it('throws when --entry matches no corpus entry (silent zero-iteration would be a footgun)', () => {
+describe('runHarvest — operator-error surfacing', async () => {
+  it('throws when --entry matches no corpus entry (silent zero-iteration would be a footgun)', async () => {
     const outRoot = mkdtempSync(join(tmpdir(), 'reactlens-harvest-smoke-'));
-    expect(() =>
+    await expect(
       runHarvest({
         repoRoot: REPO_ROOT,
         outputRoot: outRoot,
         entryName: 'this-entry-does-not-exist',
       }),
-    ).toThrow(/matched no corpus entries/);
+    ).rejects.toThrow(/matched no corpus entries/);
   });
 });
