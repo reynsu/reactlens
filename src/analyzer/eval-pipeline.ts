@@ -1,20 +1,19 @@
-// I/O wrapper around the pure helpers in eval-metrics.ts: load a single case
-// directory, invoke the diagnosis agent against it, compare to truth.json,
-// return a CaseResult ready to feed into aggregateMetrics().
+// I/O wrapper around the pure helpers in @reynsu/reactlens-diagnosis-prompts:
+// load truth.json for a case, invoke DiagnosisRun against the eval-case
+// intent, compare the resulting Diagnosis to truth, return a CaseResult.
 //
-// Kept separate from eval-metrics.ts so that file stays pure (no fs, no agent)
-// and from failure-agent.ts so the agent stays oblivious to truth.json.
+// Post-#45: this file no longer orchestrates sandboxCase + caseToFailure +
+// diagnose. Those concerns live inside the DiagnosisRun Module's
+// `prepare-eval-case` step now. The §13 Calibration fence is enforced
+// there, not here — runEvalCase doesn't need to know it exists.
 //
-// Sandboxing rationale lives in `../eval/case-sandbox.ts`. Summary:
-// truth.json never reaches the agent-visible cwd, so the Read tool can't
-// trivially copy the expected answer (Principle 2 / ADR-0008).
+// The legacy `failure-agent.ts::diagnose` + `case-sandbox.ts::sandboxCase`
+// + `case-to-failure.ts::caseToFailure` remain alive for the AblationHarness
+// caller (production-diagnose-fn.ts) until #46 migrates it and #47 deletes.
 import { readFileSync } from 'node:fs';
 import { basename, join } from 'node:path';
 import type { AgentRunner } from '../agent/runner';
-import { caseToFailure } from '../eval/case-to-failure';
-import { sandboxCase } from '../eval/case-sandbox';
-import type { EvalCase } from '../eval/eval-case-loader';
-import { diagnose } from './failure-agent';
+import { createDiagnosisRun } from '../diagnosis-run/run';
 import { compareToTruth, parseTruth, type CaseResult } from '@reynsu/reactlens-diagnosis-prompts';
 
 export type RunEvalCaseOptions = {
@@ -26,22 +25,12 @@ export type RunEvalCaseOptions = {
 export async function runEvalCase(opts: RunEvalCaseOptions): Promise<CaseResult> {
   const { caseDir, agent } = opts;
   const truth = parseTruth(readFileSync(join(caseDir, 'truth.json'), 'utf8'));
-  // Synthesize an EvalCase view of the directory. `curated: true` is a
-  // safe default — runEvalCase doesn't observe curated at all, and the
-  // downstream helpers (`sandboxCase`, `caseToFailure`) don't either.
-  const c: EvalCase = { name: basename(caseDir), path: caseDir, truth, curated: true };
+  const name = basename(caseDir);
 
-  const { sandboxedCase, cleanup } = sandboxCase(c);
-  try {
-    const failure = caseToFailure(sandboxedCase);
-    const diagnosis = await diagnose({
-      cwd: sandboxedCase.path,
-      agent,
-      failure,
-      onChunk: opts.onChunk,
-    });
-    return compareToTruth(diagnosis, truth, c.name);
-  } finally {
-    cleanup();
-  }
+  const runner = createDiagnosisRun({ agent });
+  const diagnosis = await runner.run(
+    { kind: 'eval-case', caseDir, name },
+    opts.onChunk !== undefined ? { onChunk: opts.onChunk } : undefined,
+  );
+  return compareToTruth(diagnosis, truth, name);
 }

@@ -42,14 +42,22 @@ export type SandboxedCase = {
   cleanup: () => void;
 };
 
-export function sandboxCase(c: EvalCase): SandboxedCase {
+// Path-only variant — copies SANDBOX_INPUTS from `srcDir` into a fresh
+// tmpdir and returns the tmpdir path + cleanup. Used by the DiagnosisRun
+// Module's `prepare-eval-case` step, which doesn't need (and doesn't have)
+// an EvalCase struct — only a path. The Calibration fence invariant is
+// identical to `sandboxCase`: `truth.json` is not in SANDBOX_INPUTS,
+// so it never gets copied.
+export function sandboxDir(srcDir: string): { dir: string; cleanup: () => void } {
   const dir = mkdtempSync(join(tmpdir(), 'reactlens-case-sandbox-'));
   for (const f of SANDBOX_INPUTS) {
-    const src = join(c.path, f);
+    const src = join(srcDir, f);
     if (existsSync(src)) copyFileSync(src, join(dir, f));
   }
-  return {
-    sandboxedCase: { ...c, path: dir },
-    cleanup: () => rmSync(dir, { recursive: true, force: true }),
-  };
+  return { dir, cleanup: () => rmSync(dir, { recursive: true, force: true }) };
+}
+
+export function sandboxCase(c: EvalCase): SandboxedCase {
+  const { dir, cleanup } = sandboxDir(c.path);
+  return { sandboxedCase: { ...c, path: dir }, cleanup };
 }
