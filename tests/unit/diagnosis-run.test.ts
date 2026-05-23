@@ -8,10 +8,11 @@
 //
 // Today only the `post-mortem` intent is wired (#43). #44/#45/#46 will add
 // `live`, `eval-case`, `ablation` intents — each migration adds tests here.
-import { mkdtempSync } from 'node:fs';
+import { existsSync, mkdtempSync, readdirSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
+import type { AgentMessage, AgentQueryOptions, AgentRunner } from '../../src/agent/runner';
 import { createDiagnosisRun } from '../../src/diagnosis-run/run';
 import { extractFinalJson } from '../../src/diagnosis-run/execute';
 import { FakeAgentRunner } from '../helpers/fake-agent';
@@ -252,6 +253,109 @@ describe('DiagnosisRun — live intent', () => {
     );
 
     expect(chunks).toEqual([VALID]);
+  });
+});
+
+// Helper for eval-case tests: build a fake case dir on disk that mirrors
+// the real tests/diagnostic-eval/cases/*/ layout (truth.json + component.tsx
+// + spec.ts, optionally snapshot.json or error.txt).
+function makeFakeCaseDir(opts: { brokenSnapshot?: boolean } = {}): string {
+  const dir = mkdtempSync(join(tmpdir(), 'reactlens-fake-case-'));
+  writeFileSync(
+    join(dir, 'truth.json'),
+    JSON.stringify({ expectedClassification: 'test-bug', minimumConfidence: 'low' }),
+  );
+  writeFileSync(join(dir, 'component.tsx'), 'export const Login = () => null;\n');
+  writeFileSync(join(dir, 'spec.ts'), 'test("x", () => {});\n');
+  if (opts.brokenSnapshot === true) {
+    writeFileSync(join(dir, 'snapshot.json'), '{ not valid json');
+  }
+  return dir;
+}
+
+// FakeAgentRunner subclass that snapshots the cwd's directory contents at
+// the moment query() is invoked. Used to assert the §13 Calibration fence:
+// truth.json must NOT be present in the agent-visible cwd.
+class InspectingAgent extends FakeAgentRunner {
+  cwdContentsAtQuery: string[] = [];
+  override query(opts: AgentQueryOptions): AsyncIterable<AgentMessage> {
+    this.cwdContentsAtQuery = readdirSync(opts.cwd);
+    return super.query(opts);
+  }
+}
+
+describe('DiagnosisRun — eval-case intent', () => {
+  it('agent cwd is a sandbox tmpdir, not the original case dir', async () => {
+    const caseDir = makeFakeCaseDir();
+    const agent = new InspectingAgent(VALID);
+    const runner = createDiagnosisRun({ agent });
+
+    await runner.run({ kind: 'eval-case', caseDir, name: 'fake-case' });
+
+    expect(agent.calls[0]?.cwd).not.toBe(caseDir);
+    expect(agent.calls[0]?.cwd).toMatch(/reactlens-case-sandbox/);
+  });
+
+  it('Calibration fence: truth.json is NOT present in the agent-visible cwd', async () => {
+    const caseDir = makeFakeCaseDir();
+    const agent = new InspectingAgent(VALID);
+    const runner = createDiagnosisRun({ agent });
+
+    await runner.run({ kind: 'eval-case', caseDir, name: 'fake-case' });
+
+    // The §13 invariant. Adding 'truth.json' to SANDBOX_INPUTS would break
+    // this assertion AND ADR-0001's calibration metric.
+    expect(agent.cwdContentsAtQuery).not.toContain('truth.json');
+    // Sanity: the inputs we DO want are there.
+    expect(agent.cwdContentsAtQuery).toContain('component.tsx');
+    expect(agent.cwdContentsAtQuery).toContain('spec.ts');
+  });
+
+  it('cleanup removes the sandbox dir after a successful run', async () => {
+    const caseDir = makeFakeCaseDir();
+    const agent = new InspectingAgent(VALID);
+    const runner = createDiagnosisRun({ agent });
+
+    await runner.run({ kind: 'eval-case', caseDir, name: 'fake-case' });
+
+    const sandboxPath = agent.calls[0]?.cwd ?? '';
+    expect(sandboxPath).toBeTruthy();
+    expect(existsSync(sandboxPath)).toBe(false);
+  });
+
+  it('cleanup runs even when the execute core throws', async () => {
+    const caseDir = makeFakeCaseDir();
+    let recordedCwd = '';
+    const throwingAgent: AgentRunner = {
+      query(opts: AgentQueryOptions): AsyncIterable<AgentMessage> {
+        recordedCwd = opts.cwd;
+        return {
+          async *[Symbol.asyncIterator]() {
+            throw new Error('boom');
+          },
+        };
+      },
+    };
+    const runner = createDiagnosisRun({ agent: throwingAgent });
+
+    await expect(
+      runner.run({ kind: 'eval-case', caseDir, name: 'fake-case' }),
+    ).rejects.toThrow('boom');
+
+    expect(recordedCwd).toBeTruthy();
+    expect(existsSync(recordedCwd)).toBe(false);
+  });
+
+  it('malformed snapshot.json propagates the parse error (Principle 2: curation bugs loud)', async () => {
+    const caseDir = makeFakeCaseDir({ brokenSnapshot: true });
+    const agent = new FakeAgentRunner(VALID);
+    const runner = createDiagnosisRun({ agent });
+
+    // SyntaxError from JSON.parse must surface — silent fallback would
+    // let a corrupt snapshot degrade the ablation measurement invisibly.
+    await expect(
+      runner.run({ kind: 'eval-case', caseDir, name: 'fake-case' }),
+    ).rejects.toThrow();
   });
 });
 
