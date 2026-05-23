@@ -2,62 +2,15 @@
   "headline": {
     "withSnapshot": {
       "variant": "with-snapshot",
-      "totalCases": 20,
-      "correctCount": 20,
+      "totalCases": 21,
+      "correctCount": 21,
       "accuracy": 1,
       "falseConfidenceCount": 0,
       "falseConfidenceRate": 0,
       "byClassification": {
         "real-bug": {
-          "total": 8,
-          "correct": 8,
-          "accuracy": 1
-        },
-        "test-bug": {
-          "total": 4,
-          "correct": 4,
-          "accuracy": 1
-        },
-        "flaky": {
-          "total": 6,
-          "correct": 6,
-          "accuracy": 1
-        },
-        "env-issue": {
-          "total": 2,
-          "correct": 2,
-          "accuracy": 1
-        }
-      },
-      "byConfidence": {
-        "high": {
-          "total": 19,
-          "correct": 19,
-          "accuracy": 1
-        },
-        "medium": {
-          "total": 1,
-          "correct": 1,
-          "accuracy": 1
-        },
-        "low": {
-          "total": 0,
-          "correct": 0,
-          "accuracy": 0
-        }
-      }
-    },
-    "withoutSnapshot": {
-      "variant": "without-snapshot",
-      "totalCases": 20,
-      "correctCount": 20,
-      "accuracy": 1,
-      "falseConfidenceCount": 0,
-      "falseConfidenceRate": 0,
-      "byClassification": {
-        "real-bug": {
-          "total": 8,
-          "correct": 8,
+          "total": 9,
+          "correct": 9,
           "accuracy": 1
         },
         "test-bug": {
@@ -83,6 +36,53 @@
           "accuracy": 1
         },
         "medium": {
+          "total": 1,
+          "correct": 1,
+          "accuracy": 1
+        },
+        "low": {
+          "total": 0,
+          "correct": 0,
+          "accuracy": 0
+        }
+      }
+    },
+    "withoutSnapshot": {
+      "variant": "without-snapshot",
+      "totalCases": 21,
+      "correctCount": 21,
+      "accuracy": 1,
+      "falseConfidenceCount": 0,
+      "falseConfidenceRate": 0,
+      "byClassification": {
+        "real-bug": {
+          "total": 9,
+          "correct": 9,
+          "accuracy": 1
+        },
+        "test-bug": {
+          "total": 4,
+          "correct": 4,
+          "accuracy": 1
+        },
+        "flaky": {
+          "total": 6,
+          "correct": 6,
+          "accuracy": 1
+        },
+        "env-issue": {
+          "total": 2,
+          "correct": 2,
+          "accuracy": 1
+        }
+      },
+      "byConfidence": {
+        "high": {
+          "total": 21,
+          "correct": 21,
+          "accuracy": 1
+        },
+        "medium": {
           "total": 0,
           "correct": 0,
           "accuracy": 0
@@ -101,9 +101,9 @@
   },
   "calibration": {
     "speculativeHighCount": 1,
-    "speculativeHighRate": 0.05,
+    "speculativeHighRate": 0.047619047619047616,
     "confidenceBoostCount": 0,
     "confidenceBoostRate": 0,
-    "confidenceMatchCount": 19
+    "confidenceMatchCount": 20
   }
 }
