@@ -20,13 +20,20 @@
 // @reynsu/reactlens-diagnosis-prompts. Until that ships, calling this
 // fn with variant='without-snapshot' throws AblationMarkersMissingError
 // from `generateVariant`. The with-snapshot path is unaffected.
-import { buildUserMessage } from '@reynsu/reactlens-diagnosis-prompts';
+import { buildUserMessage, type Diagnosis } from '@reynsu/reactlens-diagnosis-prompts';
 import type { AgentRunner } from '../agent/runner';
 import { diagnose } from '../analyzer/failure-agent';
-import type { DiagnoseFn } from './ablation-harness';
-import { generateVariant } from './ablation-variant-generator';
+import { generateVariant, type AblationVariant } from './ablation-variant-generator';
+import type { EvalCase } from './eval-case-loader';
 import { caseToFailure } from './case-to-failure';
 import { sandboxCase } from './case-sandbox';
+
+// Post-#46: the AblationHarness no longer takes a DiagnoseFn — it calls
+// DiagnosisRun's `ablation` intent directly. This file is dead-code-walking
+// until #47 deletes it; the type stays defined locally so the file
+// typechecks until then. No production caller exists; only the existing
+// unit test in tests/unit/production-diagnose-fn.test.ts still imports it.
+type DiagnoseFn = (args: { case: EvalCase; variant: AblationVariant }) => Promise<Diagnosis>;
 
 export type CreateProductionDiagnoseFnOpts = {
   agent: AgentRunner;

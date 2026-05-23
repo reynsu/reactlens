@@ -48,11 +48,11 @@ export function prepareEvalCase(intent: EvalCaseIntent): PrepareResult {
 }
 
 // Local equivalent of `caseToFailure` from `src/eval/case-to-failure.ts`
-// but parameterized on a path (not an EvalCase). The legacy version stays
-// alive for the eval-pipeline caller until #47; we don't fight to share
-// here because the coupling to EvalCase isn't worth a structural-typing
-// refactor mid-migration.
-function readSandboxedFailure(sandboxPath: string, name: string): PublishedFailedTest {
+// but parameterized on a path (not an EvalCase). Module-internal — also
+// used by `prepare-ablation.ts` so both sandbox-based prepares share the
+// same path → FailedTest mapping. The legacy `caseToFailure` stays alive
+// for the eval-pipeline caller until #47.
+export function readSandboxedFailure(sandboxPath: string, name: string): PublishedFailedTest {
   const specFile = join(sandboxPath, 'spec.ts');
   const componentFile = join(sandboxPath, 'component.tsx');
   const errorFile = join(sandboxPath, 'error.txt');

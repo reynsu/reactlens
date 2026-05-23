@@ -30,7 +30,6 @@ import { createFileCache } from '../../src/eval/ablation-cache';
 import { runAblation, type AblationReport } from '../../src/eval/ablation-harness';
 import { formatAblationReport } from '../../src/eval/ablation-report-formatter';
 import { loadEvalCases } from '../../src/eval/eval-case-loader';
-import { createProductionDiagnoseFn } from '../../src/eval/production-diagnose-fn';
 import { logger } from '../../src/utils/logger';
 
 const CASES_DIR = join(__dirname, 'cases');
@@ -194,11 +193,13 @@ describe.skipIf(!ABLATION || !HAS_AGENT)('diagnostic ablation (with API)', () =>
     // ablatable) without weakening the AblationMarkersMissingError guard.
     const allCases = loadEvalCases(CASES_DIR);
     const cases = allCases.filter((c) => existsSync(join(c.path, 'snapshot.json')));
-    const cwd = join(__dirname, '..', '..');
-    const diagnoseFn = createProductionDiagnoseFn({ agent, cwd });
     const cache = createFileCache({ root: ABLATION_CACHE_ROOT });
 
-    const report = await runAblation({ cases, diagnoseFn, cache });
+    // Post-#46: the harness constructs DiagnosisRun internally and
+    // dispatches the `ablation` intent per (case, variant) — no more
+    // production-diagnose-fn shim. The §13 Calibration fence and the
+    // Variant transform both live inside DiagnosisRun's prepare-ablation.
+    const report = await runAblation({ cases, agent, cache });
 
     // Print the report on stdout. console.log (not logger.info) because
     // the issue #8 acceptance criterion specifies STDOUT; logger writes
