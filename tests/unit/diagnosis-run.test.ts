@@ -187,6 +187,74 @@ describe('DiagnosisRun — post-mortem intent', () => {
   });
 });
 
+describe('DiagnosisRun — live intent', () => {
+  it('happy path: returns a parsed Diagnosis on first attempt', async () => {
+    const agent = new FakeAgentRunner(VALID);
+    const cwd = tmpCwd();
+    const runner = createDiagnosisRun({ agent });
+
+    const diagnosis = await runner.run({
+      kind: 'live',
+      cwd,
+      testId: 't1',
+      testTitle: 'submit button stays disabled',
+      specFile: join(cwd, 's.ts'),
+    });
+
+    expect(diagnosis.classification).toBe('real-bug');
+    expect(agent.calls).toHaveLength(1);
+    expect(agent.calls[0]?.cwd).toBe(cwd);
+  });
+
+  it('passes the componentSnapshot through to the user message', async () => {
+    const agent = new FakeAgentRunner(VALID);
+    const cwd = tmpCwd();
+    const runner = createDiagnosisRun({ agent });
+
+    await runner.run({
+      kind: 'live',
+      cwd,
+      testId: 't1',
+      testTitle: 'x',
+      specFile: join(cwd, 's.ts'),
+      componentSnapshot: {
+        name: 'LoginForm',
+        props: { disabled: true },
+        children: [
+          { name: 'SubmitButton', props: { 'aria-disabled': 'true' }, children: [] },
+        ],
+      },
+    });
+
+    const prompt = agent.calls[0]?.prompt ?? '';
+    // buildUserMessage serializes the snapshot into the prompt; we don't pin
+    // the exact rendering (lives in the prompts package) — we assert the
+    // moat signal made it through to the agent at all.
+    expect(prompt).toContain('LoginForm');
+    expect(prompt).toContain('SubmitButton');
+  });
+
+  it('invokes onChunk for streamed text blocks during a live diagnosis', async () => {
+    const agent = new FakeAgentRunner(VALID);
+    const cwd = tmpCwd();
+    const chunks: string[] = [];
+    const runner = createDiagnosisRun({ agent });
+
+    await runner.run(
+      {
+        kind: 'live',
+        cwd,
+        testId: 't1',
+        testTitle: 'x',
+        specFile: join(cwd, 's.ts'),
+      },
+      { onChunk: (text) => chunks.push(text) },
+    );
+
+    expect(chunks).toEqual([VALID]);
+  });
+});
+
 describe('extractFinalJson — direct unit (folded from run-json)', () => {
   it('extracts JSON from a ```json fenced block', () => {
     expect(extractFinalJson('```json\n{"a":1}\n```')).toEqual({ a: 1 });

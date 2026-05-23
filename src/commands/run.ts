@@ -3,7 +3,7 @@ import { resolve, join } from 'node:path';
 import { spawn } from 'node:child_process';
 import { CostTracker, withCostTracking } from '../agent/cost';
 import { canResolveAgent, pickAgentRunner } from '../agent/select';
-import { diagnose } from '../analyzer/failure-agent';
+import { createDiagnosisRun } from '../diagnosis-run/run';
 import { loadConfig } from '../config/load';
 import { startDashboardServer } from '../dashboard/server';
 import { EventBus } from '../runner/event-bus';
@@ -232,18 +232,18 @@ export async function runRun(opts: RunCommandOptions): Promise<number> {
       }
       const promise = agentPromise
         .then((agent) =>
-          diagnose({
-            cwd,
-            agent,
-            failure: {
+          createDiagnosisRun({ agent }).run(
+            {
+              kind: 'live',
+              cwd,
               testId: e.id,
               testTitle: t.title,
               specFile: t.file,
               ...(e.error !== undefined ? { errorMessage: e.error } : {}),
               ...(t.snapshot !== undefined ? { componentSnapshot: t.snapshot } : {}),
             },
-            onChunk: (text) => bus.emit({ t: 'diagnosis:chunk', testId: e.id, text }),
-          }),
+            { onChunk: (text) => bus.emit({ t: 'diagnosis:chunk', testId: e.id, text }) },
+          ),
         )
         .then((result) => {
           bus.emit({ t: 'diagnosis:end', testId: e.id, result });
