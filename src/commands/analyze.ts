@@ -7,7 +7,7 @@ import { resolve } from 'node:path';
 import { resolveAgentForCommand } from '../agent/select';
 import { ReactLensError } from '../utils/errors';
 import { logger } from '../utils/logger';
-import { diagnose } from '../analyzer/failure-agent';
+import { createDiagnosisRun } from '../diagnosis-run/run';
 import type { Diagnosis } from '../runner/events';
 
 export type AnalyzeCommandOptions = {
@@ -116,17 +116,16 @@ export async function runAnalyze(opts: AnalyzeCommandOptions): Promise<number> {
   const failures = collectFailures(report);
   logger.info({ count: failures.length }, 'analyzing failures');
 
+  const runner = createDiagnosisRun({ agent });
   const sections: string[] = ['# reactlens diagnostic report', ''];
   for (const hit of failures) {
-    const diagnosis = await diagnose({
+    const diagnosis = await runner.run({
+      kind: 'post-mortem',
       cwd,
-      agent,
-      failure: {
-        testId: hit.testId,
-        testTitle: hit.title,
-        specFile: hit.file,
-        ...(hit.errorMessage !== undefined ? { errorMessage: hit.errorMessage } : {}),
-      },
+      testId: hit.testId,
+      testTitle: hit.title,
+      specFile: hit.file,
+      ...(hit.errorMessage !== undefined ? { errorMessage: hit.errorMessage } : {}),
     });
     sections.push(diagnosisToMarkdown(diagnosis, hit));
     sections.push('');
