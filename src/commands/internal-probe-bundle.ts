@@ -14,8 +14,8 @@
 // Adding a shipped prompt: append a line below. The list is the
 // contract; CI fails closed if a prompt added to the source tree is
 // not added here.
-import type { PromptSource } from '../agent/run-json';
-import { loadPromptSource } from '../agent/run-json';
+import type { PromptSource } from '../agent/prompt-loader';
+import { loadPromptSource } from '../agent/prompt-loader';
 
 const SHIPPED_PROMPTS: ReadonlyArray<{ area: string; name: string }> = [
   { area: 'generator', name: 'generate-suite.md' },

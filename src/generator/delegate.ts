@@ -3,7 +3,7 @@
 // commitment: the agent does NOT discover visual states from the DOM — we
 // hand it the AST-derived list up front. That's the difference between
 // guessing and knowing (capability 4.2 in CLAUDE.md).
-import { loadPromptSource } from '../agent/run-json';
+import { loadPromptSource } from '../agent/prompt-loader';
 import { logger } from '../utils/logger';
 import type { AgentRunner } from '../agent/runner';
 import type { ComponentAnalysis } from '../ast/component-analyzer';
