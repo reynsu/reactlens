@@ -13,7 +13,7 @@
 // (operator-gated) and in `tests/integration/cli-smoke.test.ts` (always-on,
 // runs the built CLI). Together they cover dev + bundled.
 import { describe, expect, it } from 'vitest';
-import { loadPromptSource } from '../../src/agent/run-json';
+import { loadPromptSource } from '../../src/agent/prompt-loader';
 
 describe('loadPromptSource', () => {
   it('resolves generate-suite.md (POM prompt) from the shipped source tree', async () => {
