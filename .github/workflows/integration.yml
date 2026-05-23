@@ -15,10 +15,13 @@ name: Integration test gate
 # No secrets required: integration tests do not invoke the agent. The
 # tarball-install probe loads prompts without making any LLM call.
 #
-# A subset of tests (run-flow, replay-from-disk, watch-mode) is
-# CI-skipped via `describe.skipIf(Boolean(process.env.CI))` — they
-# fail under headless chromium in GitHub Actions runners because the
-# in-app probe + CDP screencast emit zero events. Tracked in #40.
+# Earlier this workflow CI-skipped run-flow, replay-from-disk, and
+# watch-mode because chromium silently failed to fully render under
+# the GitHub Actions runner's headless sandbox — the in-app probe
+# never injected and component:snapshot / frame events stayed at
+# zero. Fix landed via `--no-sandbox` in fixture playwright configs
+# (env-gated on CI). All three tests now run in CI. See #40 for the
+# investigation + resolution.
 
 on:
   push:

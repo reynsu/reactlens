@@ -15,7 +15,20 @@ export default defineConfig({
     trace: 'on',
     screenshot: 'only-on-failure',
   },
-  projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],
+  projects: [
+    {
+      name: 'chromium',
+      use: {
+        ...devices['Desktop Chrome'],
+        // GitHub Actions runners are unprivileged containers without user
+        // namespaces; chromium silently fails to fully render under headless
+        // sandboxing, the probe's addInitScript never runs against a real
+        // page, and component:snapshot / frame events stay at zero (#40).
+        // Local runs (CI unset) keep the sandbox for safety.
+        launchOptions: process.env.CI ? { args: ['--no-sandbox'] } : undefined,
+      },
+    },
+  ],
   // We invoke `next dev` directly (not via `pnpm dev`) because pnpm walks up
   // to the repo root for its workspace context, and the root's `dev` script
   // is `tsup --watch`, not next. The direct binary path avoids the lookup.

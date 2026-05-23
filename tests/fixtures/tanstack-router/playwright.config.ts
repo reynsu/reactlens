@@ -16,7 +16,20 @@ export default defineConfig({
     trace: 'on',
     screenshot: 'only-on-failure',
   },
-  projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],
+  projects: [
+    {
+      name: 'chromium',
+      use: {
+        ...devices['Desktop Chrome'],
+        // GitHub Actions runners are unprivileged containers without user
+        // namespaces; chromium silently fails to fully render under headless
+        // sandboxing, the probe's addInitScript never runs against a real
+        // page, and component:snapshot / frame events stay at zero (#40).
+        // Local runs (CI unset) keep the sandbox for safety.
+        launchOptions: process.env.CI ? { args: ['--no-sandbox'] } : undefined,
+      },
+    },
+  ],
   webServer:
     process.env.REACTLENS_NO_WEB_SERVER === '1'
       ? undefined
