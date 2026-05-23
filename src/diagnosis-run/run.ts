@@ -24,14 +24,16 @@
 import type { Diagnosis } from '@reynsu/reactlens-diagnosis-prompts';
 import type { AgentRunner } from '../agent/runner';
 import { executeDiagnosis } from './execute';
+import { prepareAblation, type AblationIntent } from './prepare-ablation';
 import { prepareEvalCase, type EvalCaseIntent, type PrepareResult } from './prepare-eval-case';
 import { prepareLive, type LiveIntent } from './prepare-live';
 import { preparePostMortem, type PostMortemIntent } from './prepare-post-mortem';
 
-export type DiagnosisIntent = PostMortemIntent | LiveIntent | EvalCaseIntent;
-// Slice #46 adds the last variant (ablation) + the corresponding case.
-// The exhaustive `never` default in `prepare` makes a missing case a
-// TypeScript error.
+export type DiagnosisIntent =
+  | PostMortemIntent
+  | LiveIntent
+  | EvalCaseIntent
+  | AblationIntent;
 
 export type DiagnosisRunOptions = {
   onChunk?: (text: string) => void;
@@ -70,9 +72,11 @@ async function prepare(intent: DiagnosisIntent): Promise<PrepareResult> {
       return { prepared: prepareLive(intent) };
     case 'eval-case':
       return prepareEvalCase(intent);
+    case 'ablation':
+      return prepareAblation(intent);
     default: {
-      // Exhaustiveness check — when #46 adds the `ablation` variant
-      // without a matching case, TypeScript rejects this assignment.
+      // Exhaustiveness check — any future intent variant without a
+      // matching case becomes a TypeScript error here.
       const _exhaustive: never = intent;
       throw new Error(`unknown DiagnosisIntent kind: ${String((_exhaustive as { kind: string }).kind)}`);
     }
