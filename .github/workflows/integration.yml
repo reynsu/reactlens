@@ -110,4 +110,13 @@ jobs:
         run: pnpm build
 
       - name: Run integration suite
-        run: pnpm test:integration
+        # Wrap with xvfb-run so chromium has a virtual display even in
+        # headless mode. The `--no-sandbox` fix alone (per fixture
+        # playwright configs) was insufficient on first attempt — CDP
+        # screencast + addInitScript paths still emitted zero events.
+        # Hypothesis 4 from #40: some headless code paths still touch
+        # X11 even when the visible window is suppressed. xvfb-run -a
+        # picks a free display number automatically. xvfb is installed
+        # as part of chromium system deps via `playwright install
+        # --with-deps chromium` above.
+        run: xvfb-run -a pnpm test:integration
