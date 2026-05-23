@@ -6,16 +6,19 @@
 // the snapshot signal improves diagnosis. This module is the place
 // where that claim either holds up or falls apart, on every measurement.
 //
-// The harness delegates the agent invocation to an injected
-// `diagnoseFn`. Production wires it to `diagnose() + generateVariant()`
-// over a sandboxed copy of the case; tests pass scripted replies
-// without touching a real LLM.
+// Post-#46: the harness owns the agent invocation directly via
+// DiagnosisRun's `ablation` intent. The previous `DiagnoseFn` injection
+// seam is gone — tests stub at the `AgentRunner` level (FakeAgentRunner
+// returning scripted JSON per case × variant), the production caller in
+// `tests/diagnostic-eval/eval-runner.test.ts` passes a real AgentRunner.
 //
-// This file is intentionally minimal — only the tracer-bullet behavior
-// (per-variant accuracy for one case) is implemented. Per-classification
-// + per-confidence breakdown, delta computation, curated-vs-uncurated
-// split, and (case, variant) caching land in subsequent TDD cycles.
+// `src/eval/production-diagnose-fn.ts` is no longer imported (its file
+// remains until #47 deletes it). The §13 Calibration fence and the
+// Variant transform both live inside the DiagnosisRun Module now —
+// the harness only schedules invocations and aggregates results.
 import type { Diagnosis } from '@reynsu/reactlens-diagnosis-prompts';
+import type { AgentRunner } from '../agent/runner';
+import { createDiagnosisRun } from '../diagnosis-run/run';
 import type { EvalCase } from './eval-case-loader';
 import type { AblationVariant } from './ablation-variant-generator';
 
@@ -46,8 +49,6 @@ export type ConfidenceStat = {
   correct: number;
   accuracy: number;
 };
-
-export type DiagnoseFn = (args: { case: EvalCase; variant: AblationVariant }) => Promise<Diagnosis>;
 
 // Optional cache for (case, variant) → Diagnosis. When provided, the
 // harness checks `get` before invoking diagnoseFn; on miss, it calls
@@ -154,7 +155,11 @@ export type AblationReport = {
 
 export type RunAblationArgs = {
   cases: EvalCase[];
-  diagnoseFn: DiagnoseFn;
+  // Post-#46: the harness constructs DiagnosisRun internally. Callers
+  // pass an AgentRunner directly (a real one for production eval,
+  // FakeAgentRunner for unit tests). The `ablation` intent handles
+  // sandbox + Variant transform per-tuple.
+  agent: AgentRunner;
   // Optional cache. When omitted, every (case, variant) tuple runs
   // fresh — useful for the first measurement, tests, or one-shot
   // recalibration. CI gates pass a file-backed cache so unchanged
@@ -165,7 +170,8 @@ export type RunAblationArgs = {
 const VARIANTS: readonly AblationVariant[] = ['with-snapshot', 'without-snapshot'] as const;
 
 export async function runAblation(args: RunAblationArgs): Promise<AblationReport> {
-  const { cases, diagnoseFn, cache } = args;
+  const { cases, agent, cache } = args;
+  const runner = createDiagnosisRun({ agent });
   const curatedBucket = newVariantBucket();
   const uncuratedBucket = newVariantBucket();
   // Per-case confidence pairing for calibration computation. Curated
@@ -187,7 +193,12 @@ export async function runAblation(args: RunAblationArgs): Promise<AblationReport
       if (cached !== undefined) {
         diagnosis = cached;
       } else {
-        diagnosis = await diagnoseFn({ case: c, variant });
+        diagnosis = await runner.run({
+          kind: 'ablation',
+          caseDir: c.path,
+          name: c.name,
+          variant,
+        });
         await cache?.set({ case: c, variant, diagnosis });
       }
       const report = bucket[variant];

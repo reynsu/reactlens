@@ -257,7 +257,14 @@ reactlens/
 │   │   ├── cli-runner.ts         ← CLI backend (subscription billing)
 │   │   ├── select.ts             ← subscription-first selection + resolveAgentForCommand
 │   │   ├── cost.ts               ← CostTracker + withCostTracking decorator
-│   │   └── run-json.ts           ← shared streaming/JSON/Zod/retry pipeline
+│   │   └── prompt-loader.ts      ← loadPromptSource: dual-layout dev/bundled prompt-file resolver (generator + internal-probe-bundle)
+│   ├── diagnosis-run/              ← v0.3 #43-#47: deep Module owning the diagnosis pipeline (CONTEXT.md)
+│   │   ├── run.ts                  ← createDiagnosisRun factory + DiagnosisIntent discriminated union (4 kinds)
+│   │   ├── execute.ts              ← shared execute core: git-context + stream + JSON extract + Zod + retry; exports extractFinalJson
+│   │   ├── prepare-post-mortem.ts  ← post-mortem intent prepare (commands/analyze.ts)
+│   │   ├── prepare-live.ts         ← live intent prepare (commands/run.ts on-failure)
+│   │   ├── prepare-eval-case.ts    ← eval-case intent: §13 Calibration fence (sandbox via sandboxDir, no truth.json)
+│   │   └── prepare-ablation.ts     ← ablation intent: fence + Variant transform (generateVariant for without-snapshot)
 │   ├── runner/
 │   │   ├── playwright-runner.ts  ← stdin events validated via parseRunEvent
 │   │   ├── reporter.ts
@@ -291,10 +298,9 @@ reactlens/
 │   │   │   │   └── TimelineSlider.tsx     ← P8.6: scrub replay steps
 │   │   │   └── main.tsx
 │   │   └── terminal.tsx
-│   ├── analyzer/
-│   │   ├── failure-agent.ts      ← agent orchestration; prompts + schema imported from @reynsu/reactlens-diagnosis-prompts (see §15); accepts optional `userMessage` override (v0.3 #8 seam)
-│   │   ├── git-context.ts        ← git blame & diff for diagnosis
-│   │   └── eval-pipeline.ts      ← runEvalCase: per-case diagnose + compareToTruth, sandboxed via `eval/case-sandbox`
+│   ├── analyzer/                   ← thin wrappers around diagnosis-run
+│   │   ├── git-context.ts          ← git blame & diff for diagnosis (consumed by diagnosis-run/execute)
+│   │   └── eval-pipeline.ts        ← runEvalCase: createDiagnosisRun + compareToTruth (~5 lines post-#45)
 │   │   # tree-diff.ts, a11y-diff.ts → @reynsu/reactlens-diff-core (extracted, see §15)
 │   │   # eval-metrics.ts → @reynsu/reactlens-diagnosis-prompts (extracted)
 │   │   # prompts/diagnose.md, prompts/classify-bug.md → @reynsu/reactlens-diagnosis-prompts (extracted)
@@ -303,9 +309,7 @@ reactlens/
 │   │   ├── ablation-variant-generator.ts ← generateVariant: marker-driven strip for `without-snapshot` variant; throws on missing markers
 │   │   ├── ablation-harness.ts          ← runAblation: (cases × variants) → AblationReport with per-class + per-confidence breakdowns
 │   │   ├── ablation-cache.ts            ← createFileCache: sha256(component+spec+truth+variant) → `<root>/<hash>.json`
-│   │   ├── case-sandbox.ts              ← sandboxCase: leak-fence shared by runEvalCase + productionDiagnoseFn (truth.json never copied)
-│   │   ├── case-to-failure.ts           ← caseToFailure: EvalCase → FailedTest (paths + optional error.txt + optional snapshot.json)
-│   │   ├── production-diagnose-fn.ts    ← createProductionDiagnoseFn: composes sandboxCase → caseToFailure → buildUserMessage → generateVariant → diagnose
+│   │   ├── case-sandbox.ts              ← sandboxDir / sandboxCase: §13 leak-fence used by diagnosis-run/prepare-{eval-case,ablation} (truth.json never copied)
 │   │   └── ablation-report-formatter.ts ← formatAblationReport: pure byte-stable stdout transform
 │   ├── generator/
 │   │   ├── delegate.ts
@@ -602,16 +606,15 @@ pnpm build && node bin/reactlens.js diff <runIdA> <runIdB> --cwd <app>  # semant
 - **Behavior contract** — `<ComponentName>.contract.md` written next to each generated spec, documenting the visual-state set the analyzer enumerated (v0.2 / P11).
 - **Semantic diff** — structural difference between two persisted runs over the component tree AND the a11y tree, exposed by `reactlens diff`. Not pixel-level (v0.2 / P12).
 - **A11y violation** — one axe-core finding emitted per test as an `a11y:violation` event (v0.2 / P13).
-- **runAgentJson** — `src/agent/run-json.ts`. The shared seam every agent caller that expects a JSON-shaped reply goes through: prompt loading + streaming + JSON extraction + Zod validation + one stricter retry. Used by `diagnose()`; future Auto-PR planning will reuse.
+- **DiagnosisRun** — `src/diagnosis-run/`. The deep Module owning the diagnosis pipeline; see [CONTEXT.md](CONTEXT.md) for the domain vocabulary (`DiagnosisRun`, `DiagnosisIntent`, `Variant`, `FailedTest` internal, `Calibration fence`). External Interface: `createDiagnosisRun({ agent }).run(intent, { onChunk? })`. Four intent kinds (`post-mortem`, `live`, `eval-case`, `ablation`) share an execute core (folded from the pre-#47 `runAgentJson` + `diagnose()`).
+- **loadPromptSource** — `src/agent/prompt-loader.ts`. Dual-layout (bundled CLI / dev tsx) prompt-file resolver. Consumed by `src/generator/delegate.ts` and `src/commands/internal-probe-bundle.ts`. NOT used by DiagnosisRun — its system prompts ship as plain text constants from `@reynsu/reactlens-diagnosis-prompts`.
 - **RunsArea / RunPath** — `src/runs/run-paths.ts`. Per-cwd / per-run value objects that own the `.reactlens/runs/<id>/` layout. Single source for ID validation (read-side `assertSafeId` + write-side `sanitizeSegment`), eager `.gitignore` write, and the runs-listing API.
 - **runEventSchema / parseRunEvent** — `src/runner/events.ts`. Runtime Zod validator for the canonical `RunEvent` union. Enforced at every untyped ingestion point (Playwright stdin, WS probe, persisted JSONL replay). Bidirectional compile-time guard keeps the schema and the TS union aligned.
 - **VISUAL_STATES catalog** — `src/visual-states/visual-states.ts`. Single source for per-visual-state data: matcher regex, description, MSW recipe, assertions. Adding a state is one row; component-analyzer and state-machine import from it as peers.
-- **AblationHarness** — `src/eval/ablation-harness.ts`. The moat-contribution measurement. `runAblation({cases, diagnoseFn, cache?})` loops every (case × variant) tuple, optionally short-circuits through `AblationCache`, and emits an `AblationReport` with overall + per-classification + per-confidence breakdowns. The single number reactlens claims publicly (per ADR-0008) — its accuracy delta with vs without the component snapshot.
+- **AblationHarness** — `src/eval/ablation-harness.ts`. The moat-contribution measurement. `runAblation({cases, agent, cache?})` loops every (case × variant) tuple, optionally short-circuits through `AblationCache`, and emits an `AblationReport` with overall + per-classification + per-confidence breakdowns. Post-#46 the harness owns DiagnosisRun construction internally; the pre-#47 `DiagnoseFn` injection seam is gone. The single number reactlens claims publicly (per ADR-0008) — its accuracy delta with vs without the component snapshot.
 - **AblationCache** — `src/eval/ablation-cache.ts`. `createFileCache({root})` returns an `AblationCache` keyed by `sha256(component.tsx + spec.ts + truth.json + variant)`. Content-hashing means automatic invalidation when a case input changes; persists at `<root>/<hash>.json` (production: `<cwd>/.reactlens/eval-cache/`). Issue #8 acceptance: re-running with no input changes does not re-invoke the agent.
 - **Calibration (AblationReport field)** — `src/eval/ablation-harness.ts`. Optional secondary metric on `AblationReport` (NOT in headline, NOT in CI gate — ADR-0001 intentionally unchanged). Three counts over paired curated cases: `speculativeHighCount` (without-snapshot emits 'high' while with-snapshot emits less), `confidenceBoostCount` (with-snapshot strictly exceeds without-snapshot), `confidenceMatchCount` (both equal). Plus rates derived from paired-case denominator. Catches the moat signal `accuracy + falseConfidenceRate` is structurally blind to: cases where both variants classify correctly but the snapshotless agent is over-confident (case-020 in `finding_ablation_delta_zero.md`). Old baselines without this field are tolerated — `compareToBaseline` ignores it. Graduates to headline + ADR-0001 amendment when enough datapoints accumulate (deferred to operator judgment).
-- **sandboxCase** — `src/eval/case-sandbox.ts`. The calibration-leak fence both `runEvalCase` and `createProductionDiagnoseFn` use. Copies `SANDBOX_INPUTS` (component.tsx, spec.ts, error.txt?, snapshot.json?) into a fresh mkdtempSync dir; CRITICALLY excludes `truth.json` so the diagnosis agent's Read tool can't trivially copy the expected answer. Adding to `SANDBOX_INPUTS` is a calibration-surface change.
-- **caseToFailure** — `src/eval/case-to-failure.ts`. Pure transform: `EvalCase → FailedTest`. Reads `component.tsx` + `spec.ts` paths from the case dir, plus optional `error.txt` (utf8) and `snapshot.json` (parsed `ComponentNode`). Malformed `snapshot.json` propagates the JSON.parse throw — curation bugs must be loud (Principle 2).
-- **productionDiagnoseFn** — `src/eval/production-diagnose-fn.ts`. The composer the AblationHarness uses against a live agent. Pipeline: `sandboxCase → caseToFailure → buildUserMessage → generateVariant → diagnose(cwd=sandbox, userMessage=variantPrompt)`. The without-snapshot leg requires the `<!-- ablation:snapshot-* -->` markers in the prompt template — those land via PR-B upstream in `@reynsu/reactlens-diagnosis-prompts`.
+- **sandboxDir / sandboxCase** — `src/eval/case-sandbox.ts`. The §13 Calibration fence used by `diagnosis-run/prepare-{eval-case,ablation}`. Copies `SANDBOX_INPUTS` (component.tsx, spec.ts, error.txt?, snapshot.json?) from `srcDir` into a fresh mkdtempSync dir; CRITICALLY excludes `truth.json` so the diagnosis agent's Read tool can't trivially copy the expected answer. Adding to `SANDBOX_INPUTS` is a calibration-surface change. `sandboxDir(srcDir)` is the path-only variant DiagnosisRun uses; `sandboxCase(EvalCase)` wraps it for legacy EvalCase-shaped callers (currently none in production).
 - **formatAblationReport** — `src/eval/ablation-report-formatter.ts`. Pure byte-stable `AblationReport → string` transform that produces the stdout output issue #8 specifies (overall accuracy delta, false-confidence delta, per-classification, per-confidence). Empty buckets render as `— (no cases)` not `0%` to avoid phantom-regression-chasing.
 - **REACTLENS_ABLATION / REACTLENS_ABLATION_UPDATE_BASELINE** — env flags that gate the ablation block in `tests/diagnostic-eval/eval-runner.test.ts`. `REACTLENS_ABLATION=1` unlocks the block (loads cases, runs harness, prints `formatAblationReport`). `REACTLENS_ABLATION_UPDATE_BASELINE=1` additionally rewrites `tests/diagnostic-eval/ablation-baseline.json` (use once per intentional recalibration; NEVER in CI — slice #14 compares against the checked-in baseline).
 

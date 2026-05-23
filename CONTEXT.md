@@ -44,4 +44,4 @@ _Avoid_: "sandbox" by itself (sandbox is the *mechanism*; the fence is the *inva
 
 ## Flagged ambiguities
 
-- "diagnose" was used in CLAUDE.md as both the noun (the output Diagnosis type) and the verb (the act of running the pipeline). Resolved: **Diagnosis** is the output; **DiagnosisRun** is the act. The legacy `diagnose()` function in `src/analyzer/failure-agent.ts` is shrinking into the execute core of DiagnosisRun.
+- "diagnose" was used in CLAUDE.md as both the noun (the output Diagnosis type) and the verb (the act of running the pipeline). **Resolved** (#47): **Diagnosis** is the output; **DiagnosisRun** is the act. The legacy `diagnose()` function and `src/analyzer/failure-agent.ts` are gone — the execute core lives at `src/diagnosis-run/execute.ts`.
