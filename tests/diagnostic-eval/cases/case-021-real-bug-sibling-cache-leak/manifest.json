@@ -1,0 +1,14 @@
+{
+  "entryName": "tanstack-router-kitchen-sink-cache-leak",
+  "sourceRepo": "https://github.com/reynsu/router.git",
+  "sourceMode": "real-clone",
+  "plantedFailure": {
+    "kind": "file-replace",
+    "path": "e2e/react-router/kitchen-sink-react-query/src/main.tsx",
+    "oldString": "    queryKey: ['invoices', invoiceId],",
+    "newString": "    queryKey: ['invoice'],",
+    "description": "Sibling invoice queries leak cache when invoiceId discriminator is stripped (snapshot-distinguishable: error message is symmetric, only the rendered tree identifies the wrong invoice)"
+  },
+  "harvestedAt": "2026-05-22T23:41:47.168Z",
+  "commitSha": "8bf400ee9d34b79724cb2c458efede90ea1e0cb0"
+}
