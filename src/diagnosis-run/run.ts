@@ -24,12 +24,13 @@
 import type { Diagnosis } from '@reynsu/reactlens-diagnosis-prompts';
 import type { AgentRunner } from '../agent/runner';
 import { executeDiagnosis, type PreparedDiagnosis } from './execute';
+import { prepareLive, type LiveIntent } from './prepare-live';
 import { preparePostMortem, type PostMortemIntent } from './prepare-post-mortem';
 
-export type DiagnosisIntent = PostMortemIntent;
-// Slices #44/#45/#46 each add one variant to this union (live, eval-case,
-// ablation) and one case to the `prepare` switch below. The exhaustive
-// `never` default in `prepare` makes a missing case a TypeScript error.
+export type DiagnosisIntent = PostMortemIntent | LiveIntent;
+// Slices #45/#46 each add one variant to this union (eval-case, ablation)
+// and one case to the `prepare` switch below. The exhaustive `never` default
+// in `prepare` makes a missing case a TypeScript error.
 
 export type DiagnosisRunOptions = {
   onChunk?: (text: string) => void;
@@ -60,11 +61,13 @@ async function prepare(intent: DiagnosisIntent): Promise<PreparedDiagnosis> {
   switch (intent.kind) {
     case 'post-mortem':
       return preparePostMortem(intent);
+    case 'live':
+      return prepareLive(intent);
     default: {
-      // Exhaustiveness check — when #44/#45/#46 add new union variants
+      // Exhaustiveness check — when #45/#46 add new union variants
       // without a matching case, TypeScript rejects this assignment.
-      const _exhaustive: never = intent.kind;
-      throw new Error(`unknown DiagnosisIntent kind: ${String(_exhaustive)}`);
+      const _exhaustive: never = intent;
+      throw new Error(`unknown DiagnosisIntent kind: ${String((_exhaustive as { kind: string }).kind)}`);
     }
   }
 }
