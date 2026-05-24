@@ -23,9 +23,9 @@
 //          `production-diagnose-fn.ts` modules that this Module supersedes.
 import type { Diagnosis } from '@reynsu/reactlens-diagnosis-prompts';
 import type { AgentRunner } from '../agent/runner';
-import { executeDiagnosis } from './execute';
+import { executeDiagnosis, type PrepareResult } from './execute';
 import { prepareAblation, type AblationIntent } from './prepare-ablation';
-import { prepareEvalCase, type EvalCaseIntent, type PrepareResult } from './prepare-eval-case';
+import { prepareEvalCase, type EvalCaseIntent } from './prepare-eval-case';
 import { prepareLive, type LiveIntent } from './prepare-live';
 import { preparePostMortem, type PostMortemIntent } from './prepare-post-mortem';
 
