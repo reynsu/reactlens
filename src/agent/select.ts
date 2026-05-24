@@ -134,43 +134,51 @@ export async function pickAgentRunner(
   );
 }
 
-// Non-throwing variant used by `reactlens run` to decide whether to wire up
-// the diagnosis pipeline at all. Mirrors the success conditions of
-// pickAgentRunner without actually constructing a runner. Accepts the same
-// per-call opts so a `--use-claude-code` or `--force-api` flag is honored
-// when deciding whether diagnosis is reachable.
-export async function canResolveAgent(
-  opts: Pick<AgentSelection, 'useClaudeCode' | 'forceApi'> = {},
-  detectors: AgentDetectors = defaultDetectors,
-): Promise<boolean> {
-  const envForceApi = process.env.REACTLENS_FORCE_API === '1';
-  const envForceCli = process.env.REACTLENS_USE_CLAUDE_CODE === '1';
-  const wantApi = opts.forceApi === true || envForceApi;
-  const wantCli = opts.useClaudeCode === true || envForceCli;
-  const hasApiKey = detectors.hasApiKey();
-  if (wantApi && wantCli) return false;
-  if (wantApi) return hasApiKey;
-  if (wantCli) return await detectors.hasClaudeCli();
-  if (await detectors.hasClaudeCli()) return true;
-  return hasApiKey;
-}
+// The single Interface every command should use. Selects a runner per the
+// precedence policy above, wraps it in CostTracker so there is no untracked
+// path reaching command code, and lets the caller decide what happens when
+// no agent is reachable:
+//   onMissing: 'throw' (default) — generate / analyze / regen, which cannot
+//     proceed without an agent
+//   onMissing: 'null' — `reactlens run`, where diagnosis is opt-in: the
+//     suite still runs without an agent; we just skip the diagnosis branch
+//
+// Replaces the prior triple of canResolveAgent / pickAgentRunner +
+// withCostTracking / resolveAgentForCommand. pickAgentRunner remains
+// exported only for the precedence-matrix unit tests; production callers
+// should reach for prepareAgent.
+export type AgentPrepareOptions = AgentSelection & {
+  maxCost?: number;
+};
 
-// Eager helper for commands that need the agent up front (generate, analyze,
-// regen): picks the runner, builds a CostTracker, wraps. Returns both so the
-// caller can log totals at end-of-command. `reactlens run` does NOT use this
-// because diagnosis is opt-in and lazy — it gates via canResolveAgent first
-// and only constructs the runner if a test actually fails.
-export type AgentResolution = {
+export type AgentPreparation = {
   agent: AgentRunner;
   tracker: CostTracker;
 };
 
-export async function resolveAgentForCommand(
-  opts: AgentSelection & { maxCost?: number },
+export async function prepareAgent(
+  opts: AgentPrepareOptions & { onMissing: 'null' },
+  detectors?: AgentDetectors,
+): Promise<AgentPreparation | null>;
+export async function prepareAgent(
+  opts: AgentPrepareOptions & { onMissing?: 'throw' },
+  detectors?: AgentDetectors,
+): Promise<AgentPreparation>;
+export async function prepareAgent(
+  opts: AgentPrepareOptions & { onMissing?: 'throw' | 'null' },
   detectors: AgentDetectors = defaultDetectors,
-): Promise<AgentResolution> {
-  const baseAgent = await pickAgentRunner(opts, detectors);
-  const tracker = new CostTracker(opts.maxCost !== undefined ? { maxUsd: opts.maxCost } : {});
-  const agent = withCostTracking(baseAgent, tracker);
-  return { agent, tracker };
+): Promise<AgentPreparation | null> {
+  try {
+    const baseAgent = await pickAgentRunner(opts, detectors);
+    const tracker = new CostTracker(opts.maxCost !== undefined ? { maxUsd: opts.maxCost } : {});
+    const agent = withCostTracking(baseAgent, tracker);
+    return { agent, tracker };
+  } catch (err) {
+    // 'null' mode swallows any ReactLensError from selection (no agent
+    // reachable, conflicting flags, missing key) the same way the prior
+    // canResolveAgent returned false. Non-ReactLens failures (bugs) still
+    // propagate.
+    if (opts.onMissing === 'null' && err instanceof ReactLensError) return null;
+    throw err;
+  }
 }

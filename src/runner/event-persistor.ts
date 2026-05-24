@@ -24,34 +24,29 @@ import { logger } from '../utils/logger';
 import type { RunPath } from '../runs/run-paths';
 import { sanitizeSegment } from '../runs/run-paths';
 import { createActiveSteps, type ActiveSteps } from './active-steps';
-import type { EventBus } from './event-bus';
-import { ALL_EVENT_TYPES, type RunEvent } from './events';
+import type { EventSink } from './event-bus';
+import { type RunEvent } from './events';
 
 export type PersistorOptions = {
   runPath: RunPath;
 };
 
-export class EventPersistor {
+export class EventPersistor implements EventSink {
   private readonly runPath: RunPath;
   private readonly steps: ActiveSteps = createActiveSteps({ clearOn: 'step:end' });
   private writeQueue: Promise<void> = Promise.resolve();
   private mkdirP: Promise<void> | null = null;
-  private disposers: Array<() => void> = [];
 
   constructor(opts: PersistorOptions) {
     this.runPath = opts.runPath;
   }
 
-  attach(bus: EventBus): void {
-    for (const t of ALL_EVENT_TYPES) {
-      const dispose = bus.on(t, (event) => this.handle(event as RunEvent));
-      this.disposers.push(dispose);
-    }
-  }
-
-  detach(): void {
-    for (const dispose of this.disposers) dispose();
-    this.disposers = [];
+  // EventSink — the bus calls this once per RunEvent. Callers subscribe
+  // via `bus.addSink(persistor)` and keep the returned unsubscribe to
+  // release the subscription during teardown. Replaces the prior
+  // attach(bus)/detach() pair so the bus owns lifecycle, not the sink.
+  accept(event: RunEvent): void {
+    this.handle(event);
   }
 
   async flush(): Promise<void> {
