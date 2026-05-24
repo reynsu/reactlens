@@ -10,7 +10,8 @@ import { readFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { ReactLensError } from '../utils/errors';
 import { logger } from '../utils/logger';
-import { parseRunEvent, type AxNode, type ComponentNode } from '../runner/events';
+import { tryIngestRunEvent } from '../runner/event-ingestion';
+import type { AxNode, ComponentNode } from '../runner/events';
 import {
   diffComponentTree,
   diffA11yTree,
@@ -84,12 +85,7 @@ async function loadFinalSnapshots(eventsPath: string): Promise<Map<string, Final
   const titles = new Map<string, string>();
   for (const line of text.split('\n')) {
     if (line.length === 0) continue;
-    let event;
-    try {
-      event = parseRunEvent(JSON.parse(line));
-    } catch {
-      continue;
-    }
+    const event = tryIngestRunEvent(line);
     if (event === null) continue;
 
     if (event.t === 'test:start') {
