@@ -1,6 +1,20 @@
-import type { RunEvent, RunEventByType, RunEventType } from './events';
+import { ALL_EVENT_TYPES, type RunEvent, type RunEventByType, type RunEventType } from './events';
 
 type Handler<T extends RunEventType> = (event: RunEventByType<T>) => void;
+
+// A consumer that wants every RunEvent in chronological order. The bus
+// owns the subscription protocol — sinks no longer track their own
+// disposers or `for (const t of ALL_EVENT_TYPES) bus.on(t, ...)` loops.
+//
+// Three production adapters in tree today: EventPersistor (writes JSONL +
+// frame JPEGs to .reactlens/runs/<id>/), DashboardHub (buffers + broadcasts
+// to dashboard-ui WS clients), plus an ad-hoc inline sink in the JSON-
+// reporter path of `reactlens run`. The first two are the reason this
+// Interface exists (rule of two adapters); the inline one is small enough
+// to stay inline.
+export interface EventSink {
+  accept(event: RunEvent): void;
+}
 
 export class EventBus {
   private handlers: { [K in RunEventType]?: Set<Handler<K>> } = {};
@@ -13,6 +27,19 @@ export class EventBus {
     }
     set.add(handler);
     return () => set?.delete(handler);
+  }
+
+  // Subscribes a sink to every RunEvent variant. Returns a single
+  // unsubscribe function that releases every per-type subscription;
+  // callers store this and call it during their own teardown.
+  addSink(sink: EventSink): () => void {
+    const unsubs: Array<() => void> = [];
+    for (const t of ALL_EVENT_TYPES) {
+      unsubs.push(this.on(t, (event) => sink.accept(event as RunEvent)));
+    }
+    return () => {
+      for (const u of unsubs) u();
+    };
   }
 
   emit(event: RunEvent): void {

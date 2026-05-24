@@ -44,11 +44,11 @@ async function makeHarness(): Promise<Harness> {
   const runPath = area.startRun();
   const bus = new EventBus();
   const persistor = new EventPersistor({ runPath });
-  persistor.attach(bus);
+  const unsubPersistor = bus.addSink(persistor);
   const server = await startDashboardServer({ port: 0, bus, runsArea: area });
   const close = async (): Promise<void> => {
     await persistor.flush();
-    persistor.detach();
+    unsubPersistor();
     await server.close();
   };
   return { cwd, server, bus, persistor, runId: runPath.id, close };

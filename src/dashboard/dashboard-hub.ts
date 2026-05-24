@@ -34,7 +34,8 @@ import { z } from 'zod';
 import { WebSocketServer, type WebSocket } from 'ws';
 import { applyPatch } from '../applier/patch-applier';
 import type { EventBus } from '../runner/event-bus';
-import { ALL_EVENT_TYPES, type RunEvent } from '../runner/events';
+import { type RunEvent } from '../runner/events';
+import type { EventSink } from '../runner/event-bus';
 import { logger } from '../utils/logger';
 import type { RunsArea } from '../runs/run-paths';
 
@@ -77,31 +78,30 @@ export type DashboardHubOpts = {
   runsArea?: RunsArea;
 };
 
-export class DashboardHub {
+export class DashboardHub implements EventSink {
   readonly wss: WebSocketServer;
   private readonly opts: DashboardHubOpts;
   private readonly buffer: RunEvent[] = [];
-  private readonly disposers: Array<() => void> = [];
 
   constructor(opts: DashboardHubOpts) {
     this.opts = opts;
     this.wss = new WebSocketServer({ noServer: true });
-
-    // Subscribe broadcast pipeline first so any event emitted while
-    // wiring (test reruns + immediate patch-apply round-trips) lands
-    // in the buffer.
-    for (const t of ALL_EVENT_TYPES) {
-      this.disposers.push(opts.bus.on(t, (e) => this.bufferAndBroadcast(e as RunEvent)));
-    }
-
     this.wss.on('connection', (client: WebSocket) => this.onConnection(client));
   }
 
-  // Closes all client sockets, releases bus subscriptions, and shuts
-  // down the WebSocketServer. Idempotent enough — the composer awaits
-  // this once during shutdown.
+  // EventSink — the bus calls this once per RunEvent. The composer
+  // subscribes via `bus.addSink(hub)` after construction; the returned
+  // unsubscribe is called before `close()` during shutdown. Buffering
+  // happens here so any event emitted while wiring (test reruns,
+  // immediate patch-apply round-trips) lands in the buffer.
+  accept(event: RunEvent): void {
+    this.bufferAndBroadcast(event);
+  }
+
+  // Closes all client sockets and shuts down the WebSocketServer. Bus
+  // subscriptions are released by the composer (it holds the unsubscribe
+  // returned from `bus.addSink(hub)`).
   async close(): Promise<void> {
-    for (const d of this.disposers) d();
     for (const c of this.wss.clients) c.close();
     await new Promise<void>((res) => this.wss.close(() => res()));
   }
