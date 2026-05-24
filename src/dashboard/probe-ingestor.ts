@@ -28,8 +28,7 @@
 // calls `close()` on shutdown.
 import { WebSocketServer, type WebSocket } from 'ws';
 import type { EventBus } from '../runner/event-bus';
-import type { RunEvent } from '../runner/events';
-import { parseRunEvent } from '../runner/events';
+import { tryIngestRunEvent } from '../runner/event-ingestion';
 import { logger } from '../utils/logger';
 
 export type ProbeIngestorOpts = {
@@ -70,20 +69,16 @@ export class ProbeIngestor {
   }
 
   private onMessage(data: unknown): void {
-    let event: RunEvent | null;
-    try {
-      event = parseRunEvent(JSON.parse((data as { toString(): string }).toString()));
-    } catch {
-      logger.warn(
-        { preview: String((data as { toString(): string }).toString()).slice(0, 200) },
-        'probe message failed JSON.parse; dropped',
-      );
-      return;
-    }
+    // tryIngestRunEvent handles both Buffer + string and combines
+    // JSON.parse + schema validation; returns null on either failure
+    // for the soft path the probe pipeline wants (drop bad frames,
+    // keep streaming the good ones). Per the event-ingestion module's
+    // boundary contract (#57).
+    const event = tryIngestRunEvent(data as Buffer);
     if (event === null) {
       logger.warn(
         { preview: (data as { toString(): string }).toString().slice(0, 200) },
-        'probe message failed schema validation; dropped',
+        'probe message failed JSON.parse or schema validation; dropped',
       );
       return;
     }

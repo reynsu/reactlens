@@ -18,7 +18,7 @@
 import { createHash } from 'node:crypto';
 import { access, readdir, readFile, stat } from 'node:fs/promises';
 import { isAbsolute, join, resolve, sep } from 'node:path';
-import { parseRunEvent } from '../runner/events';
+import { tryIngestRunEvent } from '../runner/event-ingestion';
 import { ensureGitignore } from '../utils/paths';
 import { generateRunId } from '../utils/run-id';
 
@@ -219,25 +219,22 @@ async function summarizeRun(runId: string, eventsPath: string): Promise<RunSumma
   if (lines.length === 0) return { runId };
 
   const summary: RunSummary = { runId };
-  try {
-    const first = parseRunEvent(JSON.parse(lines[0]!));
-    if (first?.t === 'run:start') {
-      summary.totalTests = first.totalTests;
-      summary.startedAt = first.timestamp;
-    }
-  } catch {
-    /* malformed first line — skip metadata */
+  // First/last-line spot-checks. tryIngestRunEvent returns null on
+  // either JSON.parse failure OR schema mismatch — both branches mean
+  // "skip the metadata extraction, leave the field unset" for this
+  // partial-corruption-tolerant code path (the runs picker must not
+  // blow up when one persisted run has a malformed events.jsonl).
+  const first = tryIngestRunEvent(lines[0]!);
+  if (first?.t === 'run:start') {
+    summary.totalTests = first.totalTests;
+    summary.startedAt = first.timestamp;
   }
-  try {
-    const last = parseRunEvent(JSON.parse(lines[lines.length - 1]!));
-    if (last?.t === 'run:end') {
-      summary.passed = last.passed;
-      summary.failed = last.failed;
-      summary.skipped = last.skipped;
-      summary.duration = last.duration;
-    }
-  } catch {
-    /* malformed last line — leave end stats unset */
+  const last = tryIngestRunEvent(lines[lines.length - 1]!);
+  if (last?.t === 'run:end') {
+    summary.passed = last.passed;
+    summary.failed = last.failed;
+    summary.skipped = last.skipped;
+    summary.duration = last.duration;
   }
   return summary;
 }
