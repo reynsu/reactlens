@@ -12,13 +12,12 @@
 // invoked by the Module's run() in a `finally` block — so cleanup runs
 // even if the execute core throws.
 //
-// `case-sandbox.ts` and `case-to-failure.ts` stay in src/eval/ for this
-// slice; #47 relocates them once the legacy callers are gone.
-import { existsSync, readFileSync } from 'node:fs';
-import { join } from 'node:path';
-import type { FailedTest as PublishedFailedTest } from '@reynsu/reactlens-diagnosis-prompts';
-import type { ComponentNode } from '../runner/events';
+// `case-sandbox.ts` stays in src/eval/. readSandboxedFailure used to live
+// here too, but prepare-ablation reached across the sibling seam to import
+// it — that leak is fixed by moving the helper into src/eval/sandboxed-
+// failure.ts, peer of sandboxDir.
 import { sandboxDir } from '../eval/case-sandbox';
+import { readSandboxedFailure } from '../eval/sandboxed-failure';
 import type { PrepareResult } from './execute';
 
 export type EvalCaseIntent = {
@@ -37,32 +36,4 @@ export function prepareEvalCase(intent: EvalCaseIntent): PrepareResult {
     prepared: { cwd: dir, failure },
     cleanup,
   };
-}
-
-// Local equivalent of `caseToFailure` from `src/eval/case-to-failure.ts`
-// but parameterized on a path (not an EvalCase). Module-internal — also
-// used by `prepare-ablation.ts` so both sandbox-based prepares share the
-// same path → FailedTest mapping. The legacy `caseToFailure` stays alive
-// for the eval-pipeline caller until #47.
-export function readSandboxedFailure(sandboxPath: string, name: string): PublishedFailedTest {
-  const specFile = join(sandboxPath, 'spec.ts');
-  const componentFile = join(sandboxPath, 'component.tsx');
-  const errorFile = join(sandboxPath, 'error.txt');
-  const snapshotFile = join(sandboxPath, 'snapshot.json');
-
-  const out: PublishedFailedTest = {
-    testId: name,
-    testTitle: name,
-    specFile,
-  };
-  if (existsSync(componentFile)) out.componentFile = componentFile;
-  if (existsSync(errorFile)) out.errorMessage = readFileSync(errorFile, 'utf8');
-  if (existsSync(snapshotFile)) {
-    // JSON.parse can throw on malformed input. Propagating is intentional
-    // — a corrupt snapshot.json is a curation bug we want loud, not a
-    // silently-undefined snapshot that would degrade the ablation
-    // comparison without the operator noticing (Principle 2 / ADR-0001).
-    out.componentSnapshot = JSON.parse(readFileSync(snapshotFile, 'utf8')) as ComponentNode;
-  }
-  return out;
 }

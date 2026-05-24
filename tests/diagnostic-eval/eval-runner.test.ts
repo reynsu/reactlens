@@ -14,7 +14,7 @@
 import { existsSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { afterAll, describe, expect, it } from 'vitest';
-import { canResolveAgent, pickAgentRunner } from '../../src/agent/select';
+import { prepareAgent } from '../../src/agent/select';
 import {
   aggregateMetrics,
   type CaseResult,
@@ -44,7 +44,7 @@ const CASES_DIR = join(__dirname, 'cases');
 // tsc rejects it under our NodeNext + CJS module setup (no `"type":"module"`
 // in package.json). Suppressed honestly so `pnpm typecheck` stays green.
 // @ts-expect-error TLA at module scope: vitest handles it; tsc does not.
-const HAS_AGENT = await canResolveAgent();
+const HAS_AGENT = (await prepareAgent({ commandName: 'eval', onMissing: 'null' })) !== null;
 
 function loadCase(dir: string): { name: string; dir: string; truth: Truth } | null {
   const truthPath = join(dir, 'truth.json');
@@ -97,7 +97,7 @@ describe.skipIf(!HAS_AGENT)('diagnostic eval (with API)', () => {
   it.each(allCases.map((c) => [c.name, c.dir] as const))(
     'diagnoses %s',
     async (_name, dir) => {
-      const agent = await pickAgentRunner({ commandName: 'eval' });
+      const { agent } = await prepareAgent({ commandName: 'eval' });
       const result = await runEvalCase({ caseDir: dir, agent });
       liveResults.push(result);
       logger.info(
@@ -181,7 +181,7 @@ describe.skipIf(!ABLATION || !HAS_AGENT)('diagnostic ablation (with API)', () =>
       );
     }
 
-    const agent = await pickAgentRunner({ commandName: 'eval' });
+    const { agent } = await prepareAgent({ commandName: 'eval' });
     // Filter to cases that actually HAVE a component snapshot. The
     // ablation harness measures "moat-contribution delta" by stripping
     // the component-snapshot section from the with-snapshot prompt; for

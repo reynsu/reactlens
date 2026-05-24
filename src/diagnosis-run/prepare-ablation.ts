@@ -16,12 +16,12 @@
 // with the `ablation` intent.
 import { buildUserMessage } from '@reynsu/reactlens-diagnosis-prompts';
 import { sandboxDir } from '../eval/case-sandbox';
+import { readSandboxedFailure } from '../eval/sandboxed-failure';
 import {
   generateVariant,
   type AblationVariant,
 } from '../eval/ablation-variant-generator';
 import type { PrepareResult } from './execute';
-import { readSandboxedFailure } from './prepare-eval-case';
 
 export type AblationIntent = {
   kind: 'ablation';
