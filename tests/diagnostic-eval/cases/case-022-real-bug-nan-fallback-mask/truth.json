@@ -1,0 +1,6 @@
+{
+  "expectedClassification": "real-bug",
+  "minimumConfidence": "high",
+  "category": "nan-fallback-mask",
+  "notes": "Synthetic moat-validation case (Type A). useDiscountCalculation feeds parseFloat('ten%') which produces NaN; the `?? 0` defense is nullish-coalescing and does NOT catch NaN; the NaN propagates as the amount prop to <DiscountBadge>; the badge's defensive isNaN fallback renders 'Saved $0' silently. Spec is correct — the bug is the calculation + the deceptive fallback together. Snapshot-distinguishable: the captured tree at the failing step shows <DiscountBadge amount={NaN}>, the direct fingerprint. From DOM alone the failure looks like 'no discount applied' (a legitimate product state), so a black-box agent must hypothesize across many candidates (calc bug, prop pipeline, formatter, CSS, mock); a tree-aware agent reads the NaN prop directly. Patch target: replace `?? 0` with `(Number.isNaN(amount) ? 0 : amount)` in useDiscountCalculation, OR validate couponPercent before parseFloat. This case is small enough to fit well under any snapshot truncation limit so the ablation harness measures the real with-/without-snapshot delta without the truncation confounder. Pairs with case-023 (Type B: sibling-state leak, case-021 in <100 lines) and case-024 (Type C: branch fires for wrong reason)."
+}

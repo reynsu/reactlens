@@ -1,0 +1,10 @@
+Error: Timed out 5000ms waiting for expect(locator).toHaveText(expected)
+
+Locator: getByTestId('count-b')
+Expected string: "0"
+Received string: "5"
+Call log:
+  - expect.toHaveText with timeout 5000ms
+  - waiting for getByTestId('count-b')
+  -   locator resolved to <span data-testid="count-b">5</span>
+  -   unexpected value "5"

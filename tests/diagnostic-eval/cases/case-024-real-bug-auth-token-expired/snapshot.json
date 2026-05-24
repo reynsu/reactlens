@@ -1,0 +1,14 @@
+{
+  "id": "1",
+  "name": "Greeting",
+  "props": {},
+  "hooks": [
+    {
+      "kind": "state",
+      "value": { "user": null, "error": null }
+    },
+    { "kind": "other" }
+  ],
+  "source": { "file": "component.tsx", "line": 60 },
+  "children": []
+}

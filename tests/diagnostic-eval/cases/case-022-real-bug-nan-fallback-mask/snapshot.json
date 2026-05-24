@@ -1,0 +1,20 @@
+{
+  "id": "1",
+  "name": "Checkout",
+  "props": {
+    "cart": [{ "id": "item1", "price": 50 }],
+    "couponPercent": "ten%"
+  },
+  "hooks": [],
+  "source": { "file": "component.tsx", "line": 49 },
+  "children": [
+    {
+      "id": "2",
+      "name": "DiscountBadge",
+      "props": { "amount": null },
+      "hooks": [],
+      "source": { "file": "component.tsx", "line": 33 },
+      "children": []
+    }
+  ]
+}

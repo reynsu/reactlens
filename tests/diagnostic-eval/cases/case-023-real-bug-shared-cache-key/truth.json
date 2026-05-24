@@ -1,0 +1,6 @@
+{
+  "expectedClassification": "real-bug",
+  "minimumConfidence": "high",
+  "category": "shared-cache-key",
+  "notes": "Synthetic moat-validation case (Type B), minimal twin of case-021. useCachedCounter hard-codes the cache key as the literal 'counter' instead of `counter-${id}`, so the two <Counter id='a'/> and <Counter id='b'/> siblings share a single cache slot. Incrementing A also increments B; the spec's count-b assertion times out on the failing iteration. Spec is correct (sibling-isolation contract); bug is purely in the hook. Snapshot-distinguishable: the captured tree shows both <Counter> fibers with the same hook value (both reading 5 after only A was clicked), which is the direct fingerprint of a shared cache key. From DOM alone the failure looks like 'Counter B happens to be 5 instead of 0' — many hypotheses (wrong source, wrong test setup, mis-rendered, props swapped). From tree the diagnosis is one step. Patch target: change the key from 'counter' to a template literal that includes id in useCachedCounter. Pairs with case-022 (Type A: NaN fallback) and case-024 (Type C: branch fires for wrong reason)."
+}

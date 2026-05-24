@@ -1,0 +1,31 @@
+{
+  "id": "1",
+  "name": "CounterPair",
+  "props": {},
+  "hooks": [],
+  "source": { "file": "component.tsx", "line": 70 },
+  "children": [
+    {
+      "id": "2",
+      "name": "Counter",
+      "props": { "id": "a" },
+      "hooks": [
+        { "kind": "state", "value": 0 },
+        { "kind": "other", "value": 5 }
+      ],
+      "source": { "file": "component.tsx", "line": 59 },
+      "children": []
+    },
+    {
+      "id": "3",
+      "name": "Counter",
+      "props": { "id": "b" },
+      "hooks": [
+        { "kind": "state", "value": 0 },
+        { "kind": "other", "value": 5 }
+      ],
+      "source": { "file": "component.tsx", "line": 59 },
+      "children": []
+    }
+  ]
+}
