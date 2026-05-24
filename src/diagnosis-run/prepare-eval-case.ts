@@ -19,7 +19,7 @@ import { join } from 'node:path';
 import type { FailedTest as PublishedFailedTest } from '@reynsu/reactlens-diagnosis-prompts';
 import type { ComponentNode } from '../runner/events';
 import { sandboxDir } from '../eval/case-sandbox';
-import type { PreparedDiagnosis } from './execute';
+import type { PrepareResult } from './execute';
 
 export type EvalCaseIntent = {
   kind: 'eval-case';
@@ -28,14 +28,6 @@ export type EvalCaseIntent = {
   // of caseDir; callers can override (e.g. corpus-harvested cases use a
   // namespaced name).
   name: string;
-};
-
-export type PrepareResult = {
-  prepared: PreparedDiagnosis;
-  // Invoked by DiagnosisRun.run() in `finally` — removes the sandbox
-  // tmpdir even if execute throws. Absent for intents that don't sandbox
-  // (post-mortem, live).
-  cleanup?: () => void;
 };
 
 export function prepareEvalCase(intent: EvalCaseIntent): PrepareResult {

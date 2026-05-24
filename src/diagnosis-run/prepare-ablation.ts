@@ -20,7 +20,7 @@ import {
   generateVariant,
   type AblationVariant,
 } from '../eval/ablation-variant-generator';
-import type { PrepareResult } from './prepare-eval-case';
+import type { PrepareResult } from './execute';
 import { readSandboxedFailure } from './prepare-eval-case';
 
 export type AblationIntent = {

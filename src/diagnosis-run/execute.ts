@@ -51,6 +51,21 @@ export type PreparedDiagnosis = {
   userMessage?: string;
 };
 
+// What the sandbox-based prepare-* intents (eval-case, ablation) return:
+// the PreparedDiagnosis plus a cleanup callback that DiagnosisRun.run()
+// invokes in a `finally` block to remove the sandbox tmpdir even if the
+// execute core throws. Lives next to PreparedDiagnosis (its produce/
+// consume partner) so the prepare-* siblings don't have to cross-import
+// each other for the type — used to live in prepare-eval-case.ts which
+// turned its sibling prepare-ablation.ts into a cross-seam importer.
+// Non-sandbox intents (live, post-mortem) return bare PreparedDiagnosis
+// instead — that two-shape distinction IS the "does the intent sandbox?"
+// rule, made explicit at the prepare/execute boundary.
+export type PrepareResult = {
+  prepared: PreparedDiagnosis;
+  cleanup?: () => void;
+};
+
 export type ExecuteDiagnosisOptions = {
   agent: AgentRunner;
   prepared: PreparedDiagnosis;
