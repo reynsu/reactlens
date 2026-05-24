@@ -10,10 +10,10 @@
 // NDJSON would balloon the log and turn `grep` into a memory hazard, so we
 // split: binary goes to disk, the log line keeps a `frameRef` pointer.
 //
-// `frame` events have no `stepId` (CLAUDE.md §9), so the persistor mirrors
-// the same activeStep-Map pattern as the dashboard server: track the latest
-// step:start per testId, key frames against it. Pre-first-step frames fall
-// back to a testId-keyed sentinel.
+// `frame` events have no `stepId` (CLAUDE.md §9), so the persistor uses
+// the shared ActiveSteps tracker (clearOn: 'step:end') to remember the
+// latest step:start per testId and key frames against it. Pre-first-step
+// frames fall back to a testId-keyed sentinel.
 //
 // Path-shape rules (sanitization, frame layout, eventsPath name) live in
 // src/runs/run-paths.ts on the RunPath value object — the persistor never
@@ -23,6 +23,7 @@ import { dirname } from 'node:path';
 import { logger } from '../utils/logger';
 import type { RunPath } from '../runs/run-paths';
 import { sanitizeSegment } from '../runs/run-paths';
+import { createActiveSteps, type ActiveSteps } from './active-steps';
 import type { EventBus } from './event-bus';
 import { ALL_EVENT_TYPES, type RunEvent } from './events';
 
@@ -32,7 +33,7 @@ export type PersistorOptions = {
 
 export class EventPersistor {
   private readonly runPath: RunPath;
-  private readonly activeStep = new Map<string, string>();
+  private readonly steps: ActiveSteps = createActiveSteps({ clearOn: 'step:end' });
   private writeQueue: Promise<void> = Promise.resolve();
   private mkdirP: Promise<void> | null = null;
   private disposers: Array<() => void> = [];
@@ -68,13 +69,7 @@ export class EventPersistor {
   }
 
   private handle(event: RunEvent): void {
-    if (event.t === 'step:start') {
-      this.activeStep.set(event.testId, event.stepId);
-    } else if (event.t === 'step:end') {
-      if (this.activeStep.get(event.testId) === event.stepId) {
-        this.activeStep.delete(event.testId);
-      }
-    }
+    this.steps.observe(event);
 
     if (event.t === 'frame') {
       // The persistor only handles WIRE-shape frames (those carrying base64
@@ -82,7 +77,7 @@ export class EventPersistor {
       // not what we re-ingest — if one ever lands on the bus it means the
       // wire/disk boundary leaked, and there's nothing useful to persist.
       if (event.data === undefined) return;
-      const stepId = this.activeStep.get(event.testId) ?? event.testId;
+      const stepId = this.steps.get(event.testId) ?? event.testId;
       const safeTestId = sanitizeSegment(event.testId);
       const safeStepId = sanitizeSegment(stepId);
       const frameRef = `frames/${safeTestId}/${safeStepId}.jpg`;
