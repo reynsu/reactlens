@@ -151,7 +151,7 @@ export async function runRun(opts: RunCommandOptions): Promise<number> {
   const area = await openRunsArea(cwd);
   let currentRun: RunPath = area.startRun();
   let persistor = new EventPersistor({ runPath: currentRun });
-  persistor.attach(bus);
+  let unsubPersistor = bus.addSink(persistor);
   logger.info({ runId: currentRun.id }, 'run starting');
 
   const wantDashboard = opts.noDashboard !== true && opts.reporter !== 'json';
@@ -191,7 +191,7 @@ export async function runRun(opts: RunCommandOptions): Promise<number> {
     });
     if (dashboard !== null) await dashboard.close();
     await persistor.flush();
-    persistor.detach();
+    unsubPersistor();
     return summary.exitCode;
   }
 
@@ -334,7 +334,7 @@ export async function runRun(opts: RunCommandOptions): Promise<number> {
         );
       }
       await persistor.flush();
-      persistor.detach();
+      unsubPersistor();
       logger.info({ runDir: currentRun.dir }, 'persisted run');
     }
     return summary;
@@ -350,7 +350,7 @@ export async function runRun(opts: RunCommandOptions): Promise<number> {
       // Rotate the persistor for the next iteration before runTests fires.
       currentRun = area.startRun();
       persistor = new EventPersistor({ runPath: currentRun });
-      persistor.attach(bus);
+      unsubPersistor = bus.addSink(persistor);
       logger.info({ runId: currentRun.id }, 'watch re-run starting');
       const next = await executeOneRun();
       process.stdout.write(

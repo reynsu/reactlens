@@ -16,16 +16,17 @@ const TINY_JPEG_B64 =
 let runDir: string;
 let bus: EventBus;
 let persistor: EventPersistor;
+let unsub: () => void;
 
 beforeEach(async () => {
   runDir = await mkdtemp(join(tmpdir(), 'reactlens-persistor-'));
   bus = new EventBus();
   persistor = new EventPersistor({ runPath: new RunPath({ id: 'test-run', dir: runDir }) });
-  persistor.attach(bus);
+  unsub = bus.addSink(persistor);
 });
 
 afterEach(() => {
-  persistor.detach();
+  unsub();
 });
 
 describe('EventPersistor', () => {
@@ -95,10 +96,10 @@ describe('EventPersistor', () => {
     expect(files).toEqual(['t1.jpg']);
   });
 
-  it('detach stops new events from being persisted', async () => {
+  it('unsubscribing the sink stops new events from being persisted', async () => {
     bus.emit({ t: 'run:start', runId: 'r1', totalTests: 1, timestamp: 0 });
     await persistor.flush();
-    persistor.detach();
+    unsub();
     bus.emit({ t: 'test:start', id: 't1', title: 'a', file: 'a.spec.ts', suite: 's' });
     await persistor.flush();
 
@@ -137,12 +138,12 @@ describe('EventPersistor', () => {
     const lateDir = join(runDir, 'nested', 'fresh');
     const lateBus = new EventBus();
     const lateP = new EventPersistor({ runPath: new RunPath({ id: 'late-run', dir: lateDir }) });
-    lateP.attach(lateBus);
+    const lateUnsub = lateBus.addSink(lateP);
     await expect(stat(lateDir)).rejects.toThrow();
     lateBus.emit({ t: 'run:start', runId: 'r1', totalTests: 0, timestamp: 0 });
     await lateP.flush();
     const s = await stat(lateDir);
     expect(s.isDirectory()).toBe(true);
-    lateP.detach();
+    lateUnsub();
   });
 });

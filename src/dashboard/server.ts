@@ -99,6 +99,10 @@ export async function startDashboardServer(opts: DashboardServerOptions): Promis
     bus: opts.bus,
     ...(opts.runsArea !== undefined ? { runsArea: opts.runsArea } : {}),
   });
+  // Bus owns the sink lifecycle (#3 architecture): the hub broadcasts
+  // every event the bus emits; the composer releases the subscription
+  // during shutdown before tearing down the WS server.
+  const unsubHub = opts.bus.addSink(hub);
   const probe = new ProbeIngestor({ bus: opts.bus });
 
   // Upgrade router — routes WS connections to the right WSS by path.
@@ -141,6 +145,7 @@ export async function startDashboardServer(opts: DashboardServerOptions): Promis
   const port = typeof address === 'object' && address !== null ? address.port : opts.port;
 
   const close = async (): Promise<void> => {
+    unsubHub();
     await hub.close();
     await probe.close();
     await new Promise<void>((resolve) => server.close(() => resolve()));
