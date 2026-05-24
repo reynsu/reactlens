@@ -27,6 +27,7 @@
 // WebSocketServer to the upgrade router for `/ws/probe` traffic, and
 // calls `close()` on shutdown.
 import { WebSocketServer, type WebSocket } from 'ws';
+import { createActiveSteps, type ActiveSteps } from '../runner/active-steps';
 import type { EventBus } from '../runner/event-bus';
 import { tryIngestRunEvent } from '../runner/event-ingestion';
 import { logger } from '../utils/logger';
@@ -38,21 +39,23 @@ export type ProbeIngestorOpts = {
 export class ProbeIngestor {
   readonly wss: WebSocketServer;
   private readonly opts: ProbeIngestorOpts;
-  // testId → current stepId. Updated by bus subscriptions; consumed
-  // on each probe message to rewrite stepId on component-* events.
-  private readonly activeStep = new Map<string, string>();
+  // testId → current stepId, kept by routing step:start + test:end events
+  // through the shared ActiveSteps tracker. Used to rewrite stepId on
+  // component-* probe messages so the inspector resolves them to the
+  // Playwright step that was actually running, not the testId-shaped
+  // default the probe baked in at addInitScript time.
+  private readonly steps: ActiveSteps = createActiveSteps({ clearOn: 'test:end' });
   private readonly disposers: Array<() => void> = [];
 
   constructor(opts: ProbeIngestorOpts) {
     this.opts = opts;
     this.wss = new WebSocketServer({ noServer: true });
 
-    // Bus subscriptions: every step:start updates the active stepId
-    // for its testId; every test:end clears the entry. Owning these
-    // here (rather than in the composer) keeps the active-step concern
-    // self-contained in the module that needs it.
-    this.disposers.push(opts.bus.on('step:start', (e) => this.activeStep.set(e.testId, e.stepId)));
-    this.disposers.push(opts.bus.on('test:end', (e) => this.activeStep.delete(e.id)));
+    // Route the two events the tracker needs into observe(). Owning the
+    // subscriptions here (rather than in the composer) keeps the active-
+    // step concern self-contained in the module that consumes it.
+    this.disposers.push(opts.bus.on('step:start', (e) => this.steps.observe(e)));
+    this.disposers.push(opts.bus.on('test:end', (e) => this.steps.observe(e)));
 
     this.wss.on('connection', (client: WebSocket) => this.onConnection(client));
   }
@@ -87,7 +90,7 @@ export class ProbeIngestor {
     // Playwright step rather than the testId-shaped default the probe
     // baked in at addInitScript time.
     if (event.t === 'component:snapshot' || event.t === 'component:event') {
-      const active = this.activeStep.get(event.testId);
+      const active = this.steps.get(event.testId);
       if (active !== undefined) (event as { stepId: string }).stepId = active;
     }
     // Echo onto the bus so other subscribers (DashboardHub broadcast,
