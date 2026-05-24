@@ -4,7 +4,7 @@
 import { existsSync } from 'node:fs';
 import { readFile, writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
-import { resolveAgentForCommand } from '../agent/select';
+import { prepareAgent } from '../agent/select';
 import { ReactLensError } from '../utils/errors';
 import { logger } from '../utils/logger';
 import { createDiagnosisRun } from '../diagnosis-run/run';
@@ -104,7 +104,7 @@ export async function runAnalyze(opts: AnalyzeCommandOptions): Promise<number> {
   if (!existsSync(reportPath)) {
     throw new ReactLensError(`report file not found: ${reportPath}`, { code: 'ANALYZE_NO_REPORT' });
   }
-  const { agent, tracker } = await resolveAgentForCommand({
+  const { agent, tracker } = await prepareAgent({
     commandName: 'analyze',
     useClaudeCode: opts.useClaudeCode,
     forceApi: opts.forceApi,

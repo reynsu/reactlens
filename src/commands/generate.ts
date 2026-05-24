@@ -2,7 +2,7 @@ import { existsSync } from 'node:fs';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { resolve, join } from 'node:path';
 import { execa } from 'execa';
-import { resolveAgentForCommand } from '../agent/select';
+import { prepareAgent } from '../agent/select';
 import { loadConfig } from '../config/load';
 import { analyzeComponent, type ComponentAnalysis } from '../ast/component-analyzer';
 import { renderContract } from '../generator/contract';
@@ -32,7 +32,7 @@ export async function runGenerate(opts: GenerateCommandOptions): Promise<number>
   const config = await loadConfig(cwd);
   const effectivePattern = opts.pattern ?? config.pattern;
   logger.info({ pattern: effectivePattern }, 'generate pattern resolved');
-  const { agent, tracker } = await resolveAgentForCommand({
+  const { agent, tracker } = await prepareAgent({
     commandName: 'generate',
     useClaudeCode: opts.useClaudeCode,
     forceApi: opts.forceApi,

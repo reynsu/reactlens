@@ -1,13 +1,13 @@
-// Verifies the agent-selection precedence enforced by pickAgentRunner /
-// canResolveAgent. Anthropic explicitly warns that ANTHROPIC_API_KEY in the
-// environment can make Claude Code bill against the API instead of the
-// subscription, so the matrix below pins the project policy: subscription
-// wins by default; API only on explicit opt-in or as a last-resort fallback.
+// Verifies the agent-selection precedence enforced by pickAgentRunner and
+// the public-Interface bundling done by prepareAgent. Anthropic explicitly
+// warns that ANTHROPIC_API_KEY in the environment can make Claude Code bill
+// against the API instead of the subscription, so the matrix below pins the
+// project policy: subscription wins by default; API only on explicit opt-in
+// or as a last-resort fallback.
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
-  canResolveAgent,
   pickAgentRunner,
-  resolveAgentForCommand,
+  prepareAgent,
   type AgentDetectors,
 } from '../../src/agent/select';
 import { CostTracker } from '../../src/agent/cost';
@@ -117,43 +117,56 @@ describe('pickAgentRunner — explicit overrides', () => {
   });
 });
 
-describe('canResolveAgent — non-throwing variant for the diagnosis gate', () => {
-  it('returns true when CLI is available (no env)', async () => {
-    expect(await canResolveAgent({}, detectors({ cli: true, key: false }))).toBe(true);
+describe('prepareAgent — onMissing: "null" (diagnosis gate for reactlens run)', () => {
+  it('returns a preparation when CLI is available (no env)', async () => {
+    const p = await prepareAgent({ commandName: 'run', onMissing: 'null' }, detectors({ cli: true, key: false }));
+    expect(p).not.toBeNull();
+    expect(p?.agent).toBeDefined();
+    expect(p?.tracker).toBeInstanceOf(CostTracker);
   });
 
-  it('returns true when only API key is available', async () => {
+  it('returns a preparation when only API key is available', async () => {
     process.env.ANTHROPIC_API_KEY = 'sk-test';
-    expect(await canResolveAgent({}, detectors({ cli: false, key: true }))).toBe(true);
+    const p = await prepareAgent({ commandName: 'run', onMissing: 'null' }, detectors({ cli: false, key: true }));
+    expect(p).not.toBeNull();
   });
 
-  it('returns false when neither CLI nor API key are available', async () => {
-    expect(await canResolveAgent({}, detectors({ cli: false, key: false }))).toBe(false);
+  it('returns null when neither CLI nor API key are available', async () => {
+    const p = await prepareAgent({ commandName: 'run', onMissing: 'null' }, detectors({ cli: false, key: false }));
+    expect(p).toBeNull();
   });
 
-  it('honors --force-api: false when the API key is missing', async () => {
-    expect(await canResolveAgent({ forceApi: true }, detectors({ cli: true, key: false }))).toBe(false);
+  it('honors --force-api: null when the API key is missing', async () => {
+    const p = await prepareAgent(
+      { commandName: 'run', forceApi: true, onMissing: 'null' },
+      detectors({ cli: true, key: false }),
+    );
+    expect(p).toBeNull();
   });
 
-  it('honors --use-claude-code: false when the CLI is missing', async () => {
+  it('honors --use-claude-code: null when the CLI is missing', async () => {
     process.env.ANTHROPIC_API_KEY = 'sk-test';
-    expect(
-      await canResolveAgent({ useClaudeCode: true }, detectors({ cli: false, key: true })),
-    ).toBe(false);
+    const p = await prepareAgent(
+      { commandName: 'run', useClaudeCode: true, onMissing: 'null' },
+      detectors({ cli: false, key: true }),
+    );
+    expect(p).toBeNull();
   });
 
-  it('returns false when both flags are set (contradiction)', async () => {
+  it('returns null when both flags are set (contradiction)', async () => {
     process.env.ANTHROPIC_API_KEY = 'sk-test';
-    expect(
-      await canResolveAgent({ forceApi: true, useClaudeCode: true }, detectors({ cli: true, key: true })),
-    ).toBe(false);
+    const p = await prepareAgent(
+      { commandName: 'run', forceApi: true, useClaudeCode: true, onMissing: 'null' },
+      detectors({ cli: true, key: true }),
+    );
+    expect(p).toBeNull();
   });
 });
 
-describe('resolveAgentForCommand — eager pick + cost-tracking bundle', () => {
+describe('prepareAgent — onMissing: "throw" (eager bundle for generate / analyze / regen)', () => {
   it('returns both an agent and a tracker on the happy path', async () => {
     process.env.ANTHROPIC_API_KEY = 'sk-test';
-    const result = await resolveAgentForCommand(
+    const result = await prepareAgent(
       { commandName: 'generate' },
       detectors({ cli: true, key: true }),
     );
@@ -164,7 +177,7 @@ describe('resolveAgentForCommand — eager pick + cost-tracking bundle', () => {
 
   it('propagates maxCost into the tracker (cap is enforced at next message)', async () => {
     process.env.ANTHROPIC_API_KEY = 'sk-test';
-    const { tracker } = await resolveAgentForCommand(
+    const { tracker } = await prepareAgent(
       { commandName: 'generate', maxCost: 0.5 },
       detectors({ cli: true, key: true }),
     );
@@ -177,10 +190,16 @@ describe('resolveAgentForCommand — eager pick + cost-tracking bundle', () => {
   it('throws when pickAgentRunner would throw (e.g. contradictory flags)', async () => {
     process.env.ANTHROPIC_API_KEY = 'sk-test';
     await expect(
-      resolveAgentForCommand(
+      prepareAgent(
         { commandName: 'generate', forceApi: true, useClaudeCode: true },
         detectors({ cli: true, key: true }),
       ),
+    ).rejects.toMatchObject({ code: 'GENERATE_NO_AGENT' });
+  });
+
+  it('throws NO_AGENT when no backend is reachable and onMissing is default', async () => {
+    await expect(
+      prepareAgent({ commandName: 'generate' }, detectors({ cli: false, key: false })),
     ).rejects.toMatchObject({ code: 'GENERATE_NO_AGENT' });
   });
 });

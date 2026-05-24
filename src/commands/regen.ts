@@ -5,7 +5,7 @@ import { createHash } from 'node:crypto';
 import { existsSync } from 'node:fs';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
-import { resolveAgentForCommand } from '../agent/select';
+import { prepareAgent } from '../agent/select';
 import { loadConfig } from '../config/load';
 import { analyzeComponent } from '../ast/component-analyzer';
 import { generateTests } from '../generator/delegate';
@@ -51,7 +51,7 @@ export async function runRegen(opts: RegenCommandOptions): Promise<number> {
   const config = await loadConfig(cwd);
   const effectivePattern = opts.pattern ?? config.pattern;
   logger.info({ pattern: effectivePattern }, 'regen pattern resolved');
-  const { agent, tracker } = await resolveAgentForCommand({
+  const { agent, tracker } = await prepareAgent({
     commandName: 'regen',
     useClaudeCode: opts.useClaudeCode,
     forceApi: opts.forceApi,
