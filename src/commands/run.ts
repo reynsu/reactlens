@@ -1,8 +1,7 @@
 import { existsSync } from 'node:fs';
 import { resolve, join } from 'node:path';
 import { spawn } from 'node:child_process';
-import { CostTracker, withCostTracking } from '../agent/cost';
-import { canResolveAgent, pickAgentRunner } from '../agent/select';
+import { prepareAgent } from '../agent/select';
 import { createDiagnosisRun } from '../diagnosis-run/run';
 import { loadConfig } from '../config/load';
 import { startDashboardServer } from '../dashboard/server';
@@ -208,42 +207,41 @@ export async function runRun(opts: RunCommandOptions): Promise<number> {
   });
   const diagnosisPromises: Array<Promise<void>> = [];
   const ciDiagnoses: Array<{ testId: string; title: string; diagnosis: unknown }> = [];
-  // Diagnosis is opt-in: needs an agent reachable per the new selection
-  // policy (subscription preferred, API as fallback). Mirroring
-  // pickAgentRunner's logic via canResolveAgent prevents the wiring from
-  // happening when neither a Claude CLI nor an API key are available.
-  const canDiagnose =
-    opts.noAnalyze !== true &&
-    (await canResolveAgent({ useClaudeCode: opts.useClaudeCode, forceApi: opts.forceApi }));
-  const costTracker = new CostTracker(opts.maxCost !== undefined ? { maxUsd: opts.maxCost } : {});
-  if (canDiagnose) {
-    let agentPromise: Promise<ReturnType<typeof withCostTracking>> | null = null;
+  // Diagnosis is opt-in: `prepareAgent({ onMissing: 'null' })` returns null
+  // when no agent is reachable (no CLI, no API key, or conflicting flags),
+  // so the suite still runs without diagnosis wiring. The CostTracker is
+  // bundled with the agent; previously the run command constructed one
+  // unconditionally and a separate one was discarded — now there is one.
+  const preparation =
+    opts.noAnalyze === true
+      ? null
+      : await prepareAgent({
+          commandName: 'run',
+          useClaudeCode: opts.useClaudeCode,
+          forceApi: opts.forceApi,
+          maxCost: opts.maxCost,
+          onMissing: 'null',
+        });
+  const costTracker = preparation?.tracker;
+  if (preparation !== null) {
+    const { agent } = preparation;
     bus.on('test:end', (e) => {
       if (e.status !== 'failed' && e.status !== 'timedOut') return;
       const t = testState.get(e.id);
       if (t === undefined) return;
       bus.emit({ t: 'diagnosis:start', testId: e.id });
-      if (agentPromise === null) {
-        agentPromise = pickAgentRunner({
-          commandName: 'run',
-          useClaudeCode: opts.useClaudeCode,
-          forceApi: opts.forceApi,
-        }).then((base) => withCostTracking(base, costTracker));
-      }
-      const promise = agentPromise
-        .then((agent) =>
-          createDiagnosisRun({ agent }).run(
-            {
-              kind: 'live',
-              cwd,
-              testId: e.id,
-              testTitle: t.title,
-              specFile: t.file,
-              ...(e.error !== undefined ? { errorMessage: e.error } : {}),
-              ...(t.snapshot !== undefined ? { componentSnapshot: t.snapshot } : {}),
-            },
-            { onChunk: (text) => bus.emit({ t: 'diagnosis:chunk', testId: e.id, text }) },
-          ),
+      const promise = createDiagnosisRun({ agent })
+        .run(
+          {
+            kind: 'live',
+            cwd,
+            testId: e.id,
+            testTitle: t.title,
+            specFile: t.file,
+            ...(e.error !== undefined ? { errorMessage: e.error } : {}),
+            ...(t.snapshot !== undefined ? { componentSnapshot: t.snapshot } : {}),
+          },
+          { onChunk: (text) => bus.emit({ t: 'diagnosis:chunk', testId: e.id, text }) },
         )
         .then((result) => {
           bus.emit({ t: 'diagnosis:end', testId: e.id, result });
@@ -361,8 +359,10 @@ export async function runRun(opts: RunCommandOptions): Promise<number> {
   }
 
   if (dashboard !== null) await dashboard.close();
-  const costTotal = costTracker.total();
-  if (costTotal.calls > 0) logger.info({ cost: costTotal }, 'agent cost summary');
+  if (costTracker !== undefined) {
+    const costTotal = costTracker.total();
+    if (costTotal.calls > 0) logger.info({ cost: costTotal }, 'agent cost summary');
+  }
   return summary.exitCode;
 }
 
