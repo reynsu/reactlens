@@ -3,6 +3,9 @@ import { dirname, join, relative } from 'node:path';
 import { execa } from 'execa';
 import prompts from 'prompts';
 import { detectStack, type DetectedStack } from '../ast/route-analyzer';
+import { detectScaffoldInputs } from '../scaffold/detect-scaffold-inputs';
+import { renderPlaywrightConfig } from '../scaffold/render-playwright-config';
+import { detectPackageManager } from '../utils/package-manager';
 import { ReactLensError } from '../utils/errors';
 import { logger } from '../utils/logger';
 import { findTemplatesDir } from '../utils/paths';
@@ -21,10 +24,18 @@ type FilePlan = {
   source: string;
   dest: string;
   rel: string;
+  // When set, init writes this function's output instead of copying `source`
+  // verbatim. Used for playwright.config.ts, whose contents are interpolated
+  // from the detected stack at write time (ADR-0010).
+  render?: (cwd: string) => Promise<string>;
 };
 
-const FILE_LAYOUT: Array<{ template: string; destRel: string }> = [
-  { template: 'playwright.config.ts', destRel: 'playwright.config.ts' },
+const FILE_LAYOUT: Array<{ template: string; destRel: string; render?: (cwd: string) => Promise<string> }> = [
+  {
+    template: 'playwright.config.ts',
+    destRel: 'playwright.config.ts',
+    render: async (cwd) => renderPlaywrightConfig(await detectScaffoldInputs(cwd)),
+  },
   { template: 'reactlens.config.ts', destRel: 'reactlens.config.ts' },
   { template: 'streaming-reporter.ts', destRel: 'reactlens/streaming-reporter.ts' },
   { template: 'global-setup.ts', destRel: 'reactlens/global-setup.ts' },
@@ -38,9 +49,9 @@ const FILE_LAYOUT: Array<{ template: string; destRel: string }> = [
 
 async function planFiles(opts: InitOptions): Promise<FilePlan[]> {
   const templatesDir = findTemplatesDir();
-  return FILE_LAYOUT.map(({ template, destRel }) => {
+  return FILE_LAYOUT.map(({ template, destRel, render }) => {
     const dest = join(opts.cwd, destRel);
-    return { source: join(templatesDir, template), dest, rel: relative(opts.cwd, dest) };
+    return { source: join(templatesDir, template), dest, rel: relative(opts.cwd, dest), render };
   });
 }
 
@@ -89,7 +100,11 @@ async function copyOne(plan: FilePlan, opts: InitOptions): Promise<'wrote' | 'sk
     return 'would-write';
   }
   await fs.mkdir(dirname(plan.dest), { recursive: true });
-  await fs.copyFile(plan.source, plan.dest);
+  if (plan.render) {
+    await fs.writeFile(plan.dest, await plan.render(opts.cwd));
+  } else {
+    await fs.copyFile(plan.source, plan.dest);
+  }
   logger.info({ file: plan.rel }, present ? 'overwrote' : 'created');
   return 'wrote';
 }
@@ -103,12 +118,6 @@ async function installDevDeps(opts: InitOptions, deps: string[]): Promise<void> 
   const args: string[] = pm === 'pnpm' ? ['add', '-D', ...deps] : ['install', '-D', ...deps];
   logger.info({ pm, deps }, 'installing dev deps');
   await execa(pm, args, { cwd: opts.cwd, stdio: 'inherit' });
-}
-
-async function detectPackageManager(cwd: string): Promise<'pnpm' | 'npm' | 'yarn'> {
-  if (await exists(join(cwd, 'pnpm-lock.yaml'))) return 'pnpm';
-  if (await exists(join(cwd, 'yarn.lock'))) return 'yarn';
-  return 'npm';
 }
 
 async function installPlaywrightChromium(opts: InitOptions): Promise<void> {

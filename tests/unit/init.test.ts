@@ -1,8 +1,12 @@
 import { mkdtemp, mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { runInit, type InitOptions } from '../../src/commands/init';
+
+// Stub the real dependency-install so runInit can exercise the real write
+// path (dryRun:false) without spawning pnpm/npx in a test.
+vi.mock('execa', () => ({ execa: vi.fn(async () => ({ stdout: '', stderr: '' })) }));
 
 let tmp: string;
 
@@ -83,6 +87,27 @@ describe('init', () => {
     expect(asked).toContain('playwright.config.ts');
     const stillThere = await readFile(join(tmp, 'playwright.config.ts'), 'utf8');
     expect(stillThere).toBe('// existing user file');
+  });
+
+  it('interpolates the detected stack into playwright.config.ts (#66)', async () => {
+    // beforeEach wrote a vite + react-router project; add a pnpm lockfile.
+    await writeFile(join(tmp, 'pnpm-lock.yaml'), '');
+    await runInit(baseOpts({ dryRun: false }));
+
+    const config = await readFile(join(tmp, 'playwright.config.ts'), 'utf8');
+    expect(config).toContain(`process.env.REACTLENS_BASE_URL ?? 'http://localhost:5173'`);
+    expect(config).toContain(`process.env.REACTLENS_WEB_SERVER ?? 'pnpm dev'`);
+    expect(config).toContain(`process.env.REACTLENS_NO_WEB_SERVER === '1'`);
+    // Other scaffold files are still copied verbatim from templates/.
+    const fixtures = await readFile(join(tmp, 'reactlens', 'fixtures.ts'), 'utf8');
+    expect(fixtures.length).toBeGreaterThan(0);
+  });
+
+  it('writes `npm run dev` on an npm project (#66)', async () => {
+    // No lockfile present → npm. beforeEach already wrote a vite project.
+    await runInit(baseOpts({ dryRun: false }));
+    const config = await readFile(join(tmp, 'playwright.config.ts'), 'utf8');
+    expect(config).toContain(`process.env.REACTLENS_WEB_SERVER ?? 'npm run dev'`);
   });
 
   it('throws when package.json is missing', async () => {
