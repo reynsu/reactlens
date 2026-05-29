@@ -2,7 +2,7 @@
 // (vite/next/tanstack via package.json deps) × package manager (npm/pnpm/yarn
 // via lockfile presence). Asserts port, devCommand, packageManager, router —
 // the values that get baked into playwright.config.ts (ADR-0010 / issue #66).
-import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -88,5 +88,57 @@ describe('detectScaffoldInputs', () => {
     expect(inputs.devServerPort).toBe(5173);
     expect(inputs.baseURL).toBe('http://localhost:5173');
     expect(inputs.devCommand).toBe('pnpm dev');
+  });
+
+  describe('componentGlobs heuristic (issue #71)', () => {
+    async function writeTsx(relDir: string): Promise<void> {
+      await mkdir(join(tmp, relDir), { recursive: true });
+      await writeFile(join(tmp, relDir, 'Widget.tsx'), 'export const Widget = () => null;\n');
+    }
+
+    it('seeds app/**/*.tsx for a Next.js App Router project', async () => {
+      await writeProject(NEXT.deps, NEXT.devDeps, 'pnpm-lock.yaml');
+      await writeTsx('app');
+      const inputs = await detectScaffoldInputs(tmp);
+      expect(inputs.router).toBe('next-app');
+      expect(inputs.componentGlobs).toContain('app/**/*.tsx');
+    });
+
+    it('seeds src/components when components live only there', async () => {
+      await writeProject(VITE.deps, VITE.devDeps, 'pnpm-lock.yaml');
+      await writeTsx('src/components');
+      const inputs = await detectScaffoldInputs(tmp);
+      expect(inputs.componentGlobs).toEqual(['src/components/**/*.tsx']);
+    });
+
+    it('seeds top-level components/ and pages/ when present', async () => {
+      await writeProject(VITE.deps, VITE.devDeps, 'pnpm-lock.yaml');
+      await writeTsx('components');
+      await writeTsx('pages');
+      const inputs = await detectScaffoldInputs(tmp);
+      expect(inputs.componentGlobs).toEqual(['pages/**/*.tsx', 'components/**/*.tsx']);
+    });
+
+    it('detects .tsx nested below the candidate directory', async () => {
+      await writeProject(VITE.deps, VITE.devDeps, 'pnpm-lock.yaml');
+      await writeTsx('src/components/forms/inputs');
+      const inputs = await detectScaffoldInputs(tmp);
+      expect(inputs.componentGlobs).toEqual(['src/components/**/*.tsx']);
+    });
+
+    it('ignores a candidate directory that has no .tsx files', async () => {
+      await writeProject(VITE.deps, VITE.devDeps, 'pnpm-lock.yaml');
+      await mkdir(join(tmp, 'src/components'), { recursive: true });
+      await writeFile(join(tmp, 'src/components', 'util.ts'), 'export const x = 1;\n');
+      await writeTsx('src/pages');
+      const inputs = await detectScaffoldInputs(tmp);
+      expect(inputs.componentGlobs).toEqual(['src/pages/**/*.tsx']);
+    });
+
+    it('falls back to the default globs when no component dir is found', async () => {
+      await writeProject(VITE.deps, VITE.devDeps, 'pnpm-lock.yaml');
+      const inputs = await detectScaffoldInputs(tmp);
+      expect(inputs.componentGlobs).toEqual(['src/pages/**/*.tsx', 'src/components/**/*.tsx']);
+    });
   });
 });

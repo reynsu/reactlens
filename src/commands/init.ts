@@ -5,6 +5,7 @@ import prompts from 'prompts';
 import { detectStack, type DetectedStack } from '../ast/route-analyzer';
 import { detectScaffoldInputs } from '../scaffold/detect-scaffold-inputs';
 import { renderPlaywrightConfig } from '../scaffold/render-playwright-config';
+import { renderReactlensConfig } from '../scaffold/render-reactlens-config';
 import { detectPackageManager } from '../utils/package-manager';
 import { ReactLensError } from '../utils/errors';
 import { logger } from '../utils/logger';
@@ -36,7 +37,11 @@ const FILE_LAYOUT: Array<{ template: string; destRel: string; render?: (cwd: str
     destRel: 'playwright.config.ts',
     render: async (cwd) => renderPlaywrightConfig(await detectScaffoldInputs(cwd)),
   },
-  { template: 'reactlens.config.ts', destRel: 'reactlens.config.ts' },
+  {
+    template: 'reactlens.config.ts',
+    destRel: 'reactlens.config.ts',
+    render: async (cwd) => renderReactlensConfig(await detectScaffoldInputs(cwd)),
+  },
   { template: 'streaming-reporter.ts', destRel: 'reactlens/streaming-reporter.ts' },
   { template: 'global-setup.ts', destRel: 'reactlens/global-setup.ts' },
   { template: 'fixtures.ts', destRel: 'reactlens/fixtures.ts' },

@@ -15,6 +15,7 @@ const VITE_PNPM: ScaffoldInputs = {
   router: 'react-router',
   reactVersion: '^18',
   testDir: 'e2e/specs',
+  componentGlobs: ['src/pages/**/*.tsx', 'src/components/**/*.tsx'],
 };
 
 const NEXT_NPM: ScaffoldInputs = {
@@ -25,6 +26,7 @@ const NEXT_NPM: ScaffoldInputs = {
   router: 'next-app',
   reactVersion: '^18',
   testDir: 'e2e/specs',
+  componentGlobs: ['app/**/*.tsx'],
 };
 
 const VITE_PNPM_EXPECTED = `// Written by \`reactlens init\`. The dev server, port, and baseURL below were
