@@ -145,7 +145,11 @@ export async function runInit(opts: InitOptions): Promise<void> {
   for (const plan of plans) {
     await copyOne(plan, opts);
   }
-  await installDevDeps(opts, ['@playwright/test']);
+  // The scaffold's reactlens/fixtures.ts + component-object.ts import `ws`
+  // directly (the probe transport runs in the user's Node context, resolving
+  // from the user's node_modules), so a freshly-init'd project needs `ws`
+  // present or `reactlens run` fails with "Cannot find package 'ws'".
+  await installDevDeps(opts, ['@playwright/test', 'ws', '@types/ws']);
   await installPlaywrightChromium(opts);
   logger.info('reactlens init complete');
 }
