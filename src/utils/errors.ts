@@ -19,6 +19,7 @@ const HELP_URLS: Record<string, string> = {
   REACTLENS_CONFIG_ERROR: `${DOCS_BASE}#reactlens-config-error`,
   INIT_NO_PACKAGE_JSON: `${DOCS_BASE}#init-no-package-json`,
   ANALYZE_NO_REPORT: `${DOCS_BASE}#analyze-no-report`,
+  GENERATE_NO_COMPONENTS: `${DOCS_BASE}#generate-no-components`,
   GENERATE_NO_AGENT: `${DOCS_BASE}#agent-credentials`,
   RUN_NO_AGENT: `${DOCS_BASE}#agent-credentials`,
   ANALYZE_NO_AGENT: `${DOCS_BASE}#agent-credentials`,

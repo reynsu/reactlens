@@ -32,19 +32,27 @@ export async function runGenerate(opts: GenerateCommandOptions): Promise<number>
   const config = await loadConfig(cwd);
   const effectivePattern = opts.pattern ?? config.pattern;
   logger.info({ pattern: effectivePattern }, 'generate pattern resolved');
+
+  // Resolve the component set BEFORE acquiring an agent: a no-match is a
+  // config error, not an agent error, and failing here keeps the message
+  // pointed at componentGlobs instead of (e.g.) missing credentials.
+  const patterns = opts.pages !== undefined ? [opts.pages] : config.componentGlobs;
+  const components = await expandComponentGlobs(cwd, patterns);
+  if (components.length === 0) {
+    throw new ReactLensError(
+      `No components matched the glob${patterns.length === 1 ? '' : 's'} ${patterns
+        .map((p) => `"${p}"`)
+        .join(', ')}. Check \`componentGlobs\` in reactlens.config.ts (or the --pages flag) and confirm the patterns point at your component files.`,
+      { code: 'GENERATE_NO_COMPONENTS' },
+    );
+  }
+
   const { agent, tracker } = await prepareAgent({
     commandName: 'generate',
     useClaudeCode: opts.useClaudeCode,
     forceApi: opts.forceApi,
     maxCost: opts.maxCost,
   });
-
-  const patterns = opts.pages !== undefined ? [opts.pages] : config.componentGlobs;
-  const components = await expandComponentGlobs(cwd, patterns);
-  if (components.length === 0) {
-    logger.warn({ patterns }, 'no components matched');
-    return 0;
-  }
 
   logger.info({ count: components.length }, 'analyzing components');
   let written = 0;
