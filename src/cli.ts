@@ -38,7 +38,7 @@ function buildProgram(): Command {
     .command('init')
     .description('scaffold reactlens in the current project')
     .option('--cwd <path>', 'directory to scaffold into', process.cwd())
-    .option('-f, --force', 'overwrite existing files without prompting', false)
+    .option('-f, --force', 'deprecated no-op: re-init always overwrites the reactlens-owned scaffold', false)
     .option('--dry-run', 'list what would happen without writing', false)
     .option('--no-install-playwright', 'skip downloading the chromium browser')
     .action(async (opts: { cwd: string; force: boolean; dryRun: boolean; installPlaywright: boolean }) => {

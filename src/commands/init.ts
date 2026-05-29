@@ -1,7 +1,6 @@
 import { promises as fs } from 'node:fs';
 import { dirname, join, relative } from 'node:path';
 import { execa } from 'execa';
-import prompts from 'prompts';
 import { detectStack, type DetectedStack } from '../ast/route-analyzer';
 import { detectScaffoldInputs } from '../scaffold/detect-scaffold-inputs';
 import { renderPlaywrightConfig } from '../scaffold/render-playwright-config';
@@ -16,9 +15,12 @@ export type InitOptions = {
   force: boolean;
   dryRun: boolean;
   installPlaywright: boolean;
-  // Test seam: lets unit tests provide a deterministic answer instead of
-  // pulling up a TTY prompt. When undefined we use the real `prompts` lib.
-  confirmOverwrite?: (relPath: string) => Promise<boolean>;
+  // Test seam (#70): observe each Scaffold file as it is (over)written. The
+  // Scaffold is reactlens-owned, so re-init rewrites it unconditionally with
+  // no interactive prompt — this callback exists purely so unit tests can
+  // assert which files were touched without filesystem mocking. It NEVER
+  // gates the write: returning anything is ignored.
+  confirmOverwrite?: (relPath: string) => Promise<void>;
 };
 
 type FilePlan = {
@@ -69,16 +71,6 @@ async function exists(path: string): Promise<boolean> {
   }
 }
 
-async function defaultConfirm(rel: string): Promise<boolean> {
-  const answer = (await prompts({
-    type: 'confirm',
-    name: 'value',
-    message: `Overwrite ${rel}?`,
-    initial: false,
-  })) as { value?: boolean };
-  return answer.value === true;
-}
-
 function printDetectedStack(stack: DetectedStack): void {
   logger.info(
     {
@@ -93,13 +85,17 @@ function printDetectedStack(stack: DetectedStack): void {
   );
 }
 
-async function copyOne(plan: FilePlan, opts: InitOptions): Promise<'wrote' | 'skipped' | 'would-write'> {
+// Writes one reactlens-owned Scaffold file. The Scaffold tracks the installed
+// reactlens version + the Detected stack, so re-init rewrites it
+// unconditionally — there is NO interactive per-file overwrite prompt (#70).
+// `--force` is therefore a no-op for Scaffold files (kept for CLI back-compat).
+// init only ever writes within FILE_LAYOUT; it never touches user-owned files
+// (app entry, specs, app code).
+async function copyOne(plan: FilePlan, opts: InitOptions): Promise<'wrote' | 'would-write'> {
   const present = await exists(plan.dest);
-  if (present && !opts.force) {
-    const confirm = opts.confirmOverwrite ?? defaultConfirm;
-    const ok = await confirm(plan.rel);
-    if (!ok) return 'skipped';
-  }
+  // Observation seam (#70): lets tests assert which Scaffold files were
+  // (re)written. It cannot veto the write — the Scaffold is reactlens-owned.
+  if (opts.confirmOverwrite) await opts.confirmOverwrite(plan.rel);
   if (opts.dryRun) {
     logger.info({ file: plan.rel }, present ? 'would overwrite' : 'would create');
     return 'would-write';
