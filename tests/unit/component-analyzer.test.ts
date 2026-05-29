@@ -49,12 +49,14 @@ describe('statesToTestCases', () => {
     }
   });
 
-  it('emits MSW handler hints appropriate to each state', () => {
+  it('emits page.route overrides appropriate to each state', () => {
     const analysis = analyzeComponent(join(FIXTURES, 'DashboardPage.tsx'));
-    // Inject endpoints so MSW hints have something to attach to.
+    // Inject endpoints so route overrides have something to attach to.
     for (const s of analysis.states) s.apiCalls = ['/api/orders'];
     const cases = statesToTestCases(analysis);
     const errorCase = cases.find((c) => c.state.name === 'error');
-    expect(errorCase?.mswHandlers.some((h) => h.includes('500'))).toBe(true);
+    expect(errorCase?.routeOverrides.some((r) => r.includes('page.route') && r.includes('500'))).toBe(
+      true,
+    );
   });
 });

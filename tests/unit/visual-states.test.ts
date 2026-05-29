@@ -1,6 +1,6 @@
 // Catalog-level invariants. Doubles as a regression test for the matchers,
-// MSW recipes, and assertion lists — if one entry's behaviour changes by
-// accident during a future refactor, the test fails loudly here instead of
+// page.route recipes, and assertion lists — if one entry's behaviour changes
+// by accident during a future refactor, the test fails loudly here instead of
 // surfacing as a wrong-shape generated spec way downstream.
 import { describe, expect, it } from 'vitest';
 import { VISUAL_STATES, type VisualStateName } from '../../src/visual-states/visual-states';
@@ -34,12 +34,12 @@ describe('VISUAL_STATES — catalog invariants', () => {
     }
   });
 
-  it('only `submitting` has a null mswRecipe (purely a UI state, no API to mock)', () => {
+  it('only `submitting` has a null routeRecipe (purely a UI state, no API to mock)', () => {
     for (const [name, entry] of Object.entries(VISUAL_STATES)) {
       if (name === 'submitting') {
-        expect(entry.mswRecipe, 'submitting.mswRecipe').toBeNull();
+        expect(entry.routeRecipe, 'submitting.routeRecipe').toBeNull();
       } else {
-        expect(entry.mswRecipe, `${name}.mswRecipe`).not.toBeNull();
+        expect(entry.routeRecipe, `${name}.routeRecipe`).not.toBeNull();
       }
     }
   });
@@ -94,29 +94,52 @@ describe('VISUAL_STATES — matchers (regression for AST condition discovery)', 
   });
 });
 
-describe('VISUAL_STATES — mswRecipe (regression for generated spec hints)', () => {
+describe('VISUAL_STATES — routeRecipe (each state → its page.route snippet)', () => {
   const ep = '/api/orders';
 
-  it('loading suggests "never resolve"', () => {
-    expect(VISUAL_STATES.loading.mswRecipe!(ep)).toBe(`${ep} → never resolve (delay) until release`);
+  it('every recipe produces a page.route(...) snippet targeting the endpoint', () => {
+    for (const [name, entry] of Object.entries(VISUAL_STATES)) {
+      if (entry.routeRecipe === null) continue;
+      const snippet = entry.routeRecipe(ep);
+      expect(snippet, `${name}.routeRecipe`).toContain('page.route');
+      expect(snippet, `${name}.routeRecipe`).toContain(ep);
+    }
   });
 
-  it('error and network-error both suggest 500', () => {
-    expect(VISUAL_STATES.error.mswRecipe!(ep)).toBe(`${ep} → 500`);
-    expect(VISUAL_STATES['network-error'].mswRecipe!(ep)).toBe(`${ep} → 500`);
+  it('loading leaves the request pending (no fulfill)', () => {
+    const snippet = VISUAL_STATES.loading.routeRecipe!(ep);
+    expect(snippet).toContain(`page.route('**${ep}'`);
+    expect(snippet).not.toContain('fulfill');
   });
 
-  it('empty suggests an empty 200 body', () => {
-    expect(VISUAL_STATES.empty.mswRecipe!(ep)).toBe(`${ep} → 200 with empty array/object`);
+  it('error fulfills with a 500', () => {
+    expect(VISUAL_STATES.error.routeRecipe!(ep)).toBe(
+      `await page.route('**${ep}', (route) => route.fulfill({ status: 500 }));`,
+    );
   });
 
-  it('declined suggests 402', () => {
-    expect(VISUAL_STATES.declined.mswRecipe!(ep)).toBe(`${ep} → 402`);
+  it('network-error aborts the request', () => {
+    expect(VISUAL_STATES['network-error'].routeRecipe!(ep)).toBe(
+      `await page.route('**${ep}', (route) => route.abort());`,
+    );
   });
 
-  it('success and idle both suggest the default 200', () => {
-    expect(VISUAL_STATES.success.mswRecipe!(ep)).toBe(`${ep} → 200 (default)`);
-    expect(VISUAL_STATES.idle.mswRecipe!(ep)).toBe(`${ep} → 200 (default)`);
+  it('empty fulfills with a 200 empty array body', () => {
+    expect(VISUAL_STATES.empty.routeRecipe!(ep)).toBe(
+      `await page.route('**${ep}', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: '[]' }));`,
+    );
+  });
+
+  it('declined fulfills with a 402', () => {
+    expect(VISUAL_STATES.declined.routeRecipe!(ep)).toBe(
+      `await page.route('**${ep}', (route) => route.fulfill({ status: 402 }));`,
+    );
+  });
+
+  it('success and idle both fulfill with a default 200', () => {
+    const expected = `await page.route('**${ep}', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: '{}' }));`;
+    expect(VISUAL_STATES.success.routeRecipe!(ep)).toBe(expected);
+    expect(VISUAL_STATES.idle.routeRecipe!(ep)).toBe(expected);
   });
 });
 

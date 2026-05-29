@@ -2,7 +2,7 @@
 // will turn into Page Object + spec code. Each TestCase represents one
 // visual state to provoke + the actions to exit it.
 //
-// Per-state data (msw recipes, assertions, descriptions) lives in the
+// Per-state data (page.route recipes, assertions, descriptions) lives in the
 // VISUAL_STATES catalog. This module owns the orthogonal axis: per-component
 // action heuristics (login, checkout) that aren't state-specific.
 import type { ComponentAnalysis, VisualState } from '../ast/component-analyzer';
@@ -13,9 +13,9 @@ export type TestCase = {
   state: VisualState;
   // Suggested test title — the agent may rephrase but must keep the intent.
   title: string;
-  // MSW handler overrides needed to provoke this state, expressed as
-  // human-readable hints. Eg: "GET /api/orders → 500".
-  mswHandlers: string[];
+  // Playwright `page.route` override snippets needed to provoke this state,
+  // one per discovered endpoint. Eg: "await page.route('**/api/orders', ...)".
+  routeOverrides: string[];
   // Steps the test should perform after the state activates.
   actions: string[];
   // Assertions the agent should generate in the spec.
@@ -26,10 +26,10 @@ function entryFor(state: VisualState): (typeof VISUAL_STATES)[VisualStateName] |
   return VISUAL_STATES[state.name as VisualStateName];
 }
 
-function mswForState(state: VisualState): string[] {
+function routeForState(state: VisualState): string[] {
   const entry = entryFor(state);
-  if (entry === undefined || entry.mswRecipe === null) return [];
-  const recipe = entry.mswRecipe;
+  if (entry === undefined || entry.routeRecipe === null) return [];
+  const recipe = entry.routeRecipe;
   return state.apiCalls.map((ep) => recipe(ep));
 }
 
@@ -63,7 +63,7 @@ export function statesToTestCases(analysis: ComponentAnalysis): TestCase[] {
     componentName: analysis.componentName,
     state,
     title: `${analysis.componentName} renders ${state.name} state`,
-    mswHandlers: mswForState(state),
+    routeOverrides: routeForState(state),
     actions: actionsForState(state, analysis.componentName),
     assertions: assertionsForState(state),
   }));

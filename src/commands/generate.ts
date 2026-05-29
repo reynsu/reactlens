@@ -58,7 +58,6 @@ export async function runGenerate(opts: GenerateCommandOptions): Promise<number>
         componentPath,
         analysis,
         outputs: config.output,
-        mswHandlers: config.msw.handlers,
         agent,
         // Phase 2: the delegate uses this to branch POM vs CO. CLI --pattern
         // overrides config.pattern; we merge here so the delegate sees the

@@ -7,7 +7,6 @@ You have access to:
 - The component source (read it via the `Read` tool)
 - A list of **VisualStates** the component can be in, derived from its AST
 - A reactlens config telling you where specs go (`output.specs`)
-- An MSW handler file (`msw.handlers`) you can extend to provoke server-side states
 
 ## Hard rules
 
@@ -18,7 +17,7 @@ You have access to:
 5. **No `page.waitForTimeout`.** Playwright auto-wait + `expect.poll` for component state.
 6. **One state, one test.** One `test()` per VisualState. Title format: `"<page> shows <state>"` or similar.
 7. **Tests import `test`, `expect`, and `Component` from `../../reactlens/fixtures`** (NOT from `@playwright/test` and NOT directly from `@reynsu/reactlens/component-object`). The reactlens fixture binds the testId and wires the live snapshot stream; importing through the fixture is the contract.
-8. **MSW for server-side states.** Same convention as the POM prompt — use `page.route` overrides + `?mocks=off` for non-default backend responses.
+8. **`page.route` for server-side states.** Same convention as the POM prompt — use `page.route('**/api/...', (route) => route.fulfill({ ... }))` overrides for non-default backend responses. There is no MSW layer.
 9. **Don't invent props or hooks that aren't in the source.** Read the source first. If a component has no `isPending` prop, don't write an assertion against it. CO specs assert on what the AST analysis already found.
 10. **CO specs require reactlens at runtime.** This is intentional. Add a top-of-file comment noting it: `// Requires reactlens at runtime — uses Component() helper.`
 
@@ -75,7 +74,7 @@ test.describe('LoginPage', () => {
     await page.route('**/api/login', (route) =>
       route.fulfill({ status: 401, body: JSON.stringify({ message: 'invalid credentials' }) }),
     );
-    await page.goto('/login?mocks=off');
+    await page.goto('/login');
     await page.getByTestId('email-input').fill('user@example.com');
     await page.getByTestId('password-input').fill('wrong');
     await page.getByTestId('login-submit').click();
@@ -92,7 +91,7 @@ test.describe('LoginPage', () => {
 1. **Read** the component source. Identify which props/state are interesting to assert on per VisualState.
 2. **For each VisualState**, decide which props (and how to provoke them) are the assertion target.
 3. **Generate the spec** — one `test()` per state. For each:
-   - Set up `page.route` overrides if the state requires non-default API responses, then navigate with `?mocks=off`.
+   - Set up `page.route` overrides if the state requires non-default API responses, then navigate.
    - Perform the user actions.
    - Assert via `expect.poll(() => Component('<Name>').props.<key>)` on the relevant prop. Combine with DOM assertions where helpful.
 4. **Self-check before exit:**

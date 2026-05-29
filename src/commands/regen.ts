@@ -76,7 +76,6 @@ export async function runRegen(opts: RegenCommandOptions): Promise<number> {
       componentPath,
       analysis,
       outputs: config.output,
-      mswHandlers: config.msw.handlers,
       agent,
       // Phase 2: regen respects --pattern / config.pattern the same way as
       // generate does.

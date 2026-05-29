@@ -144,7 +144,7 @@ export async function runInit(opts: InitOptions): Promise<void> {
   for (const plan of plans) {
     await copyOne(plan, opts);
   }
-  await installDevDeps(opts, ['@playwright/test', 'msw']);
+  await installDevDeps(opts, ['@playwright/test']);
   await installPlaywrightChromium(opts);
   logger.info('reactlens init complete');
 }
