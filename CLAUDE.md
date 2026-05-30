@@ -400,8 +400,12 @@ Everything that flows between the runner, the dashboard server, the dashboard fr
 ```ts
 type RunEvent =
   // Run lifecycle. runId added v0.2 (P8.1) — sortable ISO+hex string,
-  // doubles as the directory key for .reactlens/runs/<runId>/.
-  | { t: 'run:start'; runId: string; totalTests: number; timestamp: number }
+  // doubles as the directory key for .reactlens/runs/<runId>/. `tests` added
+  // v0.3 — the full suite roster the reporter enumerates at onBegin (each id
+  // matches the later test:start), so the dashboard renders the complete list
+  // up front, every row `pending` until its own test:start/test:end arrives.
+  // Optional for back-compat with standalone runs + pre-v0.3 persisted runs.
+  | { t: 'run:start'; runId: string; totalTests: number; timestamp: number; tests?: { id: string; title: string; file: string; suite: string }[] }
   | { t: 'run:end'; passed: number; failed: number; skipped: number; duration: number }
 
   // Test lifecycle

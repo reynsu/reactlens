@@ -16,8 +16,10 @@ type Attachment = { name: string; path: string; contentType?: string };
 // Local copy of the RunEvent variants this reporter emits. Kept in sync with
 // src/runner/events.ts; duplicated here so the template stays self-contained
 // when copied into a user's project.
+type TestPlanEntry = { id: string; title: string; file: string; suite: string };
+
 type RunEvent =
-  | { t: 'run:start'; runId: string; totalTests: number; timestamp: number }
+  | { t: 'run:start'; runId: string; totalTests: number; timestamp: number; tests?: TestPlanEntry[] }
   | { t: 'run:end'; passed: number; failed: number; skipped: number; duration: number }
   | { t: 'test:start'; id: string; title: string; file: string; suite: string }
   | {
@@ -88,7 +90,18 @@ class ReactLensStreamingReporter implements Reporter {
     // presence — but the value is marked "standalone" so persistence layers
     // can choose to skip it.
     const runId = process.env['REACTLENS_RUN_ID'] ?? `standalone-${this.startedAt}`;
-    emit({ t: 'run:start', runId, totalTests: suite.allTests().length, timestamp: this.startedAt });
+    // Enumerate the whole suite up front so the dashboard renders the complete
+    // test list immediately, every row `pending` until its own test:start
+    // arrives. Each id here matches the id onTestBegin emits later, so the
+    // dashboard reducer flips the same row in place.
+    const allTests = suite.allTests();
+    const tests: TestPlanEntry[] = allTests.map((test) => ({
+      id: test.id,
+      title: test.title,
+      file: test.location.file,
+      suite: suiteFor(test),
+    }));
+    emit({ t: 'run:start', runId, totalTests: allTests.length, timestamp: this.startedAt, tests });
   }
 
   onTestBegin(test: TestCase): void {
