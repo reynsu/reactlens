@@ -22,6 +22,7 @@ import type {
 import type { AblationVariant } from '../../src/eval/ablation-variant-generator';
 import { loadEvalCases } from '../../src/eval/eval-case-loader';
 import { type AblationCache, runAblation } from '../../src/eval/ablation-harness';
+import { anonymizeTitle } from '../../src/eval/sandboxed-failure';
 
 // `makeCuratedCase` now writes a synthetic snapshot.json alongside the
 // component/spec. The snapshot is what causes buildUserMessage to emit
@@ -74,9 +75,16 @@ function scriptedAgent(replies: Script): AgentRunner & {
       const variant: AblationVariant = opts.prompt.includes('<!-- ablation:snapshot-start -->')
         ? 'with-snapshot'
         : 'without-snapshot';
+      // Anonymize script keys before matching: the prompt's `Test: <title>`
+      // line carries the testTitle, which DiagnosisRun's prepare step now
+      // anonymizes via anonymizeTitle (strips the descriptive suffix from
+      // case-NNN-<category> identifiers to prevent ground-truth leakage).
+      // Script keys stay full descriptive names for human readability;
+      // matching anonymizes both sides so the test data and the prompt
+      // line up.
       let matchedName: string | undefined;
       for (const name of Object.keys(replies)) {
-        if (opts.prompt.includes(`Test: ${name}`)) {
+        if (opts.prompt.includes(`Test: ${anonymizeTitle(name)}`)) {
           matchedName = name;
           break;
         }
