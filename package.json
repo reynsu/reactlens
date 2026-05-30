@@ -62,7 +62,7 @@
   },
   "dependencies": {
     "@anthropic-ai/claude-agent-sdk": "^0.2.132",
-    "@reynsu/reactlens-dashboard-ui": "^0.3.0",
+    "@reynsu/reactlens-dashboard-ui": "^0.4.0",
     "@reynsu/reactlens-diagnosis-prompts": "^0.3.0",
     "@reynsu/reactlens-diff-core": "^0.1.0",
     "axe-core": "^4.11.4",
