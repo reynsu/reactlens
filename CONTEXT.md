@@ -27,12 +27,32 @@ A prompt-transform applied during preparation of an `ablation` intent. Today `'w
 The §13 invariant that `truth.json` must never reach the agent-visible cwd during a DiagnosisRun. Enforced in the preparation step for `eval-case` and `ablation` intents via per-run sandbox temp dirs. Violating it makes ADR-0001's ablation metric meaningless (the agent can just `Read` the expected answer).
 _Avoid_: "sandbox" by itself (sandbox is the *mechanism*; the fence is the *invariant*).
 
+## Setup vocabulary
+
+The nouns/verbs of getting reactlens working in a user's project. (Engine internals stay in CLAUDE.md §14; these are the workflow terms a user or maintainer says out loud.)
+
+**Init**:
+The one-time, non-interactive setup act (`reactlens init`) that makes a project **Runnable**: it reads the **Detected stack**, ensures the test runner + mocking deps and a browser are present, and writes the **Scaffold** with the Detected stack interpolated in. Idempotent — re-running after an upgrade or a stack change is safe.
+_Avoid_: "install" (installing deps is one step Init performs, not the whole act).
+
+**Scaffold**:
+The set of reactlens-owned files Init writes into a user's project. reactlens owns these: a re-Init overwrites them without asking, because they must track the installed reactlens version and the user's Detected stack. Distinct from user-owned files (the user's specs, their app code), which Init never touches.
+_Avoid_: "templates" (a template is the source-side blueprint inside the reactlens package; the Scaffold is the materialized, stack-interpolated result in the user's repo — distinct things).
+
+**Detected stack**:
+The inference Init makes about a project — router, build tool, dev-server port, package manager, React version — used to interpolate the Scaffold so it fits the user's actual stack rather than a fixed reference default. The thing that makes a project Runnable out of the box rather than only on the reference stack (Vite + pnpm + port 5173).
+
+**Runnable** (out of the box):
+The state of a project, after Init, in which `reactlens run` works with zero manual file edits, for that project's actual stack. The goal Init serves.
+
 ## Relationships
 
 - A **DiagnosisRun** is parameterized by exactly one **DiagnosisIntent** and produces exactly one **Diagnosis**.
 - A **DiagnosisIntent** of kind `eval-case` or `ablation` triggers the **Calibration fence** during preparation; `live` and `post-mortem` do not.
 - An **ablation** **DiagnosisIntent** carries a **Variant**; other intents do not.
 - The **AblationHarness** (CLAUDE.md §14) is the only caller that drives a **DiagnosisRun** with the `ablation` intent kind.
+- **Init** reads exactly one **Detected stack** and produces the **Scaffold**; a project is **Runnable** only once its Scaffold reflects its Detected stack.
+- A re-**Init** overwrites the **Scaffold** unconditionally but never touches user-owned files; this is why the Scaffold/user-owned boundary is load-bearing.
 
 ## Example dialogue
 

@@ -1,0 +1,170 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-05-30T15:00:00Z",
+  "title": "Design System: reactlens",
+  "extensions": {
+    "colorMeta": {
+      "accent":      { "role": "primary",  "displayName": "Probe Indigo",       "canonical": "#5a57e6", "tonalRamp": ["#1c1b6e", "#2d2b96", "#3d3ab8", "#5a57e6", "#7977ee", "#9897f3", "#c4c3f9", "#ecebff"] },
+      "pass":        { "role": "tertiary", "displayName": "Verified Green",     "canonical": "#2ea043", "tonalRamp": ["#0d3318", "#155424", "#1c7935", "#2ea043", "#56be62", "#85d287", "#bbe6bd", "#e6f4ea"] },
+      "fail":        { "role": "tertiary", "displayName": "Stop Signal",        "canonical": "#e5484d", "tonalRamp": ["#4a0e10", "#691518", "#9e242a", "#e5484d", "#ec7378", "#f29ea2", "#f8c8cb", "#fdecec"] },
+      "warn":        { "role": "tertiary", "displayName": "Workshop Amber",     "canonical": "#e08a1e", "tonalRamp": ["#3d2306", "#5b350a", "#a05f12", "#e08a1e", "#e8a44e", "#f0bd7e", "#f6d6ae", "#fdf3e1"] },
+      "bg":          { "role": "neutral",  "displayName": "Studio Pearl",       "canonical": "#e9ebf0", "tonalRamp": ["#1d2230", "#2a3140", "#475569", "#6b7480", "#8a93a0", "#aeb4c0", "#d6dbe5", "#e9ebf0"] },
+      "window":      { "role": "neutral",  "displayName": "Bench White",        "canonical": "#ffffff" },
+      "panel-2":     { "role": "neutral",  "displayName": "Tooltray Mist",      "canonical": "#f3f5f9" },
+      "ink":         { "role": "neutral",  "displayName": "Editor Black",       "canonical": "#1d2230" },
+      "text":        { "role": "neutral",  "displayName": "Console Slate",      "canonical": "#2a3140" },
+      "muted":       { "role": "neutral",  "displayName": "Margin Slate",       "canonical": "#6b7480" },
+      "code-tag":    { "role": "primary",  "displayName": "Tag Indigo",         "canonical": "#4c46d8" },
+      "code-string": { "role": "tertiary", "displayName": "String Rust",        "canonical": "#b8430a" },
+      "code-number": { "role": "tertiary", "displayName": "Number Teal",        "canonical": "#0e7490" },
+      "code-punct":  { "role": "neutral",  "displayName": "Punctuation Slate",  "canonical": "#94a3b8" }
+    },
+    "typographyMeta": {
+      "display":  { "displayName": "Display",  "purpose": "Test title in the preview header; the largest weighted text per screen." },
+      "headline": { "displayName": "Headline", "purpose": "Selected test row title, active-step banner step name." },
+      "title":    { "displayName": "Title",    "purpose": "The brand wordmark 'reactlens' in the header." },
+      "body":     { "displayName": "Body",     "purpose": "Every other piece of UI text; sentence-case." },
+      "label":    { "displayName": "Label",    "purpose": "Uppercase panel-header eyebrows (one per panel, never per-section)." },
+      "code":     { "displayName": "Code",     "purpose": "React tree, prop/hook values, diff lines, file paths, kbd hints. JetBrains Mono 13.5/1.85." }
+    },
+    "shadows": [
+      { "name": "window-ambient", "value": "0 12px 40px rgba(40,49,64,0.10)", "purpose": "The app window's soft floating-over-the-desk drop shadow. The only persistent shadow on the UI." },
+      { "name": "modal-lift",     "value": "0 20px 50px color-mix(in srgb, var(--text) 25%, transparent)", "purpose": "Apply Fix confirmation card. Heavier because it interrupts the flow." },
+      { "name": "step-pill-active", "value": "0 2px 8px rgba(90,87,230,0.30)", "purpose": "On the currently-active fail step pill in the timeline. Indigo-tinted; the shadow itself carries the brand." },
+      { "name": "stat-dot-halo",  "value": "0 0 0 3px rgba(229,72,77,0.10)", "purpose": "Soft ring around failing test status dots. Reads as a pulse, not a depth shadow." }
+    ],
+    "motion": [
+      { "name": "row-hover",       "value": "background-color 100ms ease-out",  "purpose": "Test rows, filter chips: subtle hover lift." },
+      { "name": "tree-node-hover", "value": "background-color 120ms ease-out",  "purpose": "Component tree node hover; slightly slower than body rows because the tree is the hero surface." },
+      { "name": "reduced-motion",  "value": "all 0.01ms !important",            "purpose": "Global override under prefers-reduced-motion: reduce." }
+    ],
+    "breakpoints": [
+      { "name": "desktop",      "value": "≥1100px", "purpose": "3-col default: tests / preview / inspector at the configured min-widths." },
+      { "name": "tight",        "value": "900-1099px", "purpose": "3-col tighter: sidebars yield ground first, preview keeps breathing room." },
+      { "name": "compact",      "value": "600-899px",  "purpose": "Test list collapses to horizontal pill strip above; 2-col preview + inspector below." },
+      { "name": "stacked",      "value": "<600px",     "purpose": "Vertical stack: tests strip on top, preview, inspector tabs below." }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button (Apply Fix)",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Affirmative-action button. Indigo solid; never red.",
+      "html": "<button class=\"ds-btn-primary\">Apply fix</button>",
+      "css": ".ds-btn-primary { background: var(--color-accent, #5a57e6); color: #fff; padding: 4px 10px; font: 500 11px 'Inter', -apple-system, sans-serif; line-height: 1.3; border: 1px solid var(--color-accent, #5a57e6); border-radius: 6px; cursor: pointer; } .ds-btn-primary:hover { filter: brightness(1.06); } .ds-btn-primary:focus-visible { outline: 2px solid var(--color-accent, #5a57e6); outline-offset: 1px; }"
+    },
+    {
+      "name": "Ghost Button (Copy as git apply)",
+      "kind": "button",
+      "refersTo": "button-ghost",
+      "description": "Secondary action. Transparent fill, muted text.",
+      "html": "<button class=\"ds-btn-ghost\">Copy as git apply</button>",
+      "css": ".ds-btn-ghost { background: transparent; color: var(--color-muted, #6b7480); padding: 4px 12px; font: 400 11px 'Inter', -apple-system, sans-serif; line-height: 1.3; border: 1px solid var(--color-border, #e3e7ee); border-radius: 6px; cursor: pointer; } .ds-btn-ghost:hover { background: var(--color-panel-2, #f3f5f9); }"
+    },
+    {
+      "name": "Pass Stat Pill",
+      "kind": "chip",
+      "refersTo": "stat-pill-pass",
+      "description": "Header stat pill for passed test count.",
+      "html": "<span class=\"ds-pill-pass\"><span aria-hidden=\"true\">✓</span><span>7</span></span>",
+      "css": ".ds-pill-pass { display: inline-flex; align-items: center; gap: 5px; padding: 4px 9px; border-radius: 999px; font: 600 11.5px 'Inter', sans-serif; font-feature-settings: 'tnum'; background: var(--color-pass-soft, #e6f4ea); color: var(--color-pass-ink, #166534); border: 1px solid rgba(46,160,67,0.18); white-space: nowrap; }"
+    },
+    {
+      "name": "Fail Stat Pill",
+      "kind": "chip",
+      "refersTo": "stat-pill-fail",
+      "description": "Header stat pill for failed test count.",
+      "html": "<span class=\"ds-pill-fail\"><span aria-hidden=\"true\">✗</span><span>2</span></span>",
+      "css": ".ds-pill-fail { display: inline-flex; align-items: center; gap: 5px; padding: 4px 9px; border-radius: 999px; font: 600 11.5px 'Inter', sans-serif; font-feature-settings: 'tnum'; background: var(--color-fail-soft, #fdecec); color: var(--color-fail-ink, #861c20); border: 1px solid rgba(229,72,77,0.20); white-space: nowrap; }"
+    },
+    {
+      "name": "Selected Test Row",
+      "kind": "card",
+      "refersTo": "test-row-selected",
+      "description": "Test list row when selected. Lens Mist fill + indigo ring + accent-ink title.",
+      "html": "<div class=\"ds-test-row\"><span class=\"ds-test-row__dot\" aria-hidden=\"true\"></span><span class=\"ds-test-row__title\">cart shows the correct subtotal</span><span class=\"ds-test-row__duration\">6118ms</span></div>",
+      "css": ".ds-test-row { display: grid; grid-template-columns: 14px 1fr auto; gap: 10px; align-items: center; padding: 8px 10px; border-radius: 8px; background: var(--color-accent-soft, #ecebff); box-shadow: inset 0 0 0 1px rgba(90,87,230,0.20); cursor: pointer; } .ds-test-row__dot { width: 9px; height: 9px; border-radius: 50%; background: var(--color-fail, #e5484d); box-shadow: 0 0 0 3px rgba(229,72,77,0.10); } .ds-test-row__title { font: 500 13px 'Inter', sans-serif; color: var(--color-accent-ink, #3d3ab8); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; } .ds-test-row__duration { font: 400 11px 'JetBrains Mono', ui-monospace, monospace; font-feature-settings: 'tnum'; color: var(--color-muted, #6b7480); }"
+    },
+    {
+      "name": "Real-Bug Badge",
+      "kind": "chip",
+      "refersTo": "badge-real-bug",
+      "description": "Diagnosis classification badge for real-bug verdicts.",
+      "html": "<span class=\"ds-badge-real-bug\">real-bug</span>",
+      "css": ".ds-badge-real-bug { display: inline-block; padding: 2px 9px; border-radius: 999px; font: 600 11px 'Inter', sans-serif; text-transform: uppercase; letter-spacing: 0.03em; background: var(--color-fail-soft, #fdecec); color: var(--color-fail, #e5484d); }"
+    },
+    {
+      "name": "Tab (selected)",
+      "kind": "nav",
+      "refersTo": "tab-selected",
+      "description": "Inspector tab when selected. Lifted off the tablist with a soft shadow.",
+      "html": "<button class=\"ds-tab--selected\" role=\"tab\" aria-selected=\"true\">Diagnostics<span class=\"ds-tab__dot\" aria-hidden=\"true\"></span></button>",
+      "css": ".ds-tab--selected { display: inline-flex; align-items: center; gap: 6px; padding: 5px 12px; border-radius: 8px; background: var(--color-window, #fff); color: var(--color-accent-ink, #3d3ab8); border: 1px solid var(--color-border-strong, #d6dbe5); font: 600 11px 'Inter', sans-serif; letter-spacing: 0.07em; text-transform: uppercase; cursor: pointer; box-shadow: 0 1px 2px rgba(40,49,64,0.04); } .ds-tab__dot { width: 7px; height: 7px; border-radius: 50%; background: var(--color-fail, #e5484d); box-shadow: 0 0 0 3px rgba(229,72,77,0.10); }"
+    },
+    {
+      "name": "Search Input (test filter)",
+      "kind": "input",
+      "description": "Filter tests by name. Cmd+F focuses globally.",
+      "html": "<div class=\"ds-search\"><svg class=\"ds-search__icon\" viewBox=\"0 0 16 16\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" aria-hidden=\"true\"><circle cx=\"7\" cy=\"7\" r=\"5\"/><path d=\"m11 11 3 3\"/></svg><input type=\"text\" placeholder=\"Filter tests…\" aria-label=\"Filter tests\"><span class=\"ds-search__kbd\" aria-hidden=\"true\">⌘F</span></div>",
+      "css": ".ds-search { position: relative; } .ds-search input { width: 100%; padding: 7px 36px 7px 30px; border: 1px solid var(--color-border-strong, #d6dbe5); background: var(--color-window, #fff); border-radius: 8px; font: 400 12.5px 'Inter', sans-serif; color: var(--color-text, #2a3140); outline: none; } .ds-search input::placeholder { color: var(--color-muted-2, #8a93a0); } .ds-search input:focus { border-color: var(--color-accent, #5a57e6); box-shadow: 0 0 0 3px rgba(90,87,230,0.12); } .ds-search__icon { position: absolute; left: 10px; top: 50%; transform: translateY(-50%); width: 13px; height: 13px; color: var(--color-muted, #6b7480); pointer-events: none; } .ds-search__kbd { position: absolute; right: 6px; top: 50%; transform: translateY(-50%); font: 600 10px 'JetBrains Mono', ui-monospace, monospace; background: var(--color-panel-2, #f3f5f9); color: var(--color-muted, #6b7480); padding: 2px 5px; border-radius: 4px; border: 1px solid var(--color-border, #e3e7ee); pointer-events: none; }"
+    },
+    {
+      "name": "Tree Node (active-owner)",
+      "kind": "custom",
+      "description": "The signature: a React fiber rendered as syntax-coloured JSX, marked as the current Playwright step's owner.",
+      "html": "<span class=\"ds-tree-node ds-tree-node--active\"><span class=\"ds-tree-toggle\">▾</span><span class=\"ds-tree-punct\">&lt;</span><span class=\"ds-tree-tag\">CartPage</span><span class=\"ds-tree-punct\">&gt;</span></span>",
+      "css": ".ds-tree-node { position: relative; display: block; padding: 1px 8px; margin: 0 -8px; border-radius: 4px; font: 400 13.5px/1.85 'JetBrains Mono', ui-monospace, monospace; letter-spacing: -0.005em; cursor: pointer; transition: background-color 120ms ease-out; } .ds-tree-node--active { background: var(--color-evidence-bg, #fef3c7); } .ds-tree-node--active::after { content: ''; position: absolute; left: 8px; right: 8px; bottom: 2px; height: 2px; background: var(--color-accent, #5a57e6); border-radius: 1px; } .ds-tree-toggle { color: var(--color-muted-2, #8a93a0); width: 14px; display: inline-block; } .ds-tree-tag { color: var(--color-code-tag, #4c46d8); font-weight: 600; } .ds-tree-punct { color: var(--color-code-punct, #94a3b8); }"
+    },
+    {
+      "name": "Step Pill (active fail)",
+      "kind": "chip",
+      "description": "Active failing step in the timeline. Solid indigo with indigo-tinted shadow.",
+      "html": "<button class=\"ds-step-pill\" aria-current=\"step\"><span class=\"ds-step-pill__glyph\">✗</span> expect \"14\" subtotal</button>",
+      "css": ".ds-step-pill { display: inline-flex; align-items: center; gap: 6px; padding: 5px 10px; background: var(--color-accent, #5a57e6); color: #fff; border: 1px solid var(--color-accent, #5a57e6); border-radius: 8px; font: 600 11.5px 'JetBrains Mono', ui-monospace, monospace; cursor: pointer; box-shadow: 0 2px 8px rgba(90,87,230,0.30); } .ds-step-pill__glyph { font-family: 'Inter', sans-serif; font-size: 12px; }"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Watchmaker's Bench",
+    "overview": "reactlens is the workspace of a careful technician. The dashboard is the bench: flat, well-lit, materials laid out where you need them. The React component tree is the movement under the loupe, magnified and rendered as code so you can read the gears. The browser-window chrome places the work in a frame without dressing it. Every other element of the dashboard exists to serve the moment of diagnosis: which test failed, what the component was rendering, where in the code to make the change. The voice is Technical, Honest, Opinionated. The aesthetic is product-restrained: dense where information demands it, generous where the operator needs to breathe. Indigo is the brand but appears on ≤10% of any surface; it carries selection, primary action, and the brand mark, nothing decorative.",
+    "keyCharacteristics": [
+      "Layered light surfaces, each ~1-2% luminance step apart, so depth reads without grayness.",
+      "Two-family typography: Inter for sans, JetBrains Mono for code. No display face; weight contrast carries hierarchy.",
+      "Semantic colour triplets (base / soft / ink) per state — pass / fail / warn / skip.",
+      "ARIA tree pattern + full keyboard navigation + WCAG 2.2 AA contrast.",
+      "3-column grid that collapses through 3 breakpoints to a stacked phone layout."
+    ],
+    "rules": [
+      { "name": "The 10% Indigo Rule",            "body": "Probe Indigo and its derivatives appear on ≤10% of any rendered surface. Its rarity is the point: it is what the operator is supposed to look at.", "section": "colors" },
+      { "name": "The Triplet Rule",               "body": "Every semantic state colour ships as a triplet: base / soft / ink. Pills use bg = soft, text = ink, border = base at 18-25% alpha.", "section": "colors" },
+      { "name": "The Same-Code-Two-Surfaces Rule", "body": "The component tree and the patch diff both render code; both must use the code-syntax palette unmodified. A `return` keyword in the tree and a `return` keyword in a patch are the same colour.", "section": "colors" },
+      { "name": "The Hero-Is-The-Tree Rule",      "body": "The component tree is rendered at 13.5px JetBrains Mono with the 1.85 line-height. It is the only display surface in the dashboard.", "section": "typography" },
+      { "name": "The One-Eyebrow-Per-Panel Rule", "body": "Each panel may declare one uppercase Label header. Sub-sections inside the panel must use other weight + size contrasts, never additional eyebrows.", "section": "typography" },
+      { "name": "The No-Display-Font Rule",       "body": "Two families total: Inter + JetBrains Mono. No serif, no extra sans, no display face.", "section": "typography" },
+      { "name": "The Flat-By-Default Rule",       "body": "Surfaces are flat at rest. Depth comes from luminance steps and 1px borders, not from shadows.", "section": "elevation" },
+      { "name": "The Ambient-Only Rule",          "body": "Shadows are atmospheric: they signal that something floats, lifts, or pulses; never that something is heavy.", "section": "elevation" }
+    ],
+    "dos": [
+      "Do preserve the layered light surface scale.",
+      "Do keep the 10% Indigo Rule.",
+      "Do ship semantic state colours as triplets.",
+      "Do render the React component tree and code patches with the same code-syntax palette.",
+      "Do use Inter for UI; JetBrains Mono for code. Two families, no exceptions.",
+      "Do keep new components flat by default.",
+      "Do honour prefers-reduced-motion.",
+      "Do wire keyboard navigation on every interactive component."
+    ],
+    "donts": [
+      "Don't add a side stripe greater than 1px as a colored accent.",
+      "Don't use gradient text.",
+      "Don't add a third type family.",
+      "Don't use uppercase eyebrows on every section.",
+      "Don't number sections by reflex.",
+      "Don't look like Cypress, Vitest UI, Storybook, Sentry, Datadog, or Grafana.",
+      "Don't use Stop Signal red for affirmative actions.",
+      "Don't ship a status dot whose meaning depends only on colour.",
+      "Don't render code as plain text.",
+      "Don't let panels overflow horizontally."
+    ]
+  }
+}

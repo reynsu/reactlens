@@ -86,6 +86,11 @@ These short sections are linked from `ReactLensError.helpUrl` so the CLI can poi
 
 `reactlens analyze` needs a Playwright report from a prior `reactlens run`. Run `reactlens run` first (or pass `--report <path>` if the JSON report lives somewhere other than the default `playwright-report/results.json`).
 
+<a id="generate-no-components"></a>
+## `GENERATE_NO_COMPONENTS`
+
+`reactlens generate` resolved its `componentGlobs` (or the `--pages` flag) to zero files, so there is nothing to write tests for. Check `componentGlobs` in `reactlens.config.ts`: confirm the patterns are relative to the directory you run `generate` from, point at your component files (e.g. `src/**/*.tsx`), and aren't accidentally excluding everything. If you passed `--pages`, verify that single pattern matches. Run from the package root, or pass `--cwd <path>` if your components live elsewhere.
+
 <a id="agent-credentials"></a>
 ## `*_NO_AGENT` — generate / run / analyze / regen need an agent
 

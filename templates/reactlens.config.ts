@@ -19,11 +19,6 @@ export default defineConfig({
     specs: 'e2e/specs',
   },
 
-  // Where MSW handlers shared by generated tests live.
-  msw: {
-    handlers: 'src/mocks/handlers.ts',
-  },
-
   // Dashboard server.
   dashboard: {
     port: 7777,

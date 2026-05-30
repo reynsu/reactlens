@@ -16,7 +16,6 @@ export type GenerateOptions = {
   componentPath: string;
   analysis: ComponentAnalysis;
   outputs: { pages: string; specs: string };
-  mswHandlers: string;
   agent: AgentRunner;
   onProgress?: (event: GenerateProgress) => void;
   // v0.3 slice 6 phase 2: when provided, the delegate calls
@@ -54,9 +53,9 @@ function buildUserMessage(
     lines.push(`## ${tc.state.name}`);
     lines.push(`- description: ${tc.state.description}`);
     lines.push(`- conditions: ${tc.state.conditions.join(' OR ') || '(default render)'}`);
-    if (tc.mswHandlers.length > 0) {
-      lines.push(`- API handlers needed:`);
-      for (const h of tc.mswHandlers) lines.push(`  - ${h}`);
+    if (tc.routeOverrides.length > 0) {
+      lines.push(`- page.route overrides needed:`);
+      for (const r of tc.routeOverrides) lines.push(`  - ${r}`);
     }
     if (tc.actions.length > 0) {
       lines.push(`- suggested actions: ${tc.actions.join('; ')}`);
@@ -71,12 +70,10 @@ function buildUserMessage(
   if (outputFormat.kind === 'pom') {
     lines.push(`- pages directory: ${outputFormat.pagesDir}`);
     lines.push(`- specs directory: ${outputFormat.specsDir}`);
-    lines.push(`- shared MSW handlers file: ${opts.mswHandlers}`);
     lines.push(``);
     lines.push(`Generate the POM and spec following the system prompt's rules.`);
   } else {
     lines.push(`- specs directory: ${outputFormat.specsDir}`);
-    lines.push(`- shared MSW handlers file: ${opts.mswHandlers}`);
     lines.push(``);
     lines.push(
       `Generate a single self-contained Component-Object spec following the system prompt's rules. Do NOT emit a Page Object class.`,
@@ -99,7 +96,6 @@ export async function generateTests(opts: GenerateOptions): Promise<GenerateResu
       // don't affect the decision so we synthesize a minimal config object.
       ...effectiveConfig,
       componentGlobs: [],
-      msw: { handlers: opts.mswHandlers },
       dashboard: { port: 7777, open: true },
     } as ReactLensConfig,
   });

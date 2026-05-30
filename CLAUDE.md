@@ -107,7 +107,7 @@ When generating tests, we don't just look at the rendered DOM. We:
 
 - Parse the component source with `ts-morph` to find all `useState`, `useReducer`, conditional renders, error boundaries, query states (`isLoading`, `isError`, `isSuccess`)
 - Enumerate the **set of visual states** the component can be in
-- Generate tests that explicitly provoke each state (with MSW mocks for API states)
+- Generate tests that explicitly provoke each state (with Playwright `page.route` mocks for API states)
 
 A `<Checkout>` component yields tests for: empty cart, loading, success, network error, validation error per field, payment declined. Not just the happy path.
 
@@ -168,10 +168,10 @@ axe-core runs against the rendered DOM at end-of-test (P13). Each `result.violat
 | CLI parsing | `commander` v12+ | Subcommands per action |
 | Config validation | `zod` | Single source of truth |
 | AI orchestration | `@anthropic-ai/claude-agent-sdk` | V1 `query()` API |
-| Test runner | `@playwright/test` | Peer dependency; user installs |
+| Test runner | `@playwright/test` | Declared `peerDependency`; `reactlens init` installs it + the chromium browser (see [ADR-0010](docs/adr/0010-interpolate-detected-stack-into-scaffold-at-init.md)) |
 | **AST parsing** | `ts-morph` | For component-aware generation |
 | **React tree capture** | Custom probe + `bippy` lib | `bippy` provides safe access to React internals across versions |
-| **API mocking** | `msw` | Generated tests use MSW handlers to provoke component states |
+| **API mocking** | Playwright `page.route` | Generated tests provoke component states via per-test route overrides. MSW removed from the out-of-the-box path — see [ADR-0011](docs/adr/0011-page-route-over-msw-for-state-provocation.md) |
 | **File watching** | `chokidar` v5+ | Watch mode (capability 4.6); only cross-platform recursive watcher (`fs.watch` lacks recursive on Linux) |
 | **Accessibility audit** | `axe-core` | Injected into the page at end-of-test for capability 4.9 |
 | Dashboard backend | `express` + `ws` | Plain WebSocket; no socket.io |
@@ -184,7 +184,7 @@ axe-core runs against the rendered DOM at end-of-test (P13). Each `result.violat
 
 - **`ts-morph`**: stable AST API over TypeScript. Needed for capability 4.2 (enumerating component states from source). Lower-level alternatives like `@babel/parser` force walking untyped trees.
 - **`bippy`**: small library that wraps React's internal fiber access in a version-safe way. Without it, every React minor version risks breaking our component tree capture. Use this rather than touching `__REACT_DEVTOOLS_GLOBAL_HOOK__` directly.
-- **`msw`**: necessary because our generated tests need to mock APIs to provoke loading/error states. Generating tests that depend on a real backend would make them flaky and useless.
+- **Playwright `page.route`** (not `msw`): generated tests provoke loading/error/empty states with per-test route overrides. `page.route` is Playwright-native, needs no service worker, and requires zero wiring in the user's app — so it never has to touch a user-owned file. The earlier MSW plan was never implemented (no worker, no app bootstrap, no `?mocks=off` gate) and is removed from the out-of-the-box path. See [ADR-0011](docs/adr/0011-page-route-over-msw-for-state-provocation.md).
 - **`chokidar`**: capability 4.6 (watch mode). `fs.watch({ recursive: true })` is unsupported on Linux, so the built-in API can't drive a portable watch loop. chokidar normalizes macOS FSEvents, Linux inotify, and Windows watchers under one event surface and handles debouncing + symlink edge cases.
 - **`axe-core`**: capability 4.9 (a11y violations). Source bundled and injected into the page via `page.evaluate(axeSource)` at end-of-test — no separate runner. The fixture reads `REACTLENS_AXE_PATH` first (set by the runner for dev with pnpm strict isolation), then falls back to `require.resolve('axe-core/axe.min.js')` in user installs.
 
@@ -282,7 +282,7 @@ reactlens/
 │   │   ├── component-analyzer.ts ← extracts state machine from source
 │   │   └── route-analyzer.ts     ← finds routes per stack
 │   ├── visual-states/            ← canonical visual-state catalog
-│   │   └── visual-states.ts      ← single source: matchers + msw + assertions
+│   │   └── visual-states.ts      ← single source: matchers + page.route recipe + assertions
 │   ├── dashboard/
 │   │   ├── server.ts             ← past-runs API routes via RunsArea
 │   │   ├── web/
@@ -400,8 +400,12 @@ Everything that flows between the runner, the dashboard server, the dashboard fr
 ```ts
 type RunEvent =
   // Run lifecycle. runId added v0.2 (P8.1) — sortable ISO+hex string,
-  // doubles as the directory key for .reactlens/runs/<runId>/.
-  | { t: 'run:start'; runId: string; totalTests: number; timestamp: number }
+  // doubles as the directory key for .reactlens/runs/<runId>/. `tests` added
+  // v0.3 — the full suite roster the reporter enumerates at onBegin (each id
+  // matches the later test:start), so the dashboard renders the complete list
+  // up front, every row `pending` until its own test:start/test:end arrives.
+  // Optional for back-compat with standalone runs + pre-v0.3 persisted runs.
+  | { t: 'run:start'; runId: string; totalTests: number; timestamp: number; tests?: { id: string; title: string; file: string; suite: string }[] }
   | { t: 'run:end'; passed: number; failed: number; skipped: number; duration: number }
 
   // Test lifecycle
@@ -611,7 +615,7 @@ pnpm build && node bin/reactlens.js diff <runIdA> <runIdB> --cwd <app>  # semant
 - **loadPromptSource** — `src/agent/prompt-loader.ts`. Dual-layout (bundled CLI / dev tsx) prompt-file resolver. Consumed by `src/generator/delegate.ts` and `src/commands/internal-probe-bundle.ts`. NOT used by DiagnosisRun — its system prompts ship as plain text constants from `@reynsu/reactlens-diagnosis-prompts`.
 - **RunsArea / RunPath** — `src/runs/run-paths.ts`. Per-cwd / per-run value objects that own the `.reactlens/runs/<id>/` layout. Single source for ID validation (read-side `assertSafeId` + write-side `sanitizeSegment`), eager `.gitignore` write, and the runs-listing API.
 - **runEventSchema / parseRunEvent** — `src/runner/events.ts`. Runtime Zod validator for the canonical `RunEvent` union. Enforced at every untyped ingestion point (Playwright stdin, WS probe, persisted JSONL replay). Bidirectional compile-time guard keeps the schema and the TS union aligned.
-- **VISUAL_STATES catalog** — `src/visual-states/visual-states.ts`. Single source for per-visual-state data: matcher regex, description, MSW recipe, assertions. Adding a state is one row; component-analyzer and state-machine import from it as peers.
+- **VISUAL_STATES catalog** — `src/visual-states/visual-states.ts`. Single source for per-visual-state data: matcher regex, description, `page.route` recipe, assertions. Adding a state is one row; component-analyzer and state-machine import from it as peers.
 - **AblationHarness** — `src/eval/ablation-harness.ts`. The moat-contribution measurement. `runAblation({cases, agent, cache?})` loops every (case × variant) tuple, optionally short-circuits through `AblationCache`, and emits an `AblationReport` with overall + per-classification + per-confidence breakdowns. Post-#46 the harness owns DiagnosisRun construction internally; the pre-#47 `DiagnoseFn` injection seam is gone. The single number reactlens claims publicly (per ADR-0008) — its accuracy delta with vs without the component snapshot.
 - **AblationCache** — `src/eval/ablation-cache.ts`. `createFileCache({root})` returns an `AblationCache` keyed by `sha256(component.tsx + spec.ts + truth.json + variant)`. Content-hashing means automatic invalidation when a case input changes; persists at `<root>/<hash>.json` (production: `<cwd>/.reactlens/eval-cache/`). Issue #8 acceptance: re-running with no input changes does not re-invoke the agent.
 - **Calibration (AblationReport field)** — `src/eval/ablation-harness.ts`. Optional secondary metric on `AblationReport` (NOT in headline, NOT in CI gate — ADR-0001 intentionally unchanged). Three counts over paired curated cases: `speculativeHighCount` (without-snapshot emits 'high' while with-snapshot emits less), `confidenceBoostCount` (with-snapshot strictly exceeds without-snapshot), `confidenceMatchCount` (both equal). Plus rates derived from paired-case denominator. Catches the moat signal `accuracy + falseConfidenceRate` is structurally blind to: cases where both variants classify correctly but the snapshotless agent is over-confident (case-020 in `finding_ablation_delta_zero.md`). Old baselines without this field are tolerated — `compareToBaseline` ignores it. Graduates to headline + ADR-0001 amendment when enough datapoints accumulate (deferred to operator judgment).

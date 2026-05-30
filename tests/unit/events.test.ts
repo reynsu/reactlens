@@ -12,6 +12,15 @@ describe('parseRunEvent — happy path per variant', () => {
     expect(out).toEqual({ t: 'run:start', runId: 'r1', totalTests: 3, timestamp: 1700000000000 });
   });
 
+  it('parses run:start with the suite roster (v0.3)', () => {
+    const tests = [
+      { id: 't1', title: 'cart shows the correct subtotal', file: '/app/e2e/cart.spec.ts', suite: 'cart.spec.ts' },
+      { id: 't2', title: 'CartPage shows idle', file: '/app/e2e/cart.spec.ts', suite: 'CartPage' },
+    ];
+    const out = parseRunEvent({ t: 'run:start', runId: 'r1', totalTests: 2, timestamp: 0, tests });
+    expect(out).toEqual({ t: 'run:start', runId: 'r1', totalTests: 2, timestamp: 0, tests });
+  });
+
   it('parses run:end', () => {
     const out = parseRunEvent({ t: 'run:end', passed: 2, failed: 1, skipped: 0, duration: 1234 });
     expect(out).toMatchObject({ t: 'run:end', passed: 2, failed: 1, skipped: 0, duration: 1234 });

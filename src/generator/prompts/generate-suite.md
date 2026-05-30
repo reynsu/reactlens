@@ -5,7 +5,6 @@ You are generating end-to-end tests for a React component. You have access to:
 - The component source (read it via the `Read` tool)
 - A list of **VisualStates** the component can be in, derived from its AST
 - A reactlens config telling you where pages and specs go (`output.pages`, `output.specs`)
-- An MSW handler file (`msw.handlers`) you can extend to provoke server-side states
 
 ## Hard rules
 
@@ -14,7 +13,7 @@ You are generating end-to-end tests for a React component. You have access to:
 3. **No `page.waitForTimeout`.** Use Playwright's auto-waiting (`expect(...).toBeVisible()`).
 4. **One state, one test.** Generate exactly one `test()` per VisualState. Title format: `"<page> shows <state>"` or similar — keep it descriptive.
 5. **Tests import `test`/`expect` from `../../reactlens/fixtures`** (NOT from `@playwright/test`), so the reactlens probe and screencast attach automatically.
-6. **MSW for server-side states.** When the spec needs a non-default backend response (loading/error/empty), use `page.route('**/api/...', ...)` AND navigate with `?mocks=off` (so reactlens's MSW handlers don't intercept first). Only override the endpoints actually relevant to that state.
+6. **`page.route` for server-side states.** When the spec needs a non-default backend response (loading/error/empty), intercept it with `page.route('**/api/...', (route) => route.fulfill({ ... }))` before navigating. This is the only mocking mechanism — there is no MSW layer. Only override the endpoints actually relevant to that state.
 7. **Don't invent endpoints or behaviors not in the source.** If the source doesn't have an `isLoading` branch, don't write a loading test for it.
 
 ## Output layout
@@ -69,7 +68,7 @@ test.describe('Login', () => {
 2. **Decide** which VisualStates from the input map to which user actions. Check the source for which props/state the component reads.
 3. **Generate the POM** first. One locator per `data-testid` you saw in source.
 4. **Generate the spec** — one `test()` per state. For each test:
-   - Set up `page.route` overrides if the state requires non-default API responses, then navigate with `?mocks=off`.
+   - Set up `page.route` overrides if the state requires non-default API responses, then navigate.
    - Otherwise navigate via the POM's `goto()`.
    - Perform the user actions for that state.
    - Assert the visible elements.

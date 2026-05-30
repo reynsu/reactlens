@@ -42,7 +42,20 @@
       "Bash(npx --yes html-validate docs/portal/index.html)",
       "Bash(open docs/portal/index.html)",
       "Bash(tee eval-baseline-prompt-refined.log)",
-      "Bash(git commit *)"
+      "Bash(git commit *)",
+      "Bash(npx impeccable *)",
+      "Bash(echo \"=== local .claude/skills ===\"; ls -la .claude/skills/ 2>/dev/null | head; echo; echo \"=== impeccable-related in local .claude ===\"; find .claude -iname '*impeccable*' -maxdepth 3 2>/dev/null | head -40; echo; echo \"=== global ~/.claude/skills ===\"; ls ~/.claude/skills/ 2>/dev/null | head -40)",
+      "Read(//private/tmp/**)",
+      "Bash(node /Users/rey/.claude/skills/i-impeccable/scripts/context.mjs)",
+      "Bash(echo \"=== exit code: $? ===\")",
+      "Bash(node /Users/rey/.claude/skills/i-impeccable/scripts/context-signals.mjs)",
+      "Bash(git check-ignore *)",
+      "Bash(cd /Users/rey/Dev/Personal_Projects/reactlens-dashboard-ui; echo \"=== importers of src/types ===\"; grep -rln \"from '\\\\.\\\\./types'\\\\|from '\\\\./types'\\\\|from '\\\\.\\\\./\\\\.\\\\./types'\" src | grep -v node_modules)",
+      "Bash(./node_modules/.bin/tsc --noEmit)",
+      "Bash(echo \"TSC_EXIT=$?\")",
+      "Bash(./node_modules/.bin/vitest run *)",
+      "Bash(node /Users/rey/.claude/skills/i-impeccable/scripts/detect.mjs --json /Users/rey/Dev/Personal_Projects/reactlens-dashboard-ui/src)",
+      "mcp__Claude_Preview__preview_start"
     ]
   },
   "enabledPlugins": {

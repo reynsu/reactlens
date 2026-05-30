@@ -12,7 +12,6 @@ function makeConfig(pattern: 'pom' | 'component-object'): ReactLensConfig {
   return {
     componentGlobs: ['src/**/*.tsx'],
     output: { pages: 'e2e/pages', specs: 'e2e/specs' },
-    msw: { handlers: 'src/mocks/handlers.ts' },
     dashboard: { port: 7777, open: true },
     pattern,
   };

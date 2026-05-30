@@ -79,8 +79,19 @@ export type AxNode = {
 import type { Diagnosis } from '@reynsu/reactlens-diagnosis-prompts';
 export type { Diagnosis };
 
+// One entry per test in the suite roster the reporter enumerates at onBegin
+// (before any test runs). Shipped on `run:start` so the dashboard can render
+// the complete test list up front, every entry `pending` until its own
+// test:start/test:end arrives. `id` MUST match the id the reporter later emits
+// on test:start so the dashboard reducer can flip the same row in place.
+export type TestPlanEntry = { id: string; title: string; file: string; suite: string };
+
 export type RunEvent =
-  | { t: 'run:start'; runId: string; totalTests: number; timestamp: number }
+  // `tests` (v0.3) is the full suite roster enumerated at onBegin. Optional
+  // for back-compat: standalone `playwright test` runs and pre-v0.3 persisted
+  // runs omit it, and the dashboard falls back to populating the list
+  // incrementally from test:start events.
+  | { t: 'run:start'; runId: string; totalTests: number; timestamp: number; tests?: TestPlanEntry[] }
   | { t: 'run:end'; passed: number; failed: number; skipped: number; duration: number }
   | { t: 'test:start'; id: string; title: string; file: string; suite: string }
   | {
@@ -337,6 +348,16 @@ export const runEventSchema = z.discriminatedUnion('t', [
     runId: z.string(),
     totalTests: z.number(),
     timestamp: z.number(),
+    tests: z
+      .array(
+        z.object({
+          id: z.string(),
+          title: z.string(),
+          file: z.string(),
+          suite: z.string(),
+        }),
+      )
+      .optional(),
   }),
   z.object({
     t: z.literal('run:end'),

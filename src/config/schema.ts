@@ -15,10 +15,6 @@ const outputSchema = z.object({
   specs: z.string().default('e2e/specs'),
 });
 
-const mswSchema = z.object({
-  handlers: z.string().default('src/mocks/handlers.ts'),
-});
-
 const dashboardSchema = z.object({
   port: z.number().int().min(1).max(65535).default(7777),
   open: z.boolean().default(true),
@@ -29,7 +25,6 @@ export const reactlensConfigSchema = z.object({
     .array(z.string())
     .default(['src/pages/**/*.tsx', 'src/components/**/*.tsx']),
   output: withDefault(outputSchema),
-  msw: withDefault(mswSchema),
   dashboard: withDefault(dashboardSchema),
   // v0.3 slice 6 (ADR-0006): test pattern selection.
   //   - 'pom' (default): generated specs use Page Object Pattern, portable
