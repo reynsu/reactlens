@@ -12,8 +12,8 @@ importers:
         specifier: ^0.2.132
         version: 0.2.141(zod@4.4.3)
       '@reynsu/reactlens-dashboard-ui':
-        specifier: ^0.3.0
-        version: 0.3.0(@reynsu/reactlens-diagnosis-prompts@0.3.0(zod@4.4.3))
+        specifier: ^0.4.0
+        version: 0.4.0(@reynsu/reactlens-diagnosis-prompts@0.3.0(zod@4.4.3))
       '@reynsu/reactlens-diagnosis-prompts':
         specifier: ^0.3.0
         version: 0.3.0(zod@4.4.3)
@@ -511,8 +511,8 @@ packages:
     engines: {node: '>=18'}
     hasBin: true
 
-  '@reynsu/reactlens-dashboard-ui@0.3.0':
-    resolution: {integrity: sha512-e7sx8niDKULytMN+KejtcPJNgQRiueSJZaEA3p6Sl6gAP+RznmVOunHjoJQMWGtYIOPdfXJiNzcp9/kTUpYn/Q==}
+  '@reynsu/reactlens-dashboard-ui@0.4.0':
+    resolution: {integrity: sha512-C38DZVmO82JvaQEUADIsyeA5ZuN/5msKuU85G9ftvvqrZ/RH19HHY4IPF9/jB+iETXIZG05poLKj46bAFTPXgA==}
     peerDependencies:
       '@reynsu/reactlens-diagnosis-prompts': '>=0.2.0 <1'
 
@@ -2133,7 +2133,7 @@ snapshots:
     dependencies:
       playwright: 1.60.0
 
-  '@reynsu/reactlens-dashboard-ui@0.3.0(@reynsu/reactlens-diagnosis-prompts@0.3.0(zod@4.4.3))':
+  '@reynsu/reactlens-dashboard-ui@0.4.0(@reynsu/reactlens-diagnosis-prompts@0.3.0(zod@4.4.3))':
     dependencies:
       '@reynsu/reactlens-diagnosis-prompts': 0.3.0(zod@4.4.3)
 
