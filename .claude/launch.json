@@ -1,0 +1,26 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "dashboard",
+      "runtimeExecutable": "sh",
+      "runtimeArgs": ["-c", "cd /Users/rey/Dev/Personal_Projects/reactlens-sandbox && exec npx reactlens run --watch"],
+      "port": 7777,
+      "autoPort": false
+    },
+    {
+      "name": "mock",
+      "runtimeExecutable": "sh",
+      "runtimeArgs": ["-c", "cd /tmp/reactlens-mock && exec python3 -m http.server 5555"],
+      "port": 5555,
+      "autoPort": false
+    },
+    {
+      "name": "dashboard-dev",
+      "runtimeExecutable": "sh",
+      "runtimeArgs": ["-c", "cd /Users/rey/Dev/Personal_Projects/reactlens-dashboard-ui && exec pnpm dev"],
+      "port": 5173,
+      "autoPort": false
+    }
+  ]
+}
