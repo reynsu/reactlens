@@ -83,6 +83,10 @@ export class EventPersistor implements EventSink {
         stepId,
         sessionId: event.sessionId,
         frameRef,
+        // #76: carry the capture time onto the disk line so the frame-track
+        // builder (#78) can replay at true cadence. Omitted when the wire
+        // frame had none (standalone runs / CDP metadata without a timestamp).
+        ...(event.timestamp !== undefined ? { timestamp: event.timestamp } : {}),
       });
       return;
     }

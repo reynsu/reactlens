@@ -128,6 +128,12 @@ export type RunEvent =
       // Absent on legacy / web-only frames (consumer defaults to 'web');
       // nativelens emits `'native'` so the DevicePreview plugin picks them up.
       source?: string;
+      // #76: capture time of this frame in epoch milliseconds, sourced from
+      // Page.screencastFrame metadata. Carries end-to-end (wire → disk JSONL)
+      // so a recorded run can later be played back at its true cadence (#78/#79).
+      // Optional for back-compat with pre-#76 persisted runs and standalone
+      // runs whose CDP metadata omits a timestamp.
+      timestamp?: number;
     }
   | {
       t: 'component:snapshot';
@@ -401,6 +407,7 @@ export const runEventSchema = z.discriminatedUnion('t', [
     frameRef: z.string().optional(),
     stepId: z.string().optional(),
     source: z.string().optional(),
+    timestamp: z.number().optional(),
   }),
   z.object({
     t: z.literal('component:snapshot'),

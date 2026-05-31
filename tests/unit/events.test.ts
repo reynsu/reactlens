@@ -100,6 +100,53 @@ describe('parseRunEvent — happy path per variant', () => {
     }
   });
 
+  it('parses a WIRE frame carrying an optional timestamp (#76)', () => {
+    // #76: per-frame timing flows end-to-end so a recorded run can later
+    // be played back at its true cadence. Sourced from Page.screencastFrame
+    // metadata in the fixture, validated here at the boundary like any field.
+    const out = parseRunEvent({
+      t: 'frame',
+      testId: 't1',
+      sessionId: 'sess-1',
+      data: 'BASE64==',
+      timestamp: 1700000000123,
+    });
+    expect(out?.t).toBe('frame');
+    if (out?.t === 'frame') {
+      expect(out.timestamp).toBe(1700000000123);
+    }
+  });
+
+  it('parses a frame WITHOUT a timestamp (pre-#76 back-compat)', () => {
+    const out = parseRunEvent({ t: 'frame', testId: 't1', sessionId: 'sess-1', data: 'BASE64==' });
+    expect(out?.t).toBe('frame');
+    if (out?.t === 'frame') {
+      expect(out.timestamp).toBeUndefined();
+    }
+  });
+
+  it('parses a DISK frame carrying stepId + frameRef + timestamp (#76)', () => {
+    const out = parseRunEvent({
+      t: 'frame',
+      testId: 't1',
+      stepId: 's1',
+      sessionId: 'sess-1',
+      frameRef: 'frames/t1/s1.jpg',
+      timestamp: 1700000000456,
+    });
+    expect(out?.t).toBe('frame');
+    if (out?.t === 'frame') {
+      expect(out.timestamp).toBe(1700000000456);
+      expect(out.frameRef).toBe('frames/t1/s1.jpg');
+    }
+  });
+
+  it('rejects a frame whose timestamp is the wrong type', () => {
+    // timestamp is a known typed field, so a bad value is rejected (null),
+    // not silently dropped the way an unknown extra field would be.
+    expect(parseRunEvent({ t: 'frame', testId: 't1', sessionId: 's', data: 'B==', timestamp: 'soon' })).toBeNull();
+  });
+
   it('parses component:snapshot with a recursive tree', () => {
     const out = parseRunEvent({
       t: 'component:snapshot',

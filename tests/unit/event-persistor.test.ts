@@ -85,6 +85,44 @@ describe('EventPersistor', () => {
     });
   });
 
+  it('preserves the frame timestamp on the persisted NDJSON line (#76)', async () => {
+    bus.emit({ t: 'run:start', runId: 'r1', totalTests: 1, timestamp: 0 });
+    bus.emit({ t: 'step:start', testId: 't1', stepId: 'step-a', title: 'click' });
+    bus.emit({ t: 'frame', testId: 't1', data: TINY_JPEG_B64, sessionId: 'sess-1', timestamp: 1700000000123 });
+
+    await persistor.flush();
+
+    const lines = (await readFile(join(runDir, 'events.jsonl'), 'utf8'))
+      .trimEnd()
+      .split('\n')
+      .map((l) => JSON.parse(l) as Record<string, unknown>);
+    const frame = lines.find((e) => e['t'] === 'frame');
+    expect(frame).toMatchObject({
+      t: 'frame',
+      testId: 't1',
+      stepId: 'step-a',
+      frameRef: 'frames/t1/step-a.jpg',
+      timestamp: 1700000000123,
+    });
+    expect(frame).not.toHaveProperty('data');
+  });
+
+  it('omits timestamp on the persisted line when the wire frame had none (#76 back-compat)', async () => {
+    bus.emit({ t: 'run:start', runId: 'r1', totalTests: 1, timestamp: 0 });
+    bus.emit({ t: 'step:start', testId: 't1', stepId: 'step-a', title: 'click' });
+    bus.emit({ t: 'frame', testId: 't1', data: TINY_JPEG_B64, sessionId: 'sess-1' });
+
+    await persistor.flush();
+
+    const lines = (await readFile(join(runDir, 'events.jsonl'), 'utf8'))
+      .trimEnd()
+      .split('\n')
+      .map((l) => JSON.parse(l) as Record<string, unknown>);
+    const frame = lines.find((e) => e['t'] === 'frame');
+    expect(frame).toBeDefined();
+    expect(frame).not.toHaveProperty('timestamp');
+  });
+
   it('falls back to testId-keyed frames when no step:start has fired yet', async () => {
     bus.emit({ t: 'run:start', runId: 'r1', totalTests: 1, timestamp: 0 });
     bus.emit({ t: 'test:start', id: 't1', title: 'a', file: 'a.spec.ts', suite: 's' });
