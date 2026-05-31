@@ -102,10 +102,18 @@ describe('RunPath — per-run value object', () => {
     expect(() => new RunPath({ id: 'a/b', dir: '/tmp/x' })).toThrow(/invalid run id/i);
   });
 
-  it('framePath sanitizes testId and stepId before joining under framesDir', () => {
+  it('frameSeqPath sanitizes testId and keys on the integer seq (#77)', () => {
     const rp = new RunPath({ id: 'r1', dir: '/tmp/run' });
-    const path = rp.framePath('test:1', 'step "with quotes"');
-    expect(path).toBe('/tmp/run/frames/test_1/step__with_quotes_.jpg');
+    expect(rp.frameSeqPath('test:1', 0)).toBe('/tmp/run/frames/test_1/0.jpg');
+    expect(rp.frameSeqPath('t1', 42)).toBe('/tmp/run/frames/t1/42.jpg');
+  });
+
+  it('frameSeqRef is the POSIX relative ref matching frameSeqPath (#77)', () => {
+    const rp = new RunPath({ id: 'r1', dir: '/tmp/run' });
+    // Always forward-slash regardless of OS — it is a URL-ish ref the server
+    // route + frontend consume, not a disk path.
+    expect(rp.frameSeqRef('test:1', 0)).toBe('frames/test_1/0.jpg');
+    expect(rp.frameSeqRef('t1', 7)).toBe('frames/t1/7.jpg');
   });
 });
 

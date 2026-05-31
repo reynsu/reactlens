@@ -45,21 +45,50 @@ describe('EventPersistor', () => {
     expect(parsed.map((e) => e.t)).toEqual(['run:start', 'test:start', 'test:end', 'run:end']);
   });
 
-  it('persists frames as JPEGs keyed by activeStep and replaces them on update (last write wins)', async () => {
+  it('persists every frame as a monotonic per-test sequence — no overwrite (#77)', async () => {
     bus.emit({ t: 'run:start', runId: 'r1', totalTests: 1, timestamp: 0 });
     bus.emit({ t: 'test:start', id: 't1', title: 'a', file: 'a.spec.ts', suite: 's' });
     bus.emit({ t: 'step:start', testId: 't1', stepId: 's1', title: 'click submit' });
     bus.emit({ t: 'frame', testId: 't1', data: TINY_JPEG_B64, sessionId: 'sess-1' });
     bus.emit({ t: 'frame', testId: 't1', data: TINY_JPEG_B64, sessionId: 'sess-1' });
+    bus.emit({ t: 'step:start', testId: 't1', stepId: 's2', title: 'submit' });
+    bus.emit({ t: 'frame', testId: 't1', data: TINY_JPEG_B64, sessionId: 'sess-1' });
 
     await persistor.flush();
 
-    const stepDir = join(runDir, 'frames', 't1');
-    const files = await readdir(stepDir);
-    expect(files).toEqual(['s1.jpg']);
-    const buf = await readFile(join(stepDir, 's1.jpg'));
+    const dir = join(runDir, 'frames', 't1');
+    const files = (await readdir(dir)).sort((a, b) => Number.parseInt(a, 10) - Number.parseInt(b, 10));
+    expect(files).toEqual(['0.jpg', '1.jpg', '2.jpg']);
     const decodedLen = Buffer.from(TINY_JPEG_B64, 'base64').length;
-    expect(buf.byteLength).toBe(decodedLen);
+    for (const f of files) {
+      expect((await readFile(join(dir, f))).byteLength).toBe(decodedLen);
+    }
+  });
+
+  it('writes one per-frame JSONL line per frame, each tagged with its step + frameRef + ts (#77)', async () => {
+    bus.emit({ t: 'run:start', runId: 'r1', totalTests: 1, timestamp: 0 });
+    bus.emit({ t: 'step:start', testId: 't1', stepId: 's1', title: 'a' });
+    bus.emit({ t: 'frame', testId: 't1', data: TINY_JPEG_B64, sessionId: 'sess-1', timestamp: 1700000000001 });
+    bus.emit({ t: 'frame', testId: 't1', data: TINY_JPEG_B64, sessionId: 'sess-1', timestamp: 1700000000002 });
+    bus.emit({ t: 'step:start', testId: 't1', stepId: 's2', title: 'b' });
+    bus.emit({ t: 'frame', testId: 't1', data: TINY_JPEG_B64, sessionId: 'sess-1', timestamp: 1700000000003 });
+
+    await persistor.flush();
+
+    const frames = (await readFile(join(runDir, 'events.jsonl'), 'utf8'))
+      .trimEnd()
+      .split('\n')
+      .map((l) => JSON.parse(l) as Record<string, unknown>)
+      .filter((e) => e['t'] === 'frame');
+    expect(frames).toHaveLength(3);
+    expect(frames.map((f) => f['frameRef'])).toEqual([
+      'frames/t1/0.jpg',
+      'frames/t1/1.jpg',
+      'frames/t1/2.jpg',
+    ]);
+    expect(frames.map((f) => f['stepId'])).toEqual(['s1', 's1', 's2']);
+    expect(frames.map((f) => f['timestamp'])).toEqual([1700000000001, 1700000000002, 1700000000003]);
+    for (const f of frames) expect(f).not.toHaveProperty('data');
   });
 
   it('replaces the raw base64 frame data with a frameRef in the NDJSON log', async () => {
@@ -81,7 +110,7 @@ describe('EventPersistor', () => {
       testId: 't1',
       stepId: 'step-a',
       sessionId: 'sess-1',
-      frameRef: 'frames/t1/step-a.jpg',
+      frameRef: 'frames/t1/0.jpg',
     });
   });
 
@@ -101,7 +130,7 @@ describe('EventPersistor', () => {
       t: 'frame',
       testId: 't1',
       stepId: 'step-a',
-      frameRef: 'frames/t1/step-a.jpg',
+      frameRef: 'frames/t1/0.jpg',
       timestamp: 1700000000123,
     });
     expect(frame).not.toHaveProperty('data');
@@ -130,8 +159,17 @@ describe('EventPersistor', () => {
 
     await persistor.flush();
 
+    // Sequence still starts at 0 per test; the missing step just means the
+    // line's stepId falls back to the testId (asserted below).
     const files = await readdir(join(runDir, 'frames', 't1'));
-    expect(files).toEqual(['t1.jpg']);
+    expect(files).toEqual(['0.jpg']);
+    const frame = (await readFile(join(runDir, 'events.jsonl'), 'utf8'))
+      .trimEnd()
+      .split('\n')
+      .map((l) => JSON.parse(l) as Record<string, unknown>)
+      .find((e) => e['t'] === 'frame');
+    expect(frame?.['stepId']).toBe('t1');
+    expect(frame?.['frameRef']).toBe('frames/t1/0.jpg');
   });
 
   it('unsubscribing the sink stops new events from being persisted', async () => {

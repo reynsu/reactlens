@@ -22,10 +22,10 @@ import { appendFile, mkdir, writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
 import { logger } from '../utils/logger';
 import type { RunPath } from '../runs/run-paths';
-import { sanitizeSegment } from '../runs/run-paths';
 import { createActiveSteps, type ActiveSteps } from './active-steps';
 import type { EventSink } from './event-bus';
 import { type RunEvent } from './events';
+import { FrameTrack } from './frame-track';
 
 export type PersistorOptions = {
   runPath: RunPath;
@@ -34,11 +34,15 @@ export type PersistorOptions = {
 export class EventPersistor implements EventSink {
   private readonly runPath: RunPath;
   private readonly steps: ActiveSteps = createActiveSteps({ clearOn: 'step:end' });
+  // #77: owns the per-test monotonic frame sequence. The persistor delegates
+  // numbering + path + index-line shape to it and keeps only the I/O.
+  private readonly frameTrack: FrameTrack;
   private writeQueue: Promise<void> = Promise.resolve();
   private mkdirP: Promise<void> | null = null;
 
   constructor(opts: PersistorOptions) {
     this.runPath = opts.runPath;
+    this.frameTrack = new FrameTrack(opts.runPath);
   }
 
   // EventSink — the bus calls this once per RunEvent. Callers subscribe
@@ -72,22 +76,20 @@ export class EventPersistor implements EventSink {
       // not what we re-ingest — if one ever lands on the bus it means the
       // wire/disk boundary leaked, and there's nothing useful to persist.
       if (event.data === undefined) return;
+      // #77: every frame is preserved as its own seq file (no per-step
+      // overwrite). FrameTrack owns the numbering, the path, and the index
+      // line; the persistor just writes the bytes and appends the line.
+      // The capture timestamp (#76) rides through on the index line so the
+      // dashboard can later replay at true cadence (#78/#79).
       const stepId = this.steps.get(event.testId) ?? event.testId;
-      const safeTestId = sanitizeSegment(event.testId);
-      const safeStepId = sanitizeSegment(stepId);
-      const frameRef = `frames/${safeTestId}/${safeStepId}.jpg`;
-      this.enqueueFrame(event.testId, stepId, event.data);
-      this.enqueueLine({
-        t: 'frame',
+      const { diskPath, line } = this.frameTrack.allocate({
         testId: event.testId,
         stepId,
         sessionId: event.sessionId,
-        frameRef,
-        // #76: carry the capture time onto the disk line so the frame-track
-        // builder (#78) can replay at true cadence. Omitted when the wire
-        // frame had none (standalone runs / CDP metadata without a timestamp).
-        ...(event.timestamp !== undefined ? { timestamp: event.timestamp } : {}),
+        timestamp: event.timestamp,
       });
+      this.enqueueFrameBytes(diskPath, event.data);
+      this.enqueueLine(line);
       return;
     }
 
@@ -105,16 +107,15 @@ export class EventPersistor implements EventSink {
     });
   }
 
-  private enqueueFrame(testId: string, stepId: string, base64Jpeg: string): void {
+  private enqueueFrameBytes(diskPath: string, base64Jpeg: string): void {
     this.writeQueue = this.writeQueue.then(async () => {
       await this.ensureRunDir();
-      const target = this.runPath.framePath(testId, stepId);
       try {
-        await mkdir(dirname(target), { recursive: true });
+        await mkdir(dirname(diskPath), { recursive: true });
         const buf = Buffer.from(base64Jpeg, 'base64');
-        await writeFile(target, buf);
+        await writeFile(diskPath, buf);
       } catch (err) {
-        logger.error({ err, testId, stepId }, 'failed to persist frame');
+        logger.error({ err, diskPath }, 'failed to persist frame');
       }
     });
   }

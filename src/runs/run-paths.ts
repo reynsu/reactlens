@@ -97,11 +97,21 @@ export class RunPath {
     this.framesDir = join(args.dir, 'frames');
   }
 
-  // Sanitizes both segments before joining. The persistor's only path-shape
-  // rule used to live here as inline `toSafeSegment` calls; now the rule
-  // belongs to the value object that owns the paths.
-  framePath(testId: string, stepId: string): string {
-    return join(this.framesDir, sanitizeSegment(testId), `${sanitizeSegment(stepId)}.jpg`);
+  // #77: absolute path for one frame in the per-test monotonic sequence.
+  // Every received screencast frame is preserved here (keyed by `seq`),
+  // replacing the pre-#77 one-overwritten-still-per-step scheme. testId is
+  // sanitized; seq is an integer and never needs sanitizing. The path-shape
+  // rule belongs to this value object — the persistor never joins by hand.
+  frameSeqPath(testId: string, seq: number): string {
+    return join(this.framesDir, sanitizeSegment(testId), `${seq}.jpg`);
+  }
+
+  // #77: the POSIX-style relative ref stored in the JSONL index line for a
+  // sequenced frame. Always uses `/` (it is a URL-ish ref the dashboard
+  // server route + frontend consume), and stays in lock-step with
+  // frameSeqPath above so the on-disk file and the ref never diverge.
+  frameSeqRef(testId: string, seq: number): string {
+    return `frames/${sanitizeSegment(testId)}/${seq}.jpg`;
   }
 }
 
