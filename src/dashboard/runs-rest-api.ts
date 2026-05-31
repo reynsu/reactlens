@@ -13,6 +13,7 @@
 // dashboard started in "legacy live-only" mode without a project root
 // (no .reactlens/) returns 404 from past-runs without trying to read.
 import type { Express } from 'express';
+import { extractFrameTrackIndex } from '../runs/frame-track-index';
 import { frameExists, type RunsArea } from '../runs/run-paths';
 
 export type MountRunsRestApiOpts = {
@@ -48,6 +49,29 @@ export function mountRunsRestApi(opts: MountRunsRestApiOpts): void {
     try {
       const body = await runsArea.loadEvents(req.params.id);
       res.type('application/x-ndjson').send(body);
+    } catch (err) {
+      const message = (err as Error).message;
+      if (/invalid run id/i.test(message)) {
+        res.status(400).type('text').send(message);
+        return;
+      }
+      if (/run not found/i.test(message)) {
+        res.status(404).type('text').send(message);
+        return;
+      }
+      next(err);
+    }
+  });
+
+  // #78: the frame-track index for a run — the ordered per-frame entries
+  // (testId, stepId, frameRef, timestamp) the dashboard's builder turns into
+  // a playable track on replay. A pre-feature run (only per-step stills)
+  // yields a degenerate index rather than 404. Same id-error mapping as
+  // /events since it reads the same NDJSON.
+  app.get('/api/runs/:id/frame-track', async (req, res, next) => {
+    try {
+      const body = await runsArea.loadEvents(req.params.id);
+      res.json(extractFrameTrackIndex(body));
     } catch (err) {
       const message = (err as Error).message;
       if (/invalid run id/i.test(message)) {

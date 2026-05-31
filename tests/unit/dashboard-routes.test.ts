@@ -88,6 +88,41 @@ describe('GET /api/runs/:id/events', () => {
   });
 });
 
+describe('GET /api/runs/:id/frame-track (#78)', () => {
+  it('returns the ordered per-frame index for a run', async () => {
+    await seedRun('r1', [
+      { t: 'run:start', runId: 'r1', totalTests: 1, timestamp: 1 },
+      { t: 'step:start', testId: 't1', stepId: 's1', title: 'a' },
+      { t: 'frame', testId: 't1', stepId: 's1', sessionId: 'x', frameRef: 'frames/t1/0.jpg', timestamp: 1700000000001 },
+      { t: 'frame', testId: 't1', stepId: 's1', sessionId: 'x', frameRef: 'frames/t1/1.jpg', timestamp: 1700000000002 },
+      { t: 'run:end', passed: 1, failed: 0, skipped: 0, duration: 5 },
+    ]);
+    const res = await fetch(`${baseUrl}/api/runs/r1/frame-track`);
+    expect(res.status).toBe(200);
+    expect(res.headers.get('content-type')).toMatch(/application\/json/);
+    const body = (await res.json()) as Array<Record<string, unknown>>;
+    expect(body).toEqual([
+      { testId: 't1', stepId: 's1', frameRef: 'frames/t1/0.jpg', timestamp: 1700000000001 },
+      { testId: 't1', stepId: 's1', frameRef: 'frames/t1/1.jpg', timestamp: 1700000000002 },
+    ]);
+  });
+
+  it('returns [] for a pre-feature run with no frames', async () => {
+    await seedRun('r2', [
+      { t: 'run:start', runId: 'r2', totalTests: 1, timestamp: 1 },
+      { t: 'run:end', passed: 1, failed: 0, skipped: 0, duration: 5 },
+    ]);
+    const res = await fetch(`${baseUrl}/api/runs/r2/frame-track`);
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual([]);
+  });
+
+  it('returns 404 when the run does not exist and 400 on bad ids', async () => {
+    expect((await fetch(`${baseUrl}/api/runs/nope/frame-track`)).status).toBe(404);
+    expect((await fetch(`${baseUrl}/api/runs/..%2Fbad/frame-track`)).status).toBe(400);
+  });
+});
+
 describe('GET /api/runs/:id/frames/:testId/:filename', () => {
   it('serves the JPEG bytes for a real frame on disk', async () => {
     await mkdir(join(runsDir, 'r1', 'frames', 't1'), { recursive: true });
