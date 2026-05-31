@@ -10,7 +10,8 @@ import { ALL_EVENT_TYPES, type ComponentNode } from '../runner/events';
 import { EventPersistor } from '../runner/event-persistor';
 import { runTests, type RunSummary } from '../runner/playwright-runner';
 import { persistSnapshots } from '../runner/snapshot-sink';
-import { openRunsArea, type RunPath } from '../runs/run-paths';
+import { applyFrameTrackRetention } from '../runs/frame-track-retention';
+import { openRunsArea, type RunPath, type RunsArea } from '../runs/run-paths';
 import { logger } from '../utils/logger';
 
 export type RunCommandOptions = {
@@ -190,6 +191,7 @@ export async function runRun(opts: RunCommandOptions): Promise<number> {
     });
     if (dashboard !== null) await dashboard.close();
     await persistor.flush();
+    await pruneOldFrameTracks(area);
     unsubPersistor();
     return summary.exitCode;
   }
@@ -332,6 +334,7 @@ export async function runRun(opts: RunCommandOptions): Promise<number> {
         );
       }
       await persistor.flush();
+      await pruneOldFrameTracks(area);
       unsubPersistor();
       logger.info({ runDir: currentRun.dir }, 'persisted run');
     }
@@ -364,6 +367,19 @@ export async function runRun(opts: RunCommandOptions): Promise<number> {
     if (costTotal.calls > 0) logger.info({ cost: costTotal }, 'agent cost summary');
   }
   return summary.exitCode;
+}
+
+// #81: prune old frame tracks once a run has landed on disk. Best-effort —
+// disk hygiene must never fail the run, so any error is logged and swallowed.
+async function pruneOldFrameTracks(area: RunsArea): Promise<void> {
+  try {
+    const { degraded } = await applyFrameTrackRetention(area);
+    if (degraded.length > 0) {
+      logger.info({ degraded: degraded.length }, 'pruned frame tracks beyond the most-recent 5 runs');
+    }
+  } catch (err) {
+    logger.warn({ err }, 'frame-track retention failed (non-fatal)');
+  }
 }
 
 // Watches <cwd>/src and <cwd>/e2e via chokidar, debouncing rapid changes
