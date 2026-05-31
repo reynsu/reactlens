@@ -340,18 +340,43 @@ async function descendAx(cdp: CdpSession, node: CdpAxNode): Promise<AxNodeOut> {
   return out;
 }
 
+// #76: throttle the screencast to ~15fps. CDP captures one frame per
+// compositor commit (up to ~60fps); everyNthFrame=4 samples roughly every
+// 4th, landing near 15fps. One stream feeds both the live preview and the
+// recorded frame track (#77), so the rate is chosen once here.
+const SCREENCAST_EVERY_NTH_FRAME = 4;
+
 async function attachScreencast(page: Page, testId: string, frameSocket: FrameSocket): Promise<() => Promise<void>> {
   const cdp = await page.context().newCDPSession(page);
-  cdp.on('Page.screencastFrame', async (params: { data: string; sessionId: number }) => {
-    frameSocket.send({ t: 'frame', testId, data: params.data, sessionId: String(params.sessionId) });
-    try {
-      await cdp.send('Page.screencastFrameAck', { sessionId: params.sessionId });
-    } catch {
-      /* page closed */
-    }
-  });
+  cdp.on(
+    'Page.screencastFrame',
+    async (params: { data: string; sessionId: number; metadata?: { timestamp?: number } }) => {
+      // #76: CDP reports metadata.timestamp in SECONDS since epoch (a float).
+      // Normalize to epoch milliseconds to match the rest of the protocol
+      // (run:start.timestamp). Omit when CDP didn't provide one.
+      const cdpTs = params.metadata?.timestamp;
+      const timestamp = typeof cdpTs === 'number' ? Math.round(cdpTs * 1000) : undefined;
+      frameSocket.send({
+        t: 'frame',
+        testId,
+        data: params.data,
+        sessionId: String(params.sessionId),
+        ...(timestamp !== undefined ? { timestamp } : {}),
+      });
+      try {
+        await cdp.send('Page.screencastFrameAck', { sessionId: params.sessionId });
+      } catch {
+        /* page closed */
+      }
+    },
+  );
   try {
-    await cdp.send('Page.startScreencast', { format: 'jpeg', quality: 60, maxWidth: 1280 });
+    await cdp.send('Page.startScreencast', {
+      format: 'jpeg',
+      quality: 60,
+      maxWidth: 1280,
+      everyNthFrame: SCREENCAST_EVERY_NTH_FRAME,
+    });
   } catch {
     /* CDP unavailable, continue silently */
   }
